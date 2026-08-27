@@ -611,6 +611,47 @@ Module Program
             Not previewStep.Arguments.Contains("--stdout-format", StringComparison.Ordinal),
             "preview command stays human-readable")
 
+        Dim incompletePreviewContext As New ExtPluginCommandContext With {
+            .IsPreview = True,
+            .PluginId = AbAv1Plugin.PluginId,
+            .PluginStateJson = previewState.Serialize(),
+            .PresetJson = New JsonObject From {
+                {"预设文件版本", 6}
+            }.ToJsonString()
+        }
+        commandProvider.Callback.Invoke(incompletePreviewContext)
+        Equal(1, incompletePreviewContext.Steps.Count, "incomplete preset still contributes preview command")
+        Dim incompleteStep = incompletePreviewContext.Steps.Single()
+        IsTrue(
+            incompleteStep.Arguments.Contains("--encoder libsvtav1", StringComparison.Ordinal),
+            "empty encoder defaults to libsvtav1 in preview")
+        IsTrue(
+            incompleteStep.Arguments.Contains("--min-vmaf 96.5", StringComparison.Ordinal),
+            "incomplete preset retains AB-AV1 search settings")
+
+        Dim incompatiblePreset = JsonNode.Parse(CreateMinimalPresetJson()).AsObject()
+        incompatiblePreset("视频参数_分辨率") = "1920x1080"
+        Dim fallbackPreviewContext As New ExtPluginCommandContext With {
+            .IsPreview = True,
+            .PluginId = AbAv1Plugin.PluginId,
+            .PluginStateJson = previewState.Serialize(),
+            .PresetJson = incompatiblePreset.ToJsonString()
+        }
+        commandProvider.Callback.Invoke(fallbackPreviewContext)
+        Equal(1, fallbackPreviewContext.Steps.Count, "incompatible preset uses visible fallback preview")
+        Dim fallbackStep = fallbackPreviewContext.Steps.Single()
+        IsTrue(
+            fallbackStep.Arguments.Contains("--encoder libsvtav1", StringComparison.Ordinal),
+            "fallback preview uses supported encoder")
+        IsTrue(
+            Not fallbackStep.Arguments.Contains("--preset", StringComparison.Ordinal) AndAlso
+            Not fallbackStep.Arguments.Contains("--pix-format", StringComparison.Ordinal),
+            "fallback preview does not claim incompatible preset mappings")
+        IsTrue(
+            host.LogMessages.Any(
+                Function(message) message.Contains("基础预览模板", StringComparison.Ordinal)),
+            "fallback preview records compatibility warning")
+
         Dim actualContext As New ExtPluginCommandContext With {
             .IsPreview = False,
             .PluginStateJson = previewState.Serialize(),

@@ -214,8 +214,20 @@ Public NotInheritable Class AbAv1Plugin
         If Not state.Enabled Then Return
 
         Try
-            Dim profile = PresetProfile.LoadJson(context.PresetJson)
-            Dim arguments = profile.BuildSearchArgumentTemplate(state.ToSearchSettings(), jsonOutput:=False)
+            Dim settings = state.ToSearchSettings()
+            Dim arguments As List(Of String)
+            Try
+                Dim profile = PresetProfile.LoadJsonForPreview(context.PresetJson)
+                arguments = profile.BuildSearchArgumentTemplate(settings, jsonOutput:=False)
+            Catch ex As Exception
+                ' 原生命令模板在参数尚未补齐时也应有可见结果。真实任务仍通过严格的
+                ' PresetProfile.LoadJson 校验；这里只退回到插件确定支持的最小 libsvtav1 模板。
+                Log(
+                    ExtPluginLogLevel.Warning,
+                    "AB-AV1 命令行使用基础预览模板：" & ex.Message,
+                    ex)
+                arguments = PresetProfile.BuildFallbackSearchArgumentTemplate(settings, jsonOutput:=False)
+            End Try
             context.Steps.Add(New ExtPluginCommandStep(
                 "ab-av1-crf-search-preview",
                 "AB-AV1 VMAF CRF 搜索",
@@ -227,7 +239,7 @@ Public NotInheritable Class AbAv1Plugin
                 .WorkingDirectory = PluginEnvironment.PluginDirectory
             })
         Catch ex As Exception
-            Log(ExtPluginLogLevel.Warning, "无法生成 AB-AV1 命令行模板：" & ex.Message, ex)
+            Log(ExtPluginLogLevel.Warning, "无法生成 AB-AV1 基础命令行模板：" & ex.Message, ex)
         End Try
     End Sub
 

@@ -80,6 +80,26 @@ Public NotInheritable Class PresetProfile
         Return New PresetProfile(String.Empty, root)
     End Function
 
+    ''' <summary>
+    ''' 为原生命令行模板读取当前面板快照。面板尚未选择视频编码器时，使用本插件唯一支持的
+    ''' libsvtav1 生成可见预览；任务执行仍调用 LoadJson，并保留完整的严格校验。
+    ''' </summary>
+    Public Shared Function LoadJsonForPreview(presetJson As String) As PresetProfile
+        If String.IsNullOrWhiteSpace(presetJson) Then
+            Throw New ArgumentException("FFmpegFreeUI 没有提供可供 ab-av1 预览的预设。", NameOf(presetJson))
+        End If
+
+        Dim parsed = JsonNode.Parse(presetJson)
+        Dim root = TryCast(parsed, JsonObject)
+        If root Is Nothing Then Throw New InvalidDataException("FFmpegFreeUI 预设的根节点不是 JSON 对象。")
+
+        Dim previewRoot = DirectCast(root.DeepClone(), JsonObject)
+        If String.IsNullOrWhiteSpace(GetStringFrom(previewRoot, "视频参数_编码器_具体编码")) Then
+            previewRoot("视频参数_编码器_具体编码") = "libsvtav1"
+        End If
+        Return New PresetProfile(String.Empty, previewRoot)
+    End Function
+
     Public Function GetSummary() As String
         Dim presetText = If(String.IsNullOrWhiteSpace(EncoderPreset), "默认", EncoderPreset)
         Dim pixelText = If(String.IsNullOrWhiteSpace(PixelFormat), "编码器默认", PixelFormat)
@@ -97,9 +117,27 @@ Public NotInheritable Class PresetProfile
 
     ''' <summary>生成使用输入文件占位符的命令行参数模板。</summary>
     Public Function BuildSearchArgumentTemplate(settings As SearchSettings,
-                                                Optional jsonOutput As Boolean = False) As List(Of String)
+                                                 Optional jsonOutput As Boolean = False) As List(Of String)
         settings.Validate()
         Return BuildSearchArgumentsCore("<输入文件>", settings, jsonOutput)
+    End Function
+
+    ''' <summary>
+    ''' 当当前面板含有尚不能等价映射的设置时，仍为命令模板生成最小、可复制的搜索命令。
+    ''' 该模板不参与真实任务执行。
+    ''' </summary>
+    Friend Shared Function BuildFallbackSearchArgumentTemplate(
+        settings As SearchSettings,
+        Optional jsonOutput As Boolean = False) As List(Of String)
+
+        settings.Validate()
+        Dim arguments As New List(Of String) From {
+            "crf-search",
+            "--input", "<输入文件>",
+            "--encoder", "libsvtav1"
+        }
+        AppendSearchSettingsArguments(arguments, settings, jsonOutput)
+        Return arguments
     End Function
 
     Private Function BuildSearchArgumentsCore(inputArgument As String,
@@ -148,6 +186,14 @@ Public NotInheritable Class PresetProfile
             arguments.Add(value)
         Next
 
+        AppendSearchSettingsArguments(arguments, settings, jsonOutput)
+        Return arguments
+    End Function
+
+    Private Shared Sub AppendSearchSettingsArguments(arguments As List(Of String),
+                                                     settings As SearchSettings,
+                                                     jsonOutput As Boolean)
+
         arguments.Add("--min-vmaf")
         arguments.Add(SearchSettings.FormatNumber(settings.TargetVmaf))
         arguments.Add("--min-crf")
@@ -179,8 +225,7 @@ Public NotInheritable Class PresetProfile
             arguments.Add("--stdout-format")
             arguments.Add("json")
         End If
-        Return arguments
-    End Function
+    End Sub
 
     ''' <summary>
     ''' 将模型名称或 JSON 路径转换为 ab-av1 的 --vmaf 参数。

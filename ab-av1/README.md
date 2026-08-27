@@ -9,7 +9,7 @@
 - `host.Ui.RegisterChoice`：向原生质量控制方式下拉框添加稳定选项，不直接修改控件的 `Items`。
 - `IExtPluginUiContext.StateJson`：参数随 3FUI v6 预设保存和恢复，不使用插件自己的预设文件。
 - `IExtPluginParameterPanelCatalog` + 原生控件锚点：以 `OrderedTransform` 资源租约装饰 `MTB_参数总览`，把目标 VMAF、最小/最大 CRF、采样、彻底搜索和模型直接追加为原生带行号文本；不创建额外总览面板，也不输出启用/未启用状态。
-- `host.Commands.RegisterStepProvider`：仅在原生命令模板预览中贡献完整的 `ab-av1 crf-search` 步骤，参数来自同一份 3FUI 预设和插件状态；实际任务仍由准备阶段处理器执行一次搜索，避免重复运行。
+- `host.Commands.RegisterStepProvider`：仅在原生命令模板预览中贡献 `ab-av1 crf-search` 步骤。完整预设会显示编码预设、像素格式、SVT 和自定义编码参数；面板尚未选择编码器时按插件唯一支持的 `libsvtav1` 显示基础模板，不再静默留空。实际任务仍由准备阶段处理器执行一次搜索，避免重复运行。
 - `ext.task.before-prepare`：在任务准备阶段执行可取消的 ab-av1 搜索，并将 CRF 写回当前任务快照。
 - `ReportProgress` / `ReportResult`：搜索过程、最终 CRF、VMAF、预测视频流大小和预测编码时长进入原生任务日志。
 - 原生编码队列：添加、开始、停止、重置、并发调度、输出路径、音频/字幕/附件及最终封装全部由 3FUI 负责；插件不提供第二套任务列表。
@@ -49,6 +49,8 @@ Plugin\
 
 完全退出并重新启动 FFmpegFreeUI 后，打开“参数面板 → 质量”，即可在“控制方式”中看到“使用 VMAF 分数（ab-av1）”。
 当前预设的 AB-AV1 参数会直接显示在“参数面板 → 参数总览”的原生带行号框内，不显示“已启用/未启用”字样；启用 VMAF 控制方式时，右侧原生“命令行模板”还会在 FFmpeg 命令前显示可复制的 ab-av1 搜索命令。即使暂时切回原生质量模式，已经保存的插件参数仍会保留。
+
+命令行模板属于预览：当前面板尚未补齐视频编码器，或含有 ab-av1 不能等价映射的处理时，插件仍显示带当前 VMAF/CRF/采样设置的最小 `libsvtav1` 搜索模板；真正加入队列后仍执行完整兼容性校验，不会用基础预览代替实际参数运行。
 
 ## 使用
 
