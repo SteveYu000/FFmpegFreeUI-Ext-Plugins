@@ -39,6 +39,7 @@ Module Program
         TestPluginRegistrationAndPipelineAsync().GetAwaiter().GetResult()
         TestCommandLineTokenizer()
         TestPresetMappingAndCrfWriteBack()
+        TestMultipleEncoderMappingAndExactPassThrough()
         TestVmafModelArguments()
         TestVmafModelHelpParser()
         TestAbAv1RunnerProcessIntegrationAsync().GetAwaiter().GetResult()
@@ -623,8 +624,8 @@ Module Program
         Equal(1, incompletePreviewContext.Steps.Count, "incomplete preset still contributes preview command")
         Dim incompleteStep = incompletePreviewContext.Steps.Single()
         IsTrue(
-            incompleteStep.Arguments.Contains("--encoder libsvtav1", StringComparison.Ordinal),
-            "empty encoder defaults to libsvtav1 in preview")
+            Not incompleteStep.Arguments.Contains("--encoder", StringComparison.Ordinal),
+            "empty encoder is not completed in preview")
         IsTrue(
             incompleteStep.Arguments.Contains("--min-vmaf 96.5", StringComparison.Ordinal),
             "incomplete preset retains AB-AV1 search settings")
@@ -638,19 +639,19 @@ Module Program
             .PresetJson = incompatiblePreset.ToJsonString()
         }
         commandProvider.Callback.Invoke(fallbackPreviewContext)
-        Equal(1, fallbackPreviewContext.Steps.Count, "incompatible preset uses visible fallback preview")
+        Equal(1, fallbackPreviewContext.Steps.Count, "processing-chain mismatch still has an exact preview")
         Dim fallbackStep = fallbackPreviewContext.Steps.Single()
         IsTrue(
             fallbackStep.Arguments.Contains("--encoder libsvtav1", StringComparison.Ordinal),
-            "fallback preview uses supported encoder")
+            "preview retains selected encoder")
         IsTrue(
-            Not fallbackStep.Arguments.Contains("--preset", StringComparison.Ordinal) AndAlso
-            Not fallbackStep.Arguments.Contains("--pix-format", StringComparison.Ordinal),
-            "fallback preview does not claim incompatible preset mappings")
+            fallbackStep.Arguments.Contains("--preset 6", StringComparison.Ordinal) AndAlso
+            fallbackStep.Arguments.Contains("--pix-format yuv420p10le", StringComparison.Ordinal),
+            "preview retains selected preset mappings")
         IsTrue(
-            host.LogMessages.Any(
+            Not host.LogMessages.Any(
                 Function(message) message.Contains("基础预览模板", StringComparison.Ordinal)),
-            "fallback preview records compatibility warning")
+            "preview does not substitute a fallback command")
 
         Dim actualContext As New ExtPluginCommandContext With {
             .IsPreview = False,
@@ -755,9 +756,10 @@ Module Program
             ContainsPair(arguments, "--encoder", "libsvtav1")
             ContainsPair(arguments, "--preset", "6")
             ContainsPair(arguments, "--pix-format", "yuv420p10le")
-            ContainsPair(arguments, "--keyint", "240")
-            ContainsPair(arguments, "--scd", "true")
+            ContainsPair(arguments, "--svt", "keyint=240")
+            ContainsPair(arguments, "--svt", "scd=1")
             ContainsPair(arguments, "--svt", "tune=0")
+            ContainsPair(arguments, "--svt", "crf=31")
             ContainsPair(arguments, "--enc", "tile-columns=2")
             ContainsPair(arguments, "--min-vmaf", "96.5")
             ContainsPair(arguments, "--samples", "4")
@@ -765,17 +767,105 @@ Module Program
             ContainsPair(arguments, "--vmaf", "model=version=vmaf_v0.6.1")
             ContainsPair(arguments, "--stdout-format", "json")
             IsTrue(arguments.Contains("--thorough"), "thorough flag")
+            IsTrue(Not arguments.Contains("--crf-increment"), "ab-av1 keeps encoder-specific search precision")
 
             Dim updated = JsonNode.Parse(profile.ApplyCrf(27.5)).AsObject()
             Equal(1, updated("视频参数_比特率_控制方式").GetValue(Of Integer)(), "native CRF mode")
             Equal("crf", updated("视频参数_质量控制_参数名").GetValue(Of String)(), "quality parameter")
             Equal("27.5", updated("视频参数_质量控制_值").GetValue(Of String)(), "quality value")
             Dim advanced = updated("视频参数_质量控制_进阶参数集").GetValue(Of String)()
-            IsTrue(advanced.Contains("crf=27.5", StringComparison.Ordinal), "embedded SVT CRF replaced")
+            IsTrue(advanced.Contains("crf=31", StringComparison.Ordinal), "user advanced arguments remain unchanged")
             IsTrue(updated("插件扩展数据") IsNot Nothing, "plugin state retained")
         Finally
             File.Delete(inputPath)
         End Try
+    End Sub
+
+    Private Sub TestMultipleEncoderMappingAndExactPassThrough()
+        Dim settings As New SearchSettings With {
+            .TargetVmaf = 95,
+            .MinCrf = 5,
+            .MaxCrf = 55,
+            .SampleDuration = "20s"
+        }
+
+        Dim emptyPreset As New JsonObject From {
+            {"预设文件版本", 6}
+        }
+        Dim emptyArguments = PresetProfile.LoadJson(emptyPreset.ToJsonString()).
+            BuildSearchArgumentTemplate(settings)
+        IsTrue(Not emptyArguments.Contains("--encoder"), "missing encoder is passed through as missing")
+
+        Dim x265Preset As New JsonObject From {
+            {"预设文件版本", 6},
+            {"视频参数_编码器_具体编码", "libx265"},
+            {"视频参数_编码器_编码预设", "slow"},
+            {"视频参数_编码器_配置文件", "main10"},
+            {"视频参数_编码器_场景优化", "grain"},
+            {"视频参数_编码器_threads", "12"},
+            {"视频参数_色彩管理_像素格式", "p010le"},
+            {"视频参数_质量控制_进阶参数集", "-x265-params aq-mode=3:rd=4 -crf 23 -preset placebo"},
+            {"自定义参数_视频参数", "-metadata ""title=user value"" -unknown-option value"},
+            {"输出容器", "mkv"}
+        }
+        Dim x265Profile = PresetProfile.LoadJson(x265Preset.ToJsonString())
+        Dim x265Arguments = x265Profile.BuildSearchArgumentTemplate(settings)
+        ContainsPair(x265Arguments, "--encoder", "libx265")
+        ContainsPair(x265Arguments, "--preset", "slow")
+        ContainsPair(x265Arguments, "--pix-format", "p010le")
+        ContainsPair(x265Arguments, "--enc", "profile:v=main10")
+        ContainsPair(x265Arguments, "--enc", "tune=grain")
+        ContainsPair(x265Arguments, "--enc", "threads=12")
+        ContainsPair(x265Arguments, "--enc", "x265-params=aq-mode=3:rd=4")
+        ContainsPair(x265Arguments, "--enc", "crf=23")
+        ContainsPair(x265Arguments, "--enc", "preset=placebo")
+        ContainsPair(x265Arguments, "--enc", "metadata=title=user value")
+        ContainsPair(x265Arguments, "--enc", "unknown-option=value")
+
+        Dim foreignSvtPreset = DirectCast(x265Preset.DeepClone(), JsonObject)
+        foreignSvtPreset("视频参数_质量控制_进阶参数集") = "-svtav1-params tune=0:keyint=8s"
+        Dim foreignSvtArguments = PresetProfile.LoadJson(foreignSvtPreset.ToJsonString()).
+            BuildSearchArgumentTemplate(settings)
+        ContainsPair(foreignSvtArguments, "--enc", "svtav1-params=tune=0:keyint=8s")
+        IsTrue(Not foreignSvtArguments.Contains("--svt"), "SVT syntax is not invented for another encoder")
+
+        Dim nvencPreset As New JsonObject From {
+            {"预设文件版本", 6},
+            {"视频参数_编码器_具体编码", "av1_nvenc"},
+            {"视频参数_编码器_编码预设", "p7"},
+            {"视频参数_编码器_场景优化", "uhq"},
+            {"视频参数_编码器_gpu", "1"},
+            {"解码参数_解码器", "cuda"},
+            {"解码参数_解码数据格式", "cuda"}
+        }
+        Dim nvencProfile = PresetProfile.LoadJson(nvencPreset.ToJsonString())
+        Dim nvencArguments = nvencProfile.BuildSearchArgumentTemplate(settings)
+        ContainsPair(nvencArguments, "--encoder", "av1_nvenc")
+        ContainsPair(nvencArguments, "--preset", "p7")
+        ContainsPair(nvencArguments, "--enc", "tune=uhq")
+        ContainsPair(nvencArguments, "--enc", "gpu=1")
+        ContainsPair(nvencArguments, "--enc-input", "hwaccel=cuda")
+        ContainsPair(nvencArguments, "--enc-input", "hwaccel_output_format=cuda")
+        Dim nvencUpdated = JsonNode.Parse(nvencProfile.ApplyCrf(34)).AsObject()
+        Equal("cq", nvencUpdated("视频参数_质量控制_参数名").GetValue(Of String)(), "NVENC quality mapping")
+        Equal("av1_nvenc", nvencUpdated("视频参数_编码器_具体编码").GetValue(Of String)(), "selected encoder unchanged")
+
+        Dim amfPreset = DirectCast(nvencPreset.DeepClone(), JsonObject)
+        amfPreset("视频参数_编码器_具体编码") = "av1_amf"
+        amfPreset("视频参数_编码器_编码预设") = "high_quality"
+        amfPreset("视频参数_编码器_场景优化") = "transcoding"
+        Dim amfArguments = PresetProfile.LoadJson(amfPreset.ToJsonString()).
+            BuildSearchArgumentTemplate(settings)
+        ContainsPair(amfArguments, "--encoder", "av1_amf")
+        ContainsPair(amfArguments, "--enc", "quality=high_quality")
+        ContainsPair(amfArguments, "--enc", "usage=transcoding")
+        IsTrue(Not amfArguments.Contains("--preset"), "AMF quality field is not relabeled as preset")
+
+        Equal("global_quality", PresetProfile.GetNativeQualityParameterName("av1_qsv"), "QSV quality mapping")
+        Equal("q", PresetProfile.GetNativeQualityParameterName("hevc_vaapi"), "VAAPI quality mapping")
+        Equal("qp", PresetProfile.GetNativeQualityParameterName("av1_vulkan"), "Vulkan quality mapping")
+        Equal("q:v", PresetProfile.GetNativeQualityParameterName("hevc_videotoolbox"), "VideoToolbox quality mapping")
+        Equal("crf", PresetProfile.GetNativeQualityParameterName("user_encoder"), "unknown encoder follows ab-av1 default")
     End Sub
 
     Private Sub TestVmafModelArguments()

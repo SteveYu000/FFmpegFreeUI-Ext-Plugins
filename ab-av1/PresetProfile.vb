@@ -4,7 +4,6 @@ Imports System.Linq
 Imports System.Text.Encodings.Web
 Imports System.Text.Json
 Imports System.Text.Json.Nodes
-Imports System.Text.RegularExpressions
 
 ''' <summary>
 ''' 读取 FFmpegFreeUI v6 JSON 预设，验证其视频处理链能否由 ab-av1 等价表示，
@@ -20,11 +19,10 @@ Public NotInheritable Class PresetProfile
     Private ReadOnly _root As JsonObject
     Private ReadOnly _svtArguments As New List(Of String)()
     Private ReadOnly _extraEncoderArguments As New List(Of String)()
+    Private ReadOnly _inputEncoderArguments As New List(Of String)()
     Private _effectivePreset As String
-    Private _keyint As String
-    Private _sceneChangeDetection As String
 
-    Private Sub New(sourcePath As String, root As JsonObject)
+    Private Sub New(sourcePath As String, root As JsonObject, validateProcessingChain As Boolean)
         Me.SourcePath = sourcePath
         _root = root
 
@@ -33,9 +31,10 @@ Public NotInheritable Class PresetProfile
         PixelFormat = GetString("视频参数_色彩管理_像素格式")
         OutputContainer = GetString("输出容器")
 
-        ValidateCompatibility()
-        ParseAdditionalArguments(GetString("视频参数_质量控制_进阶参数集"), "质量控制进阶参数")
-        ParseAdditionalArguments(GetString("自定义参数_视频参数"), "自定义视频参数")
+        If validateProcessingChain Then ValidateProcessingChainCompatibility()
+        MapStructuredEncoderArguments()
+        ParseAdditionalArguments(GetString("视频参数_质量控制_进阶参数集"))
+        ParseAdditionalArguments(GetString("自定义参数_视频参数"))
     End Sub
 
     Public ReadOnly Property SourcePath As String
@@ -66,7 +65,7 @@ Public NotInheritable Class PresetProfile
         Dim root = TryCast(parsed, JsonObject)
         If root Is Nothing Then Throw New InvalidDataException("预设文件的根节点不是 JSON 对象。")
 
-        Return New PresetProfile(Path.GetFullPath(sourceFilePath), root)
+        Return New PresetProfile(Path.GetFullPath(sourceFilePath), root, validateProcessingChain:=True)
     End Function
 
     Public Shared Function LoadJson(presetJson As String) As PresetProfile
@@ -77,12 +76,12 @@ Public NotInheritable Class PresetProfile
         Dim parsed = JsonNode.Parse(presetJson)
         Dim root = TryCast(parsed, JsonObject)
         If root Is Nothing Then Throw New InvalidDataException("FFmpegFreeUI 预设的根节点不是 JSON 对象。")
-        Return New PresetProfile(String.Empty, root)
+        Return New PresetProfile(String.Empty, root, validateProcessingChain:=True)
     End Function
 
     ''' <summary>
-    ''' 为原生命令行模板读取当前面板快照。面板尚未选择视频编码器时，使用本插件唯一支持的
-    ''' libsvtav1 生成可见预览；任务执行仍调用 LoadJson，并保留完整的严格校验。
+    ''' 为原生命令行模板读取当前面板快照。预览只做 JSON 和参数映射，不替用户补全、
+    ''' 替换或校验编码器；任务执行仍调用 LoadJson 检查无法等价采样的画面处理链。
     ''' </summary>
     Public Shared Function LoadJsonForPreview(presetJson As String) As PresetProfile
         If String.IsNullOrWhiteSpace(presetJson) Then
@@ -93,17 +92,14 @@ Public NotInheritable Class PresetProfile
         Dim root = TryCast(parsed, JsonObject)
         If root Is Nothing Then Throw New InvalidDataException("FFmpegFreeUI 预设的根节点不是 JSON 对象。")
 
-        Dim previewRoot = DirectCast(root.DeepClone(), JsonObject)
-        If String.IsNullOrWhiteSpace(GetStringFrom(previewRoot, "视频参数_编码器_具体编码")) Then
-            previewRoot("视频参数_编码器_具体编码") = "libsvtav1"
-        End If
-        Return New PresetProfile(String.Empty, previewRoot)
+        Return New PresetProfile(String.Empty, root, validateProcessingChain:=False)
     End Function
 
     Public Function GetSummary() As String
         Dim presetText = If(String.IsNullOrWhiteSpace(EncoderPreset), "默认", EncoderPreset)
         Dim pixelText = If(String.IsNullOrWhiteSpace(PixelFormat), "编码器默认", PixelFormat)
-        Return $"{Encoder} · preset {presetText} · {pixelText} · {_svtArguments.Count} 个 SVT 高级参数"
+        Dim encoderText = If(String.IsNullOrWhiteSpace(Encoder), "未指定编码器", Encoder)
+        Return $"{encoderText} · preset {presetText} · {pixelText} · {_svtArguments.Count} 个 SVT 参数 · {_extraEncoderArguments.Count} 个输出参数 · {_inputEncoderArguments.Count} 个输入参数"
     End Function
 
     Public Function BuildSearchArguments(inputPath As String,
@@ -122,52 +118,34 @@ Public NotInheritable Class PresetProfile
         Return BuildSearchArgumentsCore("<输入文件>", settings, jsonOutput)
     End Function
 
-    ''' <summary>
-    ''' 当当前面板含有尚不能等价映射的设置时，仍为命令模板生成最小、可复制的搜索命令。
-    ''' 该模板不参与真实任务执行。
-    ''' </summary>
-    Friend Shared Function BuildFallbackSearchArgumentTemplate(
-        settings As SearchSettings,
-        Optional jsonOutput As Boolean = False) As List(Of String)
-
-        settings.Validate()
-        Dim arguments As New List(Of String) From {
-            "crf-search",
-            "--input", "<输入文件>",
-            "--encoder", "libsvtav1"
-        }
-        AppendSearchSettingsArguments(arguments, settings, jsonOutput)
-        Return arguments
-    End Function
-
     Private Function BuildSearchArgumentsCore(inputArgument As String,
                                                settings As SearchSettings,
                                                jsonOutput As Boolean) As List(Of String)
 
         Dim arguments As New List(Of String) From {
             "crf-search",
-            "--input", inputArgument,
-            "--encoder", Encoder
+            "--input", inputArgument
         }
 
+        ' 未选择编码器时不替用户补 libsvtav1。省略该项后如何处理由 ab-av1 自己决定。
+        If Not String.IsNullOrWhiteSpace(Encoder) Then
+            arguments.Add("--encoder")
+            arguments.Add(Encoder)
+        End If
+
         If Not String.IsNullOrWhiteSpace(EncoderPreset) Then
-            arguments.Add("--preset")
-            arguments.Add(EncoderPreset)
+            If UsesFfmpegQualityPreset(Encoder) Then
+                arguments.Add("--enc")
+                arguments.Add("quality=" & EncoderPreset)
+            Else
+                arguments.Add("--preset")
+                arguments.Add(EncoderPreset)
+            End If
         End If
 
         If Not String.IsNullOrWhiteSpace(PixelFormat) Then
             arguments.Add("--pix-format")
             arguments.Add(PixelFormat)
-        End If
-
-        If Not String.IsNullOrWhiteSpace(_keyint) Then
-            arguments.Add("--keyint")
-            arguments.Add(_keyint)
-        End If
-
-        If Not String.IsNullOrWhiteSpace(_sceneChangeDetection) Then
-            arguments.Add("--scd")
-            arguments.Add(_sceneChangeDetection)
         End If
 
         Dim customFilter = GetString("自定义参数_视频滤镜")
@@ -186,6 +164,11 @@ Public NotInheritable Class PresetProfile
             arguments.Add(value)
         Next
 
+        For Each value In _inputEncoderArguments
+            arguments.Add("--enc-input")
+            arguments.Add(value)
+        Next
+
         AppendSearchSettingsArguments(arguments, settings, jsonOutput)
         Return arguments
     End Function
@@ -200,10 +183,6 @@ Public NotInheritable Class PresetProfile
         arguments.Add(SearchSettings.FormatNumber(settings.MinCrf))
         arguments.Add("--max-crf")
         arguments.Add(SearchSettings.FormatNumber(settings.MaxCrf))
-
-        ' libsvtav1 的默认增量就是 1；显式指定可确保结果能通过 FFmpegFreeUI 的常规 -crf 选项应用。
-        arguments.Add("--crf-increment")
-        arguments.Add("1")
 
         If settings.Samples.HasValue Then
             arguments.Add("--samples")
@@ -269,38 +248,35 @@ Public NotInheritable Class PresetProfile
     Public Function ApplyCrf(crf As Double) As String
         Dim clone = DirectCast(_root.DeepClone(), JsonObject)
         clone("视频参数_比特率_控制方式") = 1
-        clone("视频参数_质量控制_参数名") = "crf"
+        clone("视频参数_质量控制_参数名") = GetNativeQualityParameterName(Encoder)
 
         Dim crfText = SearchSettings.FormatNumber(crf)
         clone("视频参数_质量控制_值") = crfText
 
-        ' 手写的 svtav1-params 若含有 crf=，会覆盖 FFmpeg 的 -crf，因此必须同步两处数值。
-        Dim advanced = GetStringFrom(clone, "视频参数_质量控制_进阶参数集")
-        If Not String.IsNullOrWhiteSpace(advanced) Then
-            Dim pattern = "(^|[\s:])crf=[^:\s""']+"
-            advanced = Regex.Replace(
-                advanced,
-                pattern,
-                Function(match) match.Groups(1).Value & "crf=" & crfText,
-                RegexOptions.IgnoreCase)
-            clone("视频参数_质量控制_进阶参数集") = advanced
-        End If
-
         Return clone.ToJsonString(JsonWriteOptions)
     End Function
 
-    Private Sub ValidateCompatibility()
+    ''' <summary>
+    ''' 与 ab-av1 的编码器质量参数映射保持一致，使搜索值能由 3FUI 原生命令复用。
+    ''' 编码器名称本身始终原样保留；未知编码器沿用 ab-av1 的 -crf 默认分支。
+    ''' </summary>
+    Friend Shared Function GetNativeQualityParameterName(encoder As String) As String
+        Dim value = If(encoder, String.Empty).Trim()
+        If value.Equals("librav1e", StringComparison.OrdinalIgnoreCase) OrElse
+           value.Equals("libvvenc", StringComparison.OrdinalIgnoreCase) OrElse
+           value.EndsWith("_vulkan", StringComparison.OrdinalIgnoreCase) Then Return "qp"
+        If value.Equals("mpeg2video", StringComparison.OrdinalIgnoreCase) OrElse
+           value.EndsWith("_vaapi", StringComparison.OrdinalIgnoreCase) Then Return "q"
+        If value.Equals("hevc_videotoolbox", StringComparison.OrdinalIgnoreCase) Then Return "q:v"
+        If value.EndsWith("_nvenc", StringComparison.OrdinalIgnoreCase) Then Return "cq"
+        If value.EndsWith("_qsv", StringComparison.OrdinalIgnoreCase) Then Return "global_quality"
+        Return "crf"
+    End Function
+
+    Private Sub ValidateProcessingChainCompatibility()
         Dim issues As New List(Of String)()
 
         If GetInteger("预设文件版本", 0) <> 6 Then issues.Add("仅支持 FFmpegFreeUI v6 预设")
-        If Not String.Equals(Encoder, "libsvtav1", StringComparison.OrdinalIgnoreCase) Then
-            issues.Add($"当前版本仅支持 libsvtav1，预设使用的是 {If(Encoder, "（空）")}")
-        End If
-
-        Dim supportedPixelFormats = New HashSet(Of String)(StringComparer.OrdinalIgnoreCase) From {
-            "", "yuv420p", "yuv420p10le", "yuv422p10le", "yuv444p10le"
-        }
-        If Not supportedPixelFormats.Contains(PixelFormat) Then issues.Add($"ab-av1 不支持像素格式 {PixelFormat}")
 
         AddIssueWhenNotEmpty(issues, "视频参数_分辨率", "分辨率调整")
         AddIssueWhenNotEmpty(issues, "视频参数_分辨率自动计算_宽度", "自动计算分辨率")
@@ -335,17 +311,6 @@ Public NotInheritable Class PresetProfile
         If HasItems("视频参数_超分_滤镜叠加策略组") Then issues.Add("超分滤镜")
         If HasItems("流控制_将视频参数应用于指定流") Then issues.Add("非默认视频流选择")
 
-        Dim decoderFields = {
-            "解码参数_解码器",
-            "解码参数_CPU解码线程数",
-            "解码参数_解码数据格式",
-            "解码参数_指定硬件的参数名",
-            "解码参数_指定硬件的参数"
-        }
-        If decoderFields.Any(Function(name) Not String.IsNullOrWhiteSpace(GetString(name))) Then
-            issues.Add("自定义解码参数")
-        End If
-
         If issues.Count > 0 Then
             Throw New PresetCompatibilityException(
                 "以下视频处理暂时无法等价映射到 ab-av1，继续搜索会使 CRF 失真：" &
@@ -353,7 +318,48 @@ Public NotInheritable Class PresetProfile
         End If
     End Sub
 
-    Private Sub ParseAdditionalArguments(raw As String, sourceName As String)
+    Private Sub MapStructuredEncoderArguments()
+        AddStructuredEncoderArgument("profile:v", GetString("视频参数_编码器_配置文件"))
+
+        Dim tune = GetString("视频参数_编码器_场景优化")
+        If Not String.IsNullOrWhiteSpace(tune) Then
+            AddStructuredEncoderArgument(
+                If(Encoder.EndsWith("_amf", StringComparison.OrdinalIgnoreCase), "usage", "tune"),
+                tune)
+        End If
+
+        AddStructuredEncoderArgument("gpu", GetString("视频参数_编码器_gpu"))
+        AddStructuredEncoderArgument("threads", GetString("视频参数_编码器_threads"))
+
+        AddStructuredInputArgument("hwaccel", GetString("解码参数_解码器"))
+        AddStructuredInputArgument("threads", GetString("解码参数_CPU解码线程数"))
+        AddStructuredInputArgument("hwaccel_output_format", GetString("解码参数_解码数据格式"))
+
+        Dim deviceName = GetString("解码参数_指定硬件的参数名").Trim().TrimStart("-"c)
+        Dim deviceValue = GetString("解码参数_指定硬件的参数")
+        If Not String.IsNullOrWhiteSpace(deviceName) AndAlso Not String.IsNullOrWhiteSpace(deviceValue) Then
+            AddStructuredInputArgument(deviceName, deviceValue)
+        End If
+    End Sub
+
+    Private Sub AddStructuredEncoderArgument(name As String, value As String)
+        If Not String.IsNullOrWhiteSpace(value) Then
+            _extraEncoderArguments.Add(name & "=" & value)
+        End If
+    End Sub
+
+    Private Sub AddStructuredInputArgument(name As String, value As String)
+        If Not String.IsNullOrWhiteSpace(value) Then
+            _inputEncoderArguments.Add(name & "=" & value)
+        End If
+    End Sub
+
+    Private Shared Function UsesFfmpegQualityPreset(value As String) As Boolean
+        Return value.EndsWith("_amf", StringComparison.OrdinalIgnoreCase) OrElse
+               value.EndsWith("_vulkan", StringComparison.OrdinalIgnoreCase)
+    End Function
+
+    Private Sub ParseAdditionalArguments(raw As String)
         If String.IsNullOrWhiteSpace(raw) Then Return
 
         Dim tokens = CommandLineTokenizer.Tokenize(raw)
@@ -361,7 +367,10 @@ Public NotInheritable Class PresetProfile
         While index < tokens.Count
             Dim optionToken = tokens(index)
             If Not LooksLikeOption(optionToken) Then
-                Throw New PresetCompatibilityException($"{sourceName} 中存在无法识别的参数：{optionToken}")
+                ' 不替用户判断裸参数是否正确；交给 ab-av1 的 --enc 解析并报告。
+                _extraEncoderArguments.Add(optionToken)
+                index += 1
+                Continue While
             End If
 
             Dim optionName = optionToken.TrimStart("-"c)
@@ -371,13 +380,15 @@ Public NotInheritable Class PresetProfile
                 index += 1
             End If
 
-            If optionName.StartsWith("svtav1-params", StringComparison.OrdinalIgnoreCase) Then
+            If optionName.StartsWith("svtav1-params", StringComparison.OrdinalIgnoreCase) AndAlso IsSvtEncoder(Encoder) Then
                 If String.IsNullOrWhiteSpace(value) Then
-                    Throw New PresetCompatibilityException($"{sourceName} 中的 -svtav1-params 缺少值。")
+                    _extraEncoderArguments.Add(optionName)
+                    index += 1
+                    Continue While
                 End If
                 ParseSvtParameters(value)
             Else
-                AddEncoderArgument(optionName, value, sourceName)
+                AddEncoderArgument(optionName, value)
             End If
 
             index += 1
@@ -388,59 +399,25 @@ Public NotInheritable Class PresetProfile
         For Each parameter In value.Split(":"c, StringSplitOptions.RemoveEmptyEntries Or StringSplitOptions.TrimEntries)
             Dim separator = parameter.IndexOf("="c)
             If separator <= 0 OrElse separator = parameter.Length - 1 Then
-                Throw New PresetCompatibilityException($"无法解析 SVT-AV1 高级参数：{parameter}")
+                _svtArguments.Add(parameter)
+                Continue For
             End If
 
             Dim name = parameter.Substring(0, separator).Trim()
             Dim parameterValue = parameter.Substring(separator + 1).Trim()
-            Select Case name.ToLowerInvariant()
-                Case "crf"
-                    ' 搜索期间由 ab-av1 接管 CRF。
-                Case "preset"
-                    _effectivePreset = parameterValue
-                Case "keyint"
-                    _keyint = parameterValue
-                Case "scd"
-                    _sceneChangeDetection = ToBooleanText(parameterValue, "scd")
-                Case "input-depth"
-                    ValidateInputDepth(parameterValue)
-                Case Else
-                    _svtArguments.Add(name & "=" & parameterValue)
-            End Select
+            _svtArguments.Add(name & "=" & parameterValue)
         Next
     End Sub
 
-    Private Sub AddEncoderArgument(optionName As String, value As String, sourceName As String)
-        Dim normalized = optionName.ToLowerInvariant()
-        Dim reserved = {"crf", "crf:v", "crf:v:0", "preset", "preset:v", "preset:v:0", "pix_fmt", "pix_fmt:v", "pix_fmt:v:0", "c:v", "c:v:0", "codec:v", "vcodec"}
-        If reserved.Contains(normalized, StringComparer.OrdinalIgnoreCase) Then
-            Throw New PresetCompatibilityException($"{sourceName} 中的 -{optionName} 应使用 FFmpegFreeUI 的独立字段设置。")
-        End If
-
-        Dim finalOnlyPrefixes = {"map", "c:a", "codec:a", "b:a", "c:s", "c:t", "map_metadata", "map_chapters", "metadata", "attach"}
-        If finalOnlyPrefixes.Any(Function(prefix) normalized.Equals(prefix, StringComparison.OrdinalIgnoreCase) OrElse normalized.StartsWith(prefix & ":", StringComparison.OrdinalIgnoreCase)) Then
-            Throw New PresetCompatibilityException($"{sourceName} 中混入了非视频采样参数 -{optionName}；请放回 FFmpegFreeUI 对应面板。")
-        End If
-
+    Private Sub AddEncoderArgument(optionName As String, value As String)
+        ' --enc 会把 name=value 还原为 FFmpeg 的 -name value。这里不维护白名单，
+        ' 也不替用户删除冲突或错误参数；最终诊断由 ab-av1/FFmpeg 给出。
         _extraEncoderArguments.Add(If(value Is Nothing, optionName, optionName & "=" & value))
     End Sub
 
-    Private Sub ValidateInputDepth(value As String)
-        Dim expected = If(PixelFormat.Contains("10", StringComparison.Ordinal), "10", "8")
-        If value <> expected Then
-            Throw New PresetCompatibilityException($"input-depth={value} 与像素格式 {PixelFormat} 不一致。")
-        End If
-    End Sub
-
-    Private Shared Function ToBooleanText(value As String, name As String) As String
-        Select Case value.Trim().ToLowerInvariant()
-            Case "1", "true", "yes", "on"
-                Return "true"
-            Case "0", "false", "no", "off"
-                Return "false"
-            Case Else
-                Throw New PresetCompatibilityException($"{name}={value} 不是有效的布尔值。")
-        End Select
+    Private Shared Function IsSvtEncoder(value As String) As Boolean
+        Return String.Equals(value, "libsvtav1", StringComparison.OrdinalIgnoreCase) OrElse
+               String.Equals(value, "svt-av1", StringComparison.OrdinalIgnoreCase)
     End Function
 
     Private Shared Function LooksLikeOption(value As String) As Boolean
