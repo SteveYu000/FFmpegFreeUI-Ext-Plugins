@@ -1,0 +1,44 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0-windows10.0.17763.0</TargetFramework>
+    <OutputType>Library</OutputType>
+    <UseWindowsForms>true</UseWindowsForms>
+    <AssemblyName>FFmpegFreeUI.Ext.AbAv1.3fui</AssemblyName>
+    <RootNamespace>FFmpegFreeUI.Ext.AbAv1</RootNamespace>
+    <OptionExplicit>On</OptionExplicit>
+    <OptionInfer>On</OptionInfer>
+    <OptionStrict>On</OptionStrict>
+    <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+    <PlatformTarget>AnyCPU</PlatformTarget>
+    <DebugType>embedded</DebugType>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <Version>1.0.5</Version>
+    <Authors>Github @SteveYu000</Authors>
+    <Description>通过 FFmpegFreeUI Ext Plugin API 在原生质量参数页和任务队列中集成 ab-av1 VMAF 目标 CRF 搜索。</Description>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <!-- 插件构建必须可离线复现；依赖版本已锁定为宿主当前版本。 -->
+    <NuGetAudit>false</NuGetAudit>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Remove="tests\**\*.vb" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\FFmpegFreeUI-API-Extended-Edition\FFmpegFreeUI.Ext.PluginSdk\FFmpegFreeUI.Ext.PluginSdk.csproj">
+      <Private>false</Private>
+    </ProjectReference>
+    <!-- 与当前 3FUI 使用同一 LakeUI 版本；宿主运行时已提供该程序集及渲染依赖。 -->
+    <PackageReference Include="LakeUI" Version="3.23.0" />
+  </ItemGroup>
+
+  <Import Project="..\..\FFmpegFreeUI-API-Extended-Edition\FFmpegFreeUI.Ext.PluginSdk\FFmpegFreeUI.Ext.PluginSdk.Deploy.targets" />
+
+  <Target Name="CreatePluginArtifact" AfterTargets="Build" Condition="'$(Configuration)' == 'Release'">
+    <MakeDir Directories="$(MSBuildProjectDirectory)\dist" />
+    <Copy SourceFiles="$(TargetPath)" DestinationFolder="$(MSBuildProjectDirectory)\dist" SkipUnchangedFiles="true" />
+  </Target>
+
+</Project>

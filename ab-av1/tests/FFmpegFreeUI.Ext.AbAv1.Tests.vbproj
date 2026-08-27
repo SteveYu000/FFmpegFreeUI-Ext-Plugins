@@ -1,0 +1,36 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0-windows10.0.17763.0</TargetFramework>
+    <OutputType>Exe</OutputType>
+    <UseWindowsForms>true</UseWindowsForms>
+    <OptionExplicit>On</OptionExplicit>
+    <OptionInfer>On</OptionInfer>
+    <OptionStrict>On</OptionStrict>
+    <!-- 测试项目只有源码 ProjectReference，没有可审计的 NuGet 包。 -->
+    <NuGetAudit>false</NuGetAudit>
+    <RootNamespace>FFmpegFreeUI.Ext.AbAv1.Tests</RootNamespace>
+    <AssemblyName>FFmpegFreeUI.Ext.AbAv1.Tests</AssemblyName>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Remove="FakeAbAv1\**\*.vb" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\FFmpegFreeUI.Ext.AbAv1.vbproj" />
+    <ProjectReference Include="..\..\..\FFmpegFreeUI-API-Extended-Edition\FFmpegFreeUI.Ext.PluginSdk\FFmpegFreeUI.Ext.PluginSdk.csproj" />
+    <ProjectReference Include="FakeAbAv1\FakeAbAv1.vbproj" ReferenceOutputAssembly="false" />
+  </ItemGroup>
+
+  <Target Name="CopyFakeAbAv1" AfterTargets="Build">
+    <ItemGroup>
+      <_FakeAbAv1File Include="$(MSBuildProjectDirectory)\FakeAbAv1\bin\$(Configuration)\net10.0\ab-av1.exe" />
+      <_FakeAbAv1File Include="$(MSBuildProjectDirectory)\FakeAbAv1\bin\$(Configuration)\net10.0\ab-av1.dll" />
+      <_FakeAbAv1File Include="$(MSBuildProjectDirectory)\FakeAbAv1\bin\$(Configuration)\net10.0\ab-av1.deps.json" />
+      <_FakeAbAv1File Include="$(MSBuildProjectDirectory)\FakeAbAv1\bin\$(Configuration)\net10.0\ab-av1.runtimeconfig.json" />
+    </ItemGroup>
+    <Copy SourceFiles="@(_FakeAbAv1File)" DestinationFolder="$(OutDir)" SkipUnchangedFiles="true" />
+  </Target>
+
+</Project>
