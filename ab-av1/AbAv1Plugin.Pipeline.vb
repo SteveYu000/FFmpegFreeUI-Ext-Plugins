@@ -1,9 +1,31 @@
 Imports System.Globalization
+Imports System.Text.Json.Nodes
 Imports System.Threading
 Imports System.Threading.Tasks
 Imports FFmpegFreeUI.Ext.PluginSdk
 
 Partial Public NotInheritable Class AbAv1Plugin
+
+    Private Function SanitizeCapturedScoreFieldsAsync(
+        context As ExtPluginPipelineContext,
+        cancellationToken As CancellationToken) As ValueTask
+
+        cancellationToken.ThrowIfCancellationRequested()
+        Dim state = AbAv1PluginState.ReadFromPreset(context.PresetJson, PluginId)
+        If Not state.Enabled Then Return ValueTask.CompletedTask
+
+        Dim root = TryCast(JsonNode.Parse(context.PresetJson), JsonObject)
+        If root Is Nothing Then
+            Throw New InvalidOperationException("3FUI 捕获的预设不是有效 JSON 对象。")
+        End If
+
+        ' 原生第二、第三栏在插件模式下只承担指标与目标分数的 UI；真正数据保存在插件状态中。
+        ' 捕获后清空原生 FFmpeg 字段，防止预览或保存时把 VMAF/XPSNR 当成编码器参数。
+        root("视频参数_质量控制_参数名") = String.Empty
+        root("视频参数_质量控制_值") = String.Empty
+        context.PresetJson = root.ToJsonString()
+        Return ValueTask.CompletedTask
+    End Function
 
     Private Function SearchBeforePrepareAsync(
         context As ExtPluginPipelineContext,
@@ -28,7 +50,7 @@ Partial Public NotInheritable Class AbAv1Plugin
         End If
 
         context.ReportProgress(
-            $"AB-AV1：搜索目标 VMAF {SearchSettings.FormatNumber(settings.TargetVmaf)} 对应的 CRF……",
+            $"AB-AV1：搜索目标 {settings.MetricDisplayName} {SearchSettings.FormatNumber(settings.TargetScore)} 对应的 CRF……",
             0.01)
 
         Dim reportLock As New Object()
@@ -56,9 +78,9 @@ Partial Public NotInheritable Class AbAv1Plugin
                 SearchSettings.FormatNumber(result.Crf),
                 "AB-AV1 CRF")
             context.ReportResult(
-                "search.vmaf",
-                result.Vmaf.ToString("0.###", CultureInfo.InvariantCulture),
-                "AB-AV1 VMAF")
+                "search." & SearchSettings.GetMetricId(result.Metric),
+                result.Score.ToString("0.###", CultureInfo.InvariantCulture),
+                "AB-AV1 " & SearchSettings.GetMetricDisplayName(result.Metric))
 
             If result.PredictedEncodeSize > 0 Then
                 context.ReportResult(
@@ -76,11 +98,11 @@ Partial Public NotInheritable Class AbAv1Plugin
             End If
 
             context.ReportProgress(
-                $"AB-AV1：已找到 CRF {SearchSettings.FormatNumber(result.Crf)}（VMAF {result.Vmaf:0.###}），开始原生编码。",
+                $"AB-AV1：已找到 CRF {SearchSettings.FormatNumber(result.Crf)}（{SearchSettings.GetMetricDisplayName(result.Metric)} {result.Score:0.###}），开始原生编码。",
                 1)
             Log(
                 ExtPluginLogLevel.Information,
-                $"任务 {context.TaskId} 的 AB-AV1 搜索完成：CRF={SearchSettings.FormatNumber(result.Crf)}，VMAF={result.Vmaf:0.###}。")
+                $"任务 {context.TaskId} 的 AB-AV1 搜索完成：CRF={SearchSettings.FormatNumber(result.Crf)}，{SearchSettings.GetMetricDisplayName(result.Metric)}={result.Score:0.###}。")
         Catch ex As OperationCanceledException When cancellationToken.IsCancellationRequested
             Log(ExtPluginLogLevel.Information, $"任务 {context.TaskId} 的 AB-AV1 搜索已取消。")
             Throw

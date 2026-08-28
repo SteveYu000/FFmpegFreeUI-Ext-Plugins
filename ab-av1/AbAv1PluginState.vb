@@ -1,13 +1,18 @@
 Imports System.Text.Json
 Imports System.Text.Json.Nodes
+Imports System.Text.Json.Serialization
 
 Friend NotInheritable Class AbAv1PluginState
 
-    Public Property Version As Integer = 1
+    Public Property Version As Integer = 2
 
     Public Property Enabled As Boolean
 
     Public Property TargetVmaf As Double = 95
+
+    Public Property TargetXpsnr As Double = 40
+
+    Public Property ScoreMetric As String = "vmaf"
 
     Public Property MinCrf As Double = 5
 
@@ -21,9 +26,34 @@ Friend NotInheritable Class AbAv1PluginState
 
     Public Property VmafModel As String = String.Empty
 
+    <JsonIgnore>
+    Public Property Metric As QualityScoreMetric
+        Get
+            Return SearchSettings.ParseMetric(ScoreMetric)
+        End Get
+        Set(value As QualityScoreMetric)
+            ScoreMetric = SearchSettings.GetMetricId(value)
+        End Set
+    End Property
+
+    <JsonIgnore>
+    Public Property TargetScore As Double
+        Get
+            Return If(Metric = QualityScoreMetric.Xpsnr, TargetXpsnr, TargetVmaf)
+        End Get
+        Set(value As Double)
+            If Metric = QualityScoreMetric.Xpsnr Then
+                TargetXpsnr = value
+            Else
+                TargetVmaf = value
+            End If
+        End Set
+    End Property
+
     Public Function ToSearchSettings() As SearchSettings
         Dim result As New SearchSettings With {
-            .TargetVmaf = TargetVmaf,
+            .Metric = Metric,
+            .TargetScore = TargetScore,
             .MinCrf = MinCrf,
             .MaxCrf = MaxCrf,
             .Samples = Samples,
@@ -60,15 +90,18 @@ Friend NotInheritable Class AbAv1PluginState
             Samples.HasValue,
             Samples.Value.ToString(Globalization.CultureInfo.InvariantCulture),
             "自动")
-        Dim modelText = If(String.IsNullOrWhiteSpace(VmafModel), "自动", VmafModel.Trim())
-        Return String.Join(
-            "  ·  ",
-            $"目标 VMAF {SearchSettings.FormatNumber(TargetVmaf)}",
+        Dim parts As New List(Of String) From {
+            $"目标 {SearchSettings.GetMetricDisplayName(Metric)} {SearchSettings.FormatNumber(TargetScore)}",
             $"CRF {SearchSettings.FormatNumber(MinCrf)}–{SearchSettings.FormatNumber(MaxCrf)}",
             $"采样 {samplesText}",
             $"单段 {If(SampleDuration, String.Empty).Trim()}",
-            $"彻底搜索 {If(Thorough, "是", "否")}",
-             $"模型 {modelText}")
+            $"彻底搜索 {If(Thorough, "是", "否")}"
+        }
+        If Metric = QualityScoreMetric.Vmaf Then
+            Dim modelText = If(String.IsNullOrWhiteSpace(VmafModel), "自动", VmafModel.Trim())
+            parts.Add($"模型 {modelText}")
+        End If
+        Return String.Join("  ·  ", parts)
     End Function
 
     Public Function ToOverviewLines() As IReadOnlyList(Of String)
@@ -76,16 +109,19 @@ Friend NotInheritable Class AbAv1PluginState
             Samples.HasValue,
             Samples.Value.ToString(Globalization.CultureInfo.InvariantCulture),
             "自动")
-        Dim modelText = If(String.IsNullOrWhiteSpace(VmafModel), "自动", VmafModel.Trim())
-        Return New String() {
-            $"AB-AV1 目标 VMAF：{SearchSettings.FormatNumber(TargetVmaf)}",
+        Dim lines As New List(Of String) From {
+            $"AB-AV1 目标 {SearchSettings.GetMetricDisplayName(Metric)}：{SearchSettings.FormatNumber(TargetScore)}",
             $"AB-AV1 最小 CRF：{SearchSettings.FormatNumber(MinCrf)}",
             $"AB-AV1 最大 CRF：{SearchSettings.FormatNumber(MaxCrf)}",
             $"AB-AV1 采样数量：{samplesText}",
             $"AB-AV1 单段时长：{If(SampleDuration, String.Empty).Trim()}",
-            $"AB-AV1 彻底搜索：{If(Thorough, "是", "否")}",
-            $"AB-AV1 VMAF 模型：{modelText}"
+            $"AB-AV1 彻底搜索：{If(Thorough, "是", "否")}"
         }
+        If Metric = QualityScoreMetric.Vmaf Then
+            Dim modelText = If(String.IsNullOrWhiteSpace(VmafModel), "自动", VmafModel.Trim())
+            lines.Add($"AB-AV1 VMAF 模型：{modelText}")
+        End If
+        Return lines
     End Function
 
     Public Shared Function HasStoredState(json As String) As Boolean
@@ -127,7 +163,8 @@ Friend NotInheritable Class AbAv1PluginState
     End Function
 
     Private Sub Normalize()
-        If Version < 1 Then Version = 1
+        Version = 2
+        ScoreMetric = SearchSettings.GetMetricId(SearchSettings.ParseMetric(ScoreMetric))
         SampleDuration = If(SampleDuration, String.Empty)
         VmafModel = If(VmafModel, String.Empty)
     End Sub

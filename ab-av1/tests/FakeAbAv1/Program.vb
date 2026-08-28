@@ -19,10 +19,17 @@ Module Program
             Return
         End If
 
-        Console.WriteLine("{""type"":""sample-encode-done"",""crf"":30,""vmaf"":94.7}")
-        Console.WriteLine(
-            "{""type"":""crf-search-done"",""crf"":28,""vmaf"":95.2," &
-            """predicted_encode_size"":123456789,""predicted_encode_seconds"":321.5}")
+        If args.Contains("--min-xpsnr", StringComparer.Ordinal) Then
+            Console.WriteLine("{""type"":""sample-encode-done"",""crf"":30,""xpsnr"":37.9}")
+            Console.WriteLine(
+                "{""type"":""crf-search-done"",""crf"":28,""xpsnr"":38.2," &
+                """predicted_encode_size"":123456789,""predicted_encode_seconds"":321.5}")
+        Else
+            Console.WriteLine("{""type"":""sample-encode-done"",""crf"":30,""vmaf"":94.7}")
+            Console.WriteLine(
+                "{""type"":""crf-search-done"",""crf"":28,""vmaf"":95.2," &
+                """predicted_encode_size"":123456789,""predicted_encode_seconds"":321.5}")
+        End If
     End Sub
 
 End Module

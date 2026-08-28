@@ -16,10 +16,10 @@ Public NotInheritable Class AbAv1Runner
         "\x1B\[[0-?]*[ -/]*[@-~]",
         RegexOptions.Compiled Or RegexOptions.CultureInvariant)
     Private Shared ReadOnly HumanResultRegex As New Regex(
-        "\bcrf\s+(?<crf>-?\d+(?:\.\d+)?)\s+VMAF\s+(?<vmaf>-?\d+(?:\.\d+)?)\s+predicted\s+(?:video\s+stream|image)\s+size\s+(?<size>\d+(?:\.\d+)?)\s+(?<unit>[KMGTPE]?i?B)\b",
+        "\bcrf\s+(?<crf>-?\d+(?:\.\d+)?)\s+(?<metric>VMAF|XPSNR)\s+(?<score>[+-]?(?:\d+(?:\.\d+)?|inf(?:inity)?))\s+predicted\s+(?:video\s+stream|image)\s+size\s+(?<size>\d+(?:\.\d+)?)\s+(?<unit>[KMGTPE]?i?B)\b",
         RegexOptions.Compiled Or RegexOptions.CultureInvariant Or RegexOptions.IgnoreCase)
     Private Shared ReadOnly HumanAttemptRegex As New Regex(
-        "\bcrf\s+(?<crf>-?\d+(?:\.\d+)?)\s+VMAF\s+(?<vmaf>-?\d+(?:\.\d+)?)\b",
+        "\bcrf\s+(?<crf>-?\d+(?:\.\d+)?)\s+(?<metric>VMAF|XPSNR)\s+(?<score>[+-]?(?:\d+(?:\.\d+)?|inf(?:inity)?))\b",
         RegexOptions.Compiled Or RegexOptions.CultureInvariant Or RegexOptions.IgnoreCase)
 
     Private Shared _jsonSupportExecutable As String = String.Empty
@@ -144,9 +144,17 @@ Public NotInheritable Class AbAv1Runner
             Dim stderrLines As New ConcurrentQueue(Of String)()
             Dim stdoutTask As Task(Of SearchResult)
             If useJsonOutput Then
-                stdoutTask = ReadJsonStdoutAsync(process.StandardOutput, progress, cancellationToken)
+                stdoutTask = ReadJsonStdoutAsync(
+                    process.StandardOutput,
+                    settings.Metric,
+                    progress,
+                    cancellationToken)
             Else
-                stdoutTask = ReadHumanStdoutAsync(process.StandardOutput, progress, cancellationToken)
+                stdoutTask = ReadHumanStdoutAsync(
+                    process.StandardOutput,
+                    settings.Metric,
+                    progress,
+                    cancellationToken)
             End If
             Dim stderrTask = ReadStderrAsync(
                 process.StandardError,
@@ -345,6 +353,7 @@ Public NotInheritable Class AbAv1Runner
     End Function
 
     Private Shared Async Function ReadJsonStdoutAsync(reader As StreamReader,
+                                                       metric As QualityScoreMetric,
                                                        progress As IProgress(Of SearchProgress),
                                                        cancellationToken As CancellationToken) As Task(Of SearchResult)
         Dim finalResult As SearchResult = Nothing
@@ -362,15 +371,23 @@ Public NotInheritable Class AbAv1Runner
                     Select Case type
                         Case "sample-encode-done"
                             Dim crf = GetDouble(root, "crf")
-                            Dim vmaf = GetOptionalDouble(root, "vmaf")
+                            Dim score = GetOptionalDouble(root, SearchSettings.GetMetricId(metric))
                             Dim message = $"测试 CRF {FormatNumber(crf)}"
-                            If vmaf.HasValue Then message &= $" · VMAF {vmaf.Value:0.###}"
-                            progress?.Report(New SearchProgress(message, crf, vmaf))
+                            If score.HasValue Then
+                                message &= $" · {SearchSettings.GetMetricDisplayName(metric)} {FormatScore(score.Value)}"
+                            End If
+                            progress?.Report(New SearchProgress(message, crf, score, metric))
 
                         Case "crf-search-done"
+                            Dim score = GetOptionalDouble(root, SearchSettings.GetMetricId(metric))
+                            If Not score.HasValue Then
+                                Throw New InvalidDataException(
+                                    $"ab-av1 JSON 结果缺少 {SearchSettings.GetMetricDisplayName(metric)} 分数字段。")
+                            End If
                             finalResult = New SearchResult With {
                                 .Crf = GetDouble(root, "crf"),
-                                .Vmaf = GetOptionalDouble(root, "vmaf").GetValueOrDefault(),
+                                .Metric = metric,
+                                .Score = score.Value,
                                 .PredictedEncodeSize = GetOptionalInt64(root, "predicted_encode_size").GetValueOrDefault(),
                                 .PredictedEncodeSeconds = GetOptionalDouble(root, "predicted_encode_seconds").GetValueOrDefault()
                             }
@@ -390,6 +407,7 @@ Public NotInheritable Class AbAv1Runner
     End Function
 
     Private Shared Async Function ReadHumanStdoutAsync(reader As StreamReader,
+                                                        metric As QualityScoreMetric,
                                                         progress As IProgress(Of SearchProgress),
                                                         cancellationToken As CancellationToken) As Task(Of SearchResult)
         Dim finalResult As SearchResult = Nothing
@@ -400,13 +418,14 @@ Public NotInheritable Class AbAv1Runner
             Dim clean = StripTerminalFormatting(line).Trim()
             If clean.Length = 0 Then Continue While
 
-            Dim parsed = TryParseHumanResult(clean)
+            Dim parsed = TryParseHumanResult(clean, metric)
             If parsed IsNot Nothing Then
                 finalResult = parsed
                 progress?.Report(New SearchProgress(
-                    $"找到 CRF {FormatNumber(parsed.Crf)} · VMAF {parsed.Vmaf:0.###}",
+                    $"找到 CRF {FormatNumber(parsed.Crf)} · {SearchSettings.GetMetricDisplayName(parsed.Metric)} {FormatScore(parsed.Score)}",
                     parsed.Crf,
-                    parsed.Vmaf))
+                    parsed.Score,
+                    parsed.Metric))
             Else
                 progress?.Report(New SearchProgress(clean))
             End If
@@ -438,22 +457,27 @@ Public NotInheritable Class AbAv1Runner
         End While
     End Function
 
-    Private Shared Function TryParseHumanResult(line As String) As SearchResult
+    Private Shared Function TryParseHumanResult(line As String,
+                                                expectedMetric As QualityScoreMetric) As SearchResult
         Dim match = HumanResultRegex.Match(line)
         If Not match.Success Then Return Nothing
 
         Dim crf As Double
-        Dim vmaf As Double
+        Dim score As Double
         Dim size As Double
+        Dim metric As QualityScoreMetric
+        If Not SearchSettings.TryParseMetric(match.Groups("metric").Value, metric) OrElse
+           metric <> expectedMetric Then Return Nothing
         If Not TryParseInvariant(match.Groups("crf").Value, crf) OrElse
-           Not TryParseInvariant(match.Groups("vmaf").Value, vmaf) OrElse
+           Not TryParseInvariant(match.Groups("score").Value, score) OrElse
            Not TryParseInvariant(match.Groups("size").Value, size) Then
             Return Nothing
         End If
 
         Return New SearchResult With {
             .Crf = crf,
-            .Vmaf = vmaf,
+            .Metric = metric,
+            .Score = score,
             .PredictedEncodeSize = ConvertHumanBytes(size, match.Groups("unit").Value)
         }
     End Function
@@ -463,13 +487,19 @@ Public NotInheritable Class AbAv1Runner
         If Not match.Success Then Return Nothing
 
         Dim crf As Double
-        Dim vmaf As Double
+        Dim score As Double
+        Dim metric As QualityScoreMetric
+        If Not SearchSettings.TryParseMetric(match.Groups("metric").Value, metric) Then Return Nothing
         If Not TryParseInvariant(match.Groups("crf").Value, crf) OrElse
-           Not TryParseInvariant(match.Groups("vmaf").Value, vmaf) Then
+           Not TryParseInvariant(match.Groups("score").Value, score) Then
             Return Nothing
         End If
 
-        Return New SearchProgress($"测试 CRF {FormatNumber(crf)} · VMAF {vmaf:0.###}", crf, vmaf)
+        Return New SearchProgress(
+            $"测试 CRF {FormatNumber(crf)} · {SearchSettings.GetMetricDisplayName(metric)} {FormatScore(score)}",
+            crf,
+            score,
+            metric)
     End Function
 
     Private Shared Function ConvertHumanBytes(value As Double, unit As String) As Long
@@ -503,6 +533,14 @@ Public NotInheritable Class AbAv1Runner
     End Function
 
     Private Shared Function TryParseInvariant(value As String, ByRef result As Double) As Boolean
+        Select Case If(value, String.Empty).Trim().ToLowerInvariant()
+            Case "inf", "+inf", "infinity", "+infinity"
+                result = Double.PositiveInfinity
+                Return True
+            Case "-inf", "-infinity"
+                result = Double.NegativeInfinity
+                Return True
+        End Select
         Return Double.TryParse(value, NumberStyles.Float, CultureInfo.InvariantCulture, result)
     End Function
 
@@ -531,9 +569,14 @@ Public NotInheritable Class AbAv1Runner
 
     Private Shared Function GetOptionalDouble(root As JsonElement, name As String) As Double?
         Dim value As JsonElement
-        If root.TryGetProperty(name, value) AndAlso value.ValueKind = JsonValueKind.Number Then
+        If Not root.TryGetProperty(name, value) Then Return Nothing
+        If value.ValueKind = JsonValueKind.Number Then
             Dim result As Double
             If value.TryGetDouble(result) Then Return result
+        End If
+        If value.ValueKind = JsonValueKind.String Then
+            Dim result As Double
+            If TryParseInvariant(value.GetString(), result) Then Return result
         End If
         Return Nothing
     End Function
@@ -549,6 +592,12 @@ Public NotInheritable Class AbAv1Runner
 
     Private Shared Function FormatNumber(value As Double) As String
         Return value.ToString("0.###", CultureInfo.InvariantCulture)
+    End Function
+
+    Private Shared Function FormatScore(value As Double) As String
+        If Double.IsPositiveInfinity(value) Then Return "inf"
+        If Double.IsNegativeInfinity(value) Then Return "-inf"
+        Return FormatNumber(value)
     End Function
 
 End Class

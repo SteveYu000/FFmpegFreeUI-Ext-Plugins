@@ -1,9 +1,16 @@
 Imports System.Globalization
 Imports System.IO
 
+Public Enum QualityScoreMetric
+    Vmaf
+    Xpsnr
+End Enum
+
 Public NotInheritable Class SearchSettings
 
-    Public Property TargetVmaf As Double = 95
+    Public Property Metric As QualityScoreMetric = QualityScoreMetric.Vmaf
+
+    Public Property TargetScore As Double = 95
 
     Public Property MinCrf As Double = 5
 
@@ -20,9 +27,18 @@ Public NotInheritable Class SearchSettings
     ''' </summary>
     Public Property VmafModel As String = String.Empty
 
+    Public ReadOnly Property MetricDisplayName As String
+        Get
+            Return GetMetricDisplayName(Metric)
+        End Get
+    End Property
+
     Public Sub Validate()
-        If Double.IsNaN(TargetVmaf) OrElse TargetVmaf <= 0 OrElse TargetVmaf > 100 Then
-            Throw New ArgumentOutOfRangeException(NameOf(TargetVmaf), "目标 VMAF 必须大于 0 且不超过 100。")
+        If Double.IsNaN(TargetScore) OrElse Double.IsInfinity(TargetScore) Then
+            Throw New ArgumentOutOfRangeException(NameOf(TargetScore), "目标分数必须是有限数字。")
+        End If
+        If Metric = QualityScoreMetric.Vmaf AndAlso (TargetScore <= 0 OrElse TargetScore > 100) Then
+            Throw New ArgumentOutOfRangeException(NameOf(TargetScore), "目标 VMAF 必须大于 0 且不超过 100。")
         End If
 
         If Double.IsNaN(MinCrf) OrElse Double.IsNaN(MaxCrf) OrElse MinCrf < 0 OrElse MinCrf >= MaxCrf Then
@@ -37,15 +53,46 @@ Public NotInheritable Class SearchSettings
             Throw New ArgumentException("采样时长不能为空。", NameOf(SampleDuration))
         End If
 
-        Dim model = If(VmafModel, String.Empty).Trim()
-        Dim modelPath = model
-        If model.StartsWith("path=", StringComparison.OrdinalIgnoreCase) Then
-            modelPath = model.Substring("path=".Length).Trim()
-        End If
-        If modelPath.EndsWith(".json", StringComparison.OrdinalIgnoreCase) AndAlso Not File.Exists(modelPath) Then
-            Throw New FileNotFoundException("找不到手动指定的 VMAF 模型文件。", modelPath)
+        If Metric = QualityScoreMetric.Vmaf Then
+            Dim model = If(VmafModel, String.Empty).Trim()
+            Dim modelPath = model
+            If model.StartsWith("path=", StringComparison.OrdinalIgnoreCase) Then
+                modelPath = model.Substring("path=".Length).Trim()
+            End If
+            If modelPath.EndsWith(".json", StringComparison.OrdinalIgnoreCase) AndAlso Not File.Exists(modelPath) Then
+                Throw New FileNotFoundException("找不到手动指定的 VMAF 模型文件。", modelPath)
+            End If
         End If
     End Sub
+
+    Public Shared Function TryParseMetric(value As String,
+                                          ByRef metric As QualityScoreMetric) As Boolean
+        Select Case If(value, String.Empty).Trim().ToLowerInvariant()
+            Case "vmaf"
+                metric = QualityScoreMetric.Vmaf
+                Return True
+            Case "xpsnr"
+                metric = QualityScoreMetric.Xpsnr
+                Return True
+            Case Else
+                metric = QualityScoreMetric.Vmaf
+                Return False
+        End Select
+    End Function
+
+    Public Shared Function ParseMetric(value As String) As QualityScoreMetric
+        Dim metric As QualityScoreMetric
+        If TryParseMetric(value, metric) Then Return metric
+        Return QualityScoreMetric.Vmaf
+    End Function
+
+    Public Shared Function GetMetricId(metric As QualityScoreMetric) As String
+        Return If(metric = QualityScoreMetric.Xpsnr, "xpsnr", "vmaf")
+    End Function
+
+    Public Shared Function GetMetricDisplayName(metric As QualityScoreMetric) As String
+        Return If(metric = QualityScoreMetric.Xpsnr, "XPSNR", "VMAF")
+    End Function
 
     Public Shared Function FormatNumber(value As Double) As String
         Return value.ToString("0.###", CultureInfo.InvariantCulture)
@@ -57,7 +104,9 @@ Public NotInheritable Class SearchResult
 
     Public Property Crf As Double
 
-    Public Property Vmaf As Double
+    Public Property Metric As QualityScoreMetric
+
+    Public Property Score As Double
 
     Public Property PredictedEncodeSize As Long
 
@@ -67,17 +116,23 @@ End Class
 
 Public NotInheritable Class SearchProgress
 
-    Public Sub New(message As String, Optional testedCrf As Double? = Nothing, Optional testedVmaf As Double? = Nothing)
+    Public Sub New(message As String,
+                   Optional testedCrf As Double? = Nothing,
+                   Optional testedScore As Double? = Nothing,
+                   Optional metric As QualityScoreMetric = QualityScoreMetric.Vmaf)
         Me.Message = message
         Me.TestedCrf = testedCrf
-        Me.TestedVmaf = testedVmaf
+        Me.TestedScore = testedScore
+        Me.Metric = metric
     End Sub
 
     Public ReadOnly Property Message As String
 
     Public ReadOnly Property TestedCrf As Double?
 
-    Public ReadOnly Property TestedVmaf As Double?
+    Public ReadOnly Property TestedScore As Double?
+
+    Public ReadOnly Property Metric As QualityScoreMetric
 
 End Class
 

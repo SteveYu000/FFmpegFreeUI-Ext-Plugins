@@ -25,8 +25,8 @@ Friend NotInheritable Class QualitySettingsPanel
     Private Const HostControlHeight As Integer = 32
     Private Const HostControlRowHeight As Integer = 42
     Private Const ModelRowHeight As Integer = 42
-    Private Const CompactPanelHeight As Integer =
-        FieldLabelHeight + HostControlRowHeight + ModelRowHeight
+    Private Const ScoreSettingsHeight As Integer = FieldLabelHeight + HostControlRowHeight
+    Private Const VmafSettingsHeight As Integer = ScoreSettingsHeight + ModelRowHeight
 
     Private ReadOnly _context As IExtPluginUiContext
     Private ReadOnly _stateChanged As Action(Of String)
@@ -34,7 +34,16 @@ Friend NotInheritable Class QualitySettingsPanel
     Private ReadOnly _lifetimeCancellation As New CancellationTokenSource()
     Private ReadOnly _normalTextBoxBorders As New Dictionary(Of ModernTextBox, TextBoxBorderStyle)()
     Private ReadOnly _refreshTimer As System.Windows.Forms.Timer
-    Private ReadOnly _targetVmaf As ModernTextBox
+    Private ReadOnly _qualityMetric As ModernComboBox
+    Private ReadOnly _qualityValue As ModernTextBox
+    Private ReadOnly _originalQualityMetricItems As New List(Of String)()
+    Private ReadOnly _originalQualityMetricText As String
+    Private ReadOnly _originalQualityMetricEditable As Boolean
+    Private ReadOnly _originalQualityMetricEnabled As Boolean
+    Private ReadOnly _originalQualityMetricWaterText As String
+    Private ReadOnly _originalQualityValueText As String
+    Private ReadOnly _originalQualityValueEnabled As Boolean
+    Private ReadOnly _originalQualityValueWaterText As String
     Private ReadOnly _minCrf As ModernTextBox
     Private ReadOnly _maxCrf As ModernTextBox
     Private ReadOnly _samples As ModernTextBox
@@ -46,8 +55,14 @@ Friend NotInheritable Class QualitySettingsPanel
     Private ReadOnly _validationStatus As Label
     Private ReadOnly _environmentStatus As Label
     Private ReadOnly _stateRestoredHandler As EventHandler
+    Private _layout As TableLayoutPanel
+    Private _modelRow As TableLayoutPanel
     Private _resourcesDisposed As Boolean
     Private _restoring As Boolean
+    Private _qualityFieldsActive As Boolean
+    Private _currentMetric As QualityScoreMetric = QualityScoreMetric.Vmaf
+    Private _scoreValidationMessage As String = String.Empty
+    Private _settingsValidationMessage As String = String.Empty
 
     Public Sub New(context As IExtPluginUiContext,
                    Optional stateChanged As Action(Of String) = Nothing)
@@ -69,24 +84,43 @@ Friend NotInheritable Class QualitySettingsPanel
         Dock = DockStyle.Top
         Font = context.AnchorControl.Font
         ForeColor = ColorText
-        Height = CompactPanelHeight
+        Height = VmafSettingsHeight
         Margin = Padding.Empty
-        MinimumSize = New Size(0, CompactPanelHeight)
+        MinimumSize = New Size(0, VmafSettingsHeight)
         Padding = Padding.Empty
 
-        Dim nativeTextBox = TryCast(
+        _qualityValue = TryCast(
             context.GetAnchorControl(ExtFFmpegFreeUIUiAnchors.ParametersVideoQualityValue),
             ModernTextBox)
+        _qualityMetric = TryCast(
+            context.GetAnchorControl(ExtFFmpegFreeUIUiAnchors.ParametersVideoQualityParameterName),
+            ModernComboBox)
         Dim nativeComboBox = TryCast(
             context.GetAnchorControl(ExtFFmpegFreeUIUiAnchors.ParametersVideoQualityMode),
             ModernComboBox)
-        Dim backgroundSource = ResolveBackgroundSource(context.AnchorControl, nativeTextBox, nativeComboBox)
-        _targetVmaf = CreateTextBox("目标 VMAF", backgroundSource, nativeTextBox)
-        _minCrf = CreateTextBox("最小 CRF", backgroundSource, nativeTextBox)
-        _maxCrf = CreateTextBox("最大 CRF", backgroundSource, nativeTextBox)
-        _samples = CreateTextBox("留空自动采样", backgroundSource, nativeTextBox)
-        _sampleDuration = CreateTextBox("例如 20s", backgroundSource, nativeTextBox)
-        RememberNormalBorders(_targetVmaf, _minCrf, _maxCrf, _samples, _sampleDuration)
+        Dim backgroundSource = ResolveBackgroundSource(context.AnchorControl, _qualityValue, nativeComboBox)
+
+        If _qualityMetric IsNot Nothing Then
+            For index = 0 To _qualityMetric.Items.Count - 1
+                _originalQualityMetricItems.Add(If(_qualityMetric.Items(index), String.Empty).ToString())
+            Next
+            _originalQualityMetricText = If(_qualityMetric.Text, String.Empty)
+            _originalQualityMetricEditable = _qualityMetric.Editable
+            _originalQualityMetricEnabled = _qualityMetric.Enabled
+            _originalQualityMetricWaterText = If(_qualityMetric.WaterText, String.Empty)
+        End If
+        If _qualityValue IsNot Nothing Then
+            _originalQualityValueText = If(_qualityValue.Text, String.Empty)
+            _originalQualityValueEnabled = _qualityValue.Enabled
+            _originalQualityValueWaterText = If(_qualityValue.WaterText, String.Empty)
+        End If
+
+        _minCrf = CreateTextBox("最小 CRF", backgroundSource, _qualityValue)
+        _maxCrf = CreateTextBox("最大 CRF", backgroundSource, _qualityValue)
+        _samples = CreateTextBox("留空自动采样", backgroundSource, _qualityValue)
+        _sampleDuration = CreateTextBox("例如 20s", backgroundSource, _qualityValue)
+        RememberNormalBorders(_minCrf, _maxCrf, _samples, _sampleDuration)
+        If _qualityValue IsNot Nothing Then RememberNormalBorders(_qualityValue)
         _vmafModel = CreateComboBox(
             "留空使用 ab-av1 自动模型",
             backgroundSource,
@@ -102,9 +136,14 @@ Friend NotInheritable Class QualitySettingsPanel
         _environmentStatus.Name = QualityValueStatusAdornment.StatusControlName
 
         Controls.Add(BuildLayout(backgroundSource, browseModelButton))
-        _qualityValueStatus = New QualityValueStatusAdornment(nativeTextBox, _environmentStatus)
+        _qualityValueStatus = New QualityValueStatusAdornment(_qualityValue, _environmentStatus)
 
-        AddHandler _targetVmaf.TextChanged, AddressOf SettingsChanged
+        If _qualityMetric IsNot Nothing Then
+            AddHandler _qualityMetric.TextChanged, AddressOf QualityMetricChanged
+        End If
+        If _qualityValue IsNot Nothing Then
+            AddHandler _qualityValue.TextChanged, AddressOf QualityScoreChanged
+        End If
         AddHandler _minCrf.TextChanged, AddressOf SettingsChanged
         AddHandler _maxCrf.TextChanged, AddressOf SettingsChanged
         AddHandler _samples.TextChanged, AddressOf SettingsChanged
@@ -133,6 +172,11 @@ Friend NotInheritable Class QualitySettingsPanel
             BeginInvoke(New Action(Of Boolean)(AddressOf SetActive), active)
             Return
         End If
+        If active Then
+            ConfigureNativeQualityFields(AbAv1PluginState.Deserialize(_context.StateJson))
+        Else
+            RestoreNativeQualityFields(preserveCurrentText:=True)
+        End If
         If Visible <> active Then Visible = active
         _qualityValueStatus.SetActive(active)
     End Sub
@@ -141,6 +185,13 @@ Friend NotInheritable Class QualitySettingsPanel
         If disposing AndAlso Not _resourcesDisposed Then
             _resourcesDisposed = True
             RemoveHandler _context.StateRestored, _stateRestoredHandler
+            If _qualityMetric IsNot Nothing AndAlso Not _qualityMetric.IsDisposed Then
+                RemoveHandler _qualityMetric.TextChanged, AddressOf QualityMetricChanged
+            End If
+            If _qualityValue IsNot Nothing AndAlso Not _qualityValue.IsDisposed Then
+                RemoveHandler _qualityValue.TextChanged, AddressOf QualityScoreChanged
+            End If
+            RestoreNativeQualityFields(preserveCurrentText:=False)
             _lifetimeCancellation.Cancel()
             _refreshTimer.Stop()
             RemoveHandler _refreshTimer.Tick, AddressOf RefreshTimerTick
@@ -151,33 +202,83 @@ Friend NotInheritable Class QualitySettingsPanel
         MyBase.Dispose(disposing)
     End Sub
 
+    Protected Overrides Sub OnDpiChangedAfterParent(e As EventArgs)
+        MyBase.OnDpiChangedAfterParent(e)
+        If _layout IsNot Nothing Then UpdateMetricLayout(_currentMetric)
+    End Sub
+
+    Private Sub ConfigureNativeQualityFields(state As AbAv1PluginState)
+        If _qualityMetric Is Nothing OrElse _qualityValue Is Nothing Then Return
+
+        Dim wasRestoring = _restoring
+        _restoring = True
+        Try
+            _qualityMetric.Items.Clear()
+            _qualityMetric.Items.AddRange(New String() {"VMAF", "XPSNR"})
+            _qualityMetric.Editable = False
+            _qualityMetric.Enabled = True
+            _qualityMetric.WaterText = "目标指标"
+            _qualityValue.Enabled = True
+            _qualityValue.WaterText = "目标分数"
+            _qualityMetric.Text = SearchSettings.GetMetricDisplayName(state.Metric)
+            SetTextIfChanged(_qualityValue, SearchSettings.FormatNumber(state.TargetScore))
+            SetTextBoxError(_qualityValue, False)
+            _qualityFieldsActive = True
+            UpdateMetricLayout(state.Metric)
+        Finally
+            _restoring = wasRestoring
+        End Try
+    End Sub
+
+    Private Sub RestoreNativeQualityFields(preserveCurrentText As Boolean)
+        If Not _qualityFieldsActive OrElse _qualityMetric Is Nothing OrElse _qualityValue Is Nothing Then Return
+
+        Dim metricText = If(preserveCurrentText, _qualityMetric.Text, _originalQualityMetricText)
+        Dim scoreText = If(preserveCurrentText, _qualityValue.Text, _originalQualityValueText)
+        Dim wasRestoring = _restoring
+        _restoring = True
+        Try
+            _qualityMetric.Items.Clear()
+            _qualityMetric.Items.AddRange(_originalQualityMetricItems)
+            _qualityMetric.Editable = _originalQualityMetricEditable
+            _qualityMetric.Enabled = _originalQualityMetricEnabled
+            _qualityMetric.WaterText = _originalQualityMetricWaterText
+            _qualityValue.Enabled = _originalQualityValueEnabled
+            _qualityValue.WaterText = _originalQualityValueWaterText
+            _qualityMetric.Text = metricText
+            _qualityValue.Text = scoreText
+            SetTextBoxError(_qualityValue, False)
+            _qualityFieldsActive = False
+        Finally
+            _restoring = wasRestoring
+        End Try
+    End Sub
+
     Private Function BuildLayout(backgroundSource As Control,
                                  browseModelButton As ModernButton) As Control
         Dim layout As New TableLayoutPanel With {
             .AutoSize = False,
             .BackColor = Color.Transparent,
-            .ColumnCount = 6,
+            .ColumnCount = 5,
             .Dock = DockStyle.Fill,
             .Margin = Padding.Empty,
             .Padding = Padding.Empty,
             .RowCount = 2
         }
         layout.SuspendLayout()
-        layout.ColumnStyles.Add(New ColumnStyle(SizeType.Percent, 13.0F))
-        layout.ColumnStyles.Add(New ColumnStyle(SizeType.Percent, 13.0F))
-        layout.ColumnStyles.Add(New ColumnStyle(SizeType.Percent, 13.0F))
+        layout.ColumnStyles.Add(New ColumnStyle(SizeType.Percent, 15.0F))
+        layout.ColumnStyles.Add(New ColumnStyle(SizeType.Percent, 15.0F))
+        layout.ColumnStyles.Add(New ColumnStyle(SizeType.Percent, 25.0F))
         layout.ColumnStyles.Add(New ColumnStyle(SizeType.Percent, 20.0F))
-        layout.ColumnStyles.Add(New ColumnStyle(SizeType.Percent, 16.0F))
         layout.ColumnStyles.Add(New ColumnStyle(SizeType.Percent, 25.0F))
         layout.RowStyles.Add(New RowStyle(SizeType.Absolute, FieldLabelHeight + HostControlRowHeight))
         layout.RowStyles.Add(New RowStyle(SizeType.Absolute, ModelRowHeight))
 
-        layout.Controls.Add(CreateSearchField("目标 VMAF", _targetVmaf, backgroundSource), 0, 0)
-        layout.Controls.Add(CreateSearchField("最小 CRF", _minCrf, backgroundSource), 1, 0)
-        layout.Controls.Add(CreateSearchField("最大 CRF", _maxCrf, backgroundSource), 2, 0)
-        layout.Controls.Add(CreateSearchField("采样数量", _samples, backgroundSource), 3, 0)
-        layout.Controls.Add(CreateSearchField("单段时长", _sampleDuration, backgroundSource), 4, 0)
-        layout.Controls.Add(CreateThoroughField(_thorough), 5, 0)
+        layout.Controls.Add(CreateSearchField("最小 CRF", _minCrf, backgroundSource), 0, 0)
+        layout.Controls.Add(CreateSearchField("最大 CRF", _maxCrf, backgroundSource), 1, 0)
+        layout.Controls.Add(CreateSearchField("采样数量", _samples, backgroundSource), 2, 0)
+        layout.Controls.Add(CreateSearchField("单段时长", _sampleDuration, backgroundSource), 3, 0)
+        layout.Controls.Add(CreateThoroughField(_thorough), 4, 0)
 
         Dim modelRow As New TableLayoutPanel With {
             .BackColor = Color.Transparent,
@@ -226,10 +327,48 @@ Friend NotInheritable Class QualitySettingsPanel
         modelRow.ResumeLayout(False)
 
         layout.Controls.Add(modelRow, 0, 1)
-        layout.SetColumnSpan(modelRow, 6)
+        layout.SetColumnSpan(modelRow, 5)
 
         layout.ResumeLayout(False)
+        _layout = layout
+        _modelRow = modelRow
         Return layout
+    End Function
+
+    Private Sub UpdateMetricLayout(metric As QualityScoreMetric)
+        _currentMetric = metric
+        If _layout Is Nothing OrElse _modelRow Is Nothing Then Return
+
+        Dim showVmafModel = metric = QualityScoreMetric.Vmaf
+        ' Absolute RowStyle heights are scaled by WinForms when the panel is attached to
+        ' a high-DPI host. Reusing the logical 72/42 px constants after that point shrinks
+        ' the outer panel back to unscaled pixels and clips the already-scaled editors.
+        Dim scoreRowHeight = ResolveCurrentScoreRowHeight()
+        Dim scaledModelRowHeight = ScaleModelRowHeight(scoreRowHeight)
+        _layout.RowStyles(1).Height = If(showVmafModel, scaledModelRowHeight, 0)
+        _modelRow.Visible = showVmafModel
+        Dim desiredHeight = scoreRowHeight + If(showVmafModel, scaledModelRowHeight, 0)
+        If MinimumSize.Height <> desiredHeight Then MinimumSize = New Size(0, desiredHeight)
+        If Height <> desiredHeight Then Height = desiredHeight
+        _layout.PerformLayout()
+        Parent?.PerformLayout()
+        Parent?.Parent?.PerformLayout()
+        UpdateValidationPresentation()
+    End Sub
+
+    Private Function ResolveCurrentScoreRowHeight() As Integer
+        If _layout Is Nothing OrElse _layout.RowStyles.Count = 0 Then Return ScoreSettingsHeight
+        Dim currentHeight = CInt(Math.Ceiling(_layout.RowStyles(0).Height))
+        Return If(currentHeight > 0, currentHeight, ScoreSettingsHeight)
+    End Function
+
+    Friend Shared Function ScaleModelRowHeight(scoreRowHeight As Integer) As Integer
+        If scoreRowHeight <= 0 Then scoreRowHeight = ScoreSettingsHeight
+        Return Math.Max(
+            1,
+            CInt(Math.Round(
+                scoreRowHeight * CDbl(ModelRowHeight) / ScoreSettingsHeight,
+                MidpointRounding.AwayFromZero)))
     End Function
 
     Private Sub RestoreState()
@@ -243,7 +382,6 @@ Friend NotInheritable Class QualitySettingsPanel
         SuspendLayout()
         Try
             Dim state = AbAv1PluginState.Deserialize(_context.StateJson)
-            SetTextIfChanged(_targetVmaf, SearchSettings.FormatNumber(state.TargetVmaf))
             SetTextIfChanged(_minCrf, SearchSettings.FormatNumber(state.MinCrf))
             SetTextIfChanged(_maxCrf, SearchSettings.FormatNumber(state.MaxCrf))
             SetTextIfChanged(
@@ -257,6 +395,7 @@ Friend NotInheritable Class QualitySettingsPanel
                 _vmafModel.Text = state.VmafModel
             End If
             ClearValidationState()
+            UpdateMetricLayout(state.Metric)
             SetActive(state.Enabled)
         Finally
             ResumeLayout(False)
@@ -267,22 +406,14 @@ Friend NotInheritable Class QualitySettingsPanel
     Private Sub SettingsChanged(sender As Object, e As EventArgs)
         If _restoring OrElse IsDisposed Then Return
 
-        Dim targetVmaf As Double
         Dim minCrf As Double
         Dim maxCrf As Double
-        Dim targetValid = TryParseNumber(_targetVmaf.Text, targetVmaf) AndAlso
-                          targetVmaf > 0 AndAlso targetVmaf <= 100
         Dim minValid = TryParseNumber(_minCrf.Text, minCrf) AndAlso minCrf >= 0
         Dim maxValid = TryParseNumber(_maxCrf.Text, maxCrf) AndAlso maxCrf >= 0
         Dim rangeValid = minValid AndAlso maxValid AndAlso minCrf < maxCrf
-        SetTextBoxError(_targetVmaf, Not targetValid)
         SetTextBoxError(_minCrf, Not minValid OrElse Not rangeValid)
         SetTextBoxError(_maxCrf, Not maxValid OrElse Not rangeValid)
 
-        If Not targetValid Then
-            ShowValidationError("目标 VMAF 必须大于 0 且不超过 100")
-            Return
-        End If
         If Not rangeValid Then
             ShowValidationError("CRF 范围无效：最小值必须小于最大值")
             Return
@@ -312,13 +443,66 @@ Friend NotInheritable Class QualitySettingsPanel
         ClearValidationMessage()
 
         Dim state = AbAv1PluginState.Deserialize(_context.StateJson)
-        state.TargetVmaf = targetVmaf
         state.MinCrf = minCrf
         state.MaxCrf = maxCrf
         state.Samples = samplesValue
         state.SampleDuration = duration
         state.Thorough = _thorough.Checked
         state.VmafModel = If(_vmafModel.Text, String.Empty).Trim()
+        Dim stateJson = state.Serialize()
+        _context.StateJson = stateJson
+        If _stateChanged IsNot Nothing Then _stateChanged.Invoke(stateJson)
+        QueueParameterRefresh()
+    End Sub
+
+    Private Sub QualityMetricChanged(sender As Object, e As EventArgs)
+        If _restoring OrElse IsDisposed OrElse Not _qualityFieldsActive Then Return
+
+        Dim metric As QualityScoreMetric
+        If Not SearchSettings.TryParseMetric(_qualityMetric.Text, metric) Then Return
+        Dim state = AbAv1PluginState.Deserialize(_context.StateJson)
+        If state.Metric = metric Then Return
+
+        state.Metric = metric
+        Dim wasRestoring = _restoring
+        _restoring = True
+        Try
+            SetTextIfChanged(_qualityValue, SearchSettings.FormatNumber(state.TargetScore))
+            SetTextBoxError(_qualityValue, False)
+            _scoreValidationMessage = String.Empty
+            UpdateMetricLayout(metric)
+        Finally
+            _restoring = wasRestoring
+        End Try
+        SaveState(state)
+    End Sub
+
+    Private Sub QualityScoreChanged(sender As Object, e As EventArgs)
+        If _restoring OrElse IsDisposed OrElse Not _qualityFieldsActive Then Return
+
+        Dim state = AbAv1PluginState.Deserialize(_context.StateJson)
+        Dim score As Double
+        Dim scoreValid = TryParseNumber(_qualityValue.Text, score) AndAlso
+                         Not Double.IsNaN(score) AndAlso
+                         Not Double.IsInfinity(score) AndAlso
+                         (state.Metric = QualityScoreMetric.Xpsnr OrElse (score > 0 AndAlso score <= 100))
+        SetTextBoxError(_qualityValue, Not scoreValid)
+        If Not scoreValid Then
+            _scoreValidationMessage = If(
+                state.Metric = QualityScoreMetric.Vmaf,
+                "目标 VMAF 必须大于 0 且不超过 100",
+                "目标 XPSNR 必须是有限数字")
+            UpdateValidationPresentation()
+            Return
+        End If
+
+        _scoreValidationMessage = String.Empty
+        state.TargetScore = score
+        SaveState(state)
+        UpdateValidationPresentation()
+    End Sub
+
+    Private Sub SaveState(state As AbAv1PluginState)
         Dim stateJson = state.Serialize()
         _context.StateJson = stateJson
         If _stateChanged IsNot Nothing Then _stateChanged.Invoke(stateJson)
@@ -378,6 +562,17 @@ Friend NotInheritable Class QualitySettingsPanel
     End Sub
 
     Private Sub UpdateEnvironmentStatus()
+        Dim inlineError = _scoreValidationMessage
+        If inlineError = String.Empty AndAlso
+           _currentMetric = QualityScoreMetric.Xpsnr Then
+            inlineError = _settingsValidationMessage
+        End If
+        If inlineError <> String.Empty Then
+            _environmentStatus.ForeColor = ColorDanger
+            _environmentStatus.Text = inlineError
+            Return
+        End If
+
         If File.Exists(PluginEnvironment.AbAv1Path) Then
             _environmentStatus.ForeColor = ColorSuccess
             _environmentStatus.Text = "ab-av1 已就绪"
@@ -398,25 +593,34 @@ Friend NotInheritable Class QualitySettingsPanel
     End Sub
 
     Private Sub ShowValidationError(message As String)
-        If Not String.Equals(_validationStatus.Text, message, StringComparison.Ordinal) Then
-            _validationStatus.ForeColor = ColorDanger
-            _validationStatus.Text = message
-        End If
-        If Not _validationStatus.Visible Then _validationStatus.Visible = True
-        _validationStatus.BringToFront()
+        _settingsValidationMessage = If(message, String.Empty)
+        UpdateValidationPresentation()
     End Sub
 
     Private Sub ClearValidationMessage()
-        If _validationStatus.Text <> String.Empty Then _validationStatus.Text = String.Empty
-        If _validationStatus.Visible Then _validationStatus.Visible = False
+        _settingsValidationMessage = String.Empty
+        UpdateValidationPresentation()
+    End Sub
+
+    Private Sub UpdateValidationPresentation()
+        Dim showModelError = _currentMetric = QualityScoreMetric.Vmaf AndAlso
+                             _settingsValidationMessage <> String.Empty
+        If Not String.Equals(_validationStatus.Text, _settingsValidationMessage, StringComparison.Ordinal) Then
+            _validationStatus.ForeColor = ColorDanger
+            _validationStatus.Text = _settingsValidationMessage
+        End If
+        _validationStatus.Visible = showModelError
+        If showModelError Then _validationStatus.BringToFront()
+        UpdateEnvironmentStatus()
     End Sub
 
     Private Sub ClearValidationState()
-        SetTextBoxError(_targetVmaf, False)
+        If _qualityValue IsNot Nothing Then SetTextBoxError(_qualityValue, False)
         SetTextBoxError(_minCrf, False)
         SetTextBoxError(_maxCrf, False)
         SetTextBoxError(_samples, False)
         SetTextBoxError(_sampleDuration, False)
+        _scoreValidationMessage = String.Empty
         ClearValidationMessage()
     End Sub
 

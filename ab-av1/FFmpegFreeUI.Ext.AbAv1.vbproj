@@ -14,10 +14,11 @@
     <PlatformTarget>AnyCPU</PlatformTarget>
     <DebugType>embedded</DebugType>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
-    <Version>0.0.6</Version>
+    <Version>0.0.9</Version>
     <Authors>Github @SteveYu000</Authors>
-    <Description>通过 FFmpegFreeUI Ext Plugin API 在原生质量参数页和任务队列中集成 ab-av1 VMAF 目标 CRF 搜索。</Description>
+    <Description>通过 FFmpegFreeUI Ext Plugin API 在原生质量参数页和任务队列中集成 ab-av1 VMAF/XPSNR 目标 CRF 搜索。</Description>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
     <!-- 插件构建必须可离线复现；依赖版本已锁定为宿主当前版本。 -->
     <NuGetAudit>false</NuGetAudit>
   </PropertyGroup>
@@ -27,14 +28,11 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\FFmpegFreeUI-API-Extended-Edition\FFmpegFreeUI.Ext.PluginSdk\FFmpegFreeUI.Ext.PluginSdk.csproj">
-      <Private>false</Private>
-    </ProjectReference>
+    <!-- SDK 由 NuGet 提供编译合同和 buildTransitive 部署目标；宿主运行时提供实际程序集。 -->
+    <PackageReference Include="FFmpegFreeUI.Ext.PluginSdk" Version="[2.5.0]" PrivateAssets="all" ExcludeAssets="runtime" />
     <!-- 与当前 3FUI 使用同一 LakeUI 版本；宿主运行时已提供该程序集及渲染依赖。 -->
-    <PackageReference Include="LakeUI" Version="3.23.0" />
+    <PackageReference Include="LakeUI" Version="[3.23.0]" />
   </ItemGroup>
-
-  <Import Project="..\..\FFmpegFreeUI-API-Extended-Edition\FFmpegFreeUI.Ext.PluginSdk\FFmpegFreeUI.Ext.PluginSdk.Deploy.targets" />
 
   <Target Name="CreatePluginArtifact" AfterTargets="Build" Condition="'$(Configuration)' == 'Release'">
     <MakeDir Directories="$(MSBuildProjectDirectory)\dist" />

@@ -20,28 +20,47 @@ Public NotInheritable Class PresetProfile
     Private ReadOnly _svtArguments As New List(Of String)()
     Private ReadOnly _extraEncoderArguments As New List(Of String)()
     Private ReadOnly _inputEncoderArguments As New List(Of String)()
+    Private ReadOnly _pendingSvtParameterGroups As New List(Of String)()
+    Private ReadOnly _searchOwnedArguments As New List(Of String)()
+    Private _effectiveEncoder As String
     Private _effectivePreset As String
+    Private _effectivePresetUsesFfmpegQualityArgument As Boolean
+    Private _effectivePixelFormat As String
+    Private _effectiveVideoFilter As String
+    Private _keyint As String
+    Private _sceneChangeDetection As String
 
     Private Sub New(sourcePath As String, root As JsonObject, validateProcessingChain As Boolean)
         Me.SourcePath = sourcePath
         _root = root
 
-        Encoder = GetString("视频参数_编码器_具体编码")
+        _effectiveEncoder = GetString("视频参数_编码器_具体编码")
         _effectivePreset = GetString("视频参数_编码器_编码预设")
-        PixelFormat = GetString("视频参数_色彩管理_像素格式")
+        _effectivePresetUsesFfmpegQualityArgument = UsesFfmpegQualityPreset(_effectiveEncoder)
+        _effectivePixelFormat = GetString("视频参数_色彩管理_像素格式")
+        _effectiveVideoFilter = GetString("自定义参数_视频滤镜")
         OutputContainer = GetString("输出容器")
 
         If validateProcessingChain Then ValidateProcessingChainCompatibility()
         MapStructuredEncoderArguments()
         ParseAdditionalArguments(GetString("视频参数_质量控制_进阶参数集"))
         ParseAdditionalArguments(GetString("自定义参数_视频参数"))
+        ResolveSvtParameterGroups()
     End Sub
 
     Public ReadOnly Property SourcePath As String
 
     Public ReadOnly Property Encoder As String
+        Get
+            Return _effectiveEncoder
+        End Get
+    End Property
 
     Public ReadOnly Property PixelFormat As String
+        Get
+            Return _effectivePixelFormat
+        End Get
+    End Property
 
     Public ReadOnly Property OutputContainer As String
 
@@ -54,6 +73,16 @@ Public NotInheritable Class PresetProfile
     Public ReadOnly Property SvtArgumentCount As Integer
         Get
             Return _svtArguments.Count
+        End Get
+    End Property
+
+    ''' <summary>
+    ''' 只保留在 3FUI 正式编码预设中、不能重复传给 ab-av1 搜索过程的参数数量。
+    ''' 这些参数从不会被从用户预设中删除或改写。
+    ''' </summary>
+    Public ReadOnly Property SearchOwnedArgumentCount As Integer
+        Get
+            Return _searchOwnedArguments.Count
         End Get
     End Property
 
@@ -134,7 +163,7 @@ Public NotInheritable Class PresetProfile
         End If
 
         If Not String.IsNullOrWhiteSpace(EncoderPreset) Then
-            If UsesFfmpegQualityPreset(Encoder) Then
+            If _effectivePresetUsesFfmpegQualityArgument Then
                 arguments.Add("--enc")
                 arguments.Add("quality=" & EncoderPreset)
             Else
@@ -148,10 +177,19 @@ Public NotInheritable Class PresetProfile
             arguments.Add(PixelFormat)
         End If
 
-        Dim customFilter = GetString("自定义参数_视频滤镜")
-        If Not String.IsNullOrWhiteSpace(customFilter) Then
+        If Not String.IsNullOrWhiteSpace(_effectiveVideoFilter) Then
             arguments.Add("--vfilter")
-            arguments.Add(customFilter)
+            arguments.Add(_effectiveVideoFilter)
+        End If
+
+        If Not String.IsNullOrWhiteSpace(_keyint) Then
+            arguments.Add("--keyint")
+            arguments.Add(_keyint)
+        End If
+
+        If Not String.IsNullOrWhiteSpace(_sceneChangeDetection) Then
+            arguments.Add("--scd")
+            arguments.Add(_sceneChangeDetection)
         End If
 
         For Each value In _svtArguments
@@ -177,8 +215,11 @@ Public NotInheritable Class PresetProfile
                                                      settings As SearchSettings,
                                                      jsonOutput As Boolean)
 
-        arguments.Add("--min-vmaf")
-        arguments.Add(SearchSettings.FormatNumber(settings.TargetVmaf))
+        arguments.Add(If(
+            settings.Metric = QualityScoreMetric.Xpsnr,
+            "--min-xpsnr",
+            "--min-vmaf"))
+        arguments.Add(SearchSettings.FormatNumber(settings.TargetScore))
         arguments.Add("--min-crf")
         arguments.Add(SearchSettings.FormatNumber(settings.MinCrf))
         arguments.Add("--max-crf")
@@ -194,10 +235,12 @@ Public NotInheritable Class PresetProfile
 
         If settings.Thorough Then arguments.Add("--thorough")
 
-        Dim vmafModelArgument = BuildVmafModelArgument(settings.VmafModel)
-        If vmafModelArgument <> "" Then
-            arguments.Add("--vmaf")
-            arguments.Add(vmafModelArgument)
+        If settings.Metric = QualityScoreMetric.Vmaf Then
+            Dim vmafModelArgument = BuildVmafModelArgument(settings.VmafModel)
+            If vmafModelArgument <> "" Then
+                arguments.Add("--vmaf")
+                arguments.Add(vmafModelArgument)
+            End If
         End If
 
         If jsonOutput Then
@@ -350,7 +393,9 @@ Public NotInheritable Class PresetProfile
 
     Private Sub AddStructuredInputArgument(name As String, value As String)
         If Not String.IsNullOrWhiteSpace(value) Then
-            _inputEncoderArguments.Add(name & "=" & value)
+            If Not TryMapDedicatedAbAv1InputArgument(name, value) Then
+                _inputEncoderArguments.Add(name & "=" & value)
+            End If
         End If
     End Sub
 
@@ -375,18 +420,24 @@ Public NotInheritable Class PresetProfile
 
             Dim optionName = optionToken.TrimStart("-"c)
             Dim value As String = Nothing
-            If index + 1 < tokens.Count AndAlso Not LooksLikeOption(tokens(index + 1)) Then
+            Dim inlineValueSeparator = optionName.IndexOf("="c)
+            If inlineValueSeparator > 0 Then
+                value = optionName.Substring(inlineValueSeparator + 1)
+                optionName = optionName.Substring(0, inlineValueSeparator)
+            ElseIf index + 1 < tokens.Count AndAlso Not LooksLikeOption(tokens(index + 1)) Then
                 value = tokens(index + 1)
                 index += 1
             End If
 
-            If optionName.StartsWith("svtav1-params", StringComparison.OrdinalIgnoreCase) AndAlso IsSvtEncoder(Encoder) Then
+            If optionName.Equals("svtav1-params", StringComparison.OrdinalIgnoreCase) Then
                 If String.IsNullOrWhiteSpace(value) Then
                     _extraEncoderArguments.Add(optionName)
                     index += 1
                     Continue While
                 End If
-                ParseSvtParameters(value)
+                _pendingSvtParameterGroups.Add(value)
+            ElseIf TryMapDedicatedAbAv1Argument(optionName, value) Then
+                ' ab-av1 禁止通过 --enc 重复传入这些参数，因此转到它的一级选项。
             Else
                 AddEncoderArgument(optionName, value)
             End If
@@ -395,23 +446,133 @@ Public NotInheritable Class PresetProfile
         End While
     End Sub
 
+    Private Sub ResolveSvtParameterGroups()
+        For Each value In _pendingSvtParameterGroups
+            If IsSvtEncoder(Encoder) Then
+                ParseSvtParameters(value)
+            Else
+                ' 其他编码器不会被自动改成 SVT。保留用户原参数，由 ab-av1 诊断该冲突。
+                _extraEncoderArguments.Add("svtav1-params=" & value)
+            End If
+        Next
+        _pendingSvtParameterGroups.Clear()
+    End Sub
+
     Private Sub ParseSvtParameters(value As String)
         For Each parameter In value.Split(":"c, StringSplitOptions.RemoveEmptyEntries Or StringSplitOptions.TrimEntries)
             Dim separator = parameter.IndexOf("="c)
             If separator <= 0 OrElse separator = parameter.Length - 1 Then
-                _svtArguments.Add(parameter)
+                If Not TryMapReservedSvtArgument(parameter, Nothing, parameter) Then
+                    _svtArguments.Add(parameter)
+                End If
                 Continue For
             End If
 
             Dim name = parameter.Substring(0, separator).Trim()
             Dim parameterValue = parameter.Substring(separator + 1).Trim()
-            _svtArguments.Add(name & "=" & parameterValue)
+            If Not TryMapReservedSvtArgument(name, parameterValue, parameter) Then
+                _svtArguments.Add(name & "=" & parameterValue)
+            End If
         Next
     End Sub
 
+    Private Function TryMapReservedSvtArgument(name As String,
+                                               value As String,
+                                               originalArgument As String) As Boolean
+
+        Dim normalizedName = If(name, String.Empty).Trim().TrimStart("-"c)
+        Dim deniedPrefixes = {"crf", "preset", "keyint", "scd", "input-depth"}
+        Dim deniedPrefix = deniedPrefixes.FirstOrDefault(
+            Function(candidate) normalizedName.StartsWith(candidate, StringComparison.OrdinalIgnoreCase))
+        If deniedPrefix Is Nothing Then Return False
+
+        ' ab-av1 本身以前缀匹配拒绝这五类 --svt 值。只有名称完全匹配时才能安全转换。
+        If normalizedName.Equals(deniedPrefix, StringComparison.OrdinalIgnoreCase) AndAlso value IsNot Nothing Then
+            Select Case deniedPrefix
+                Case "preset"
+                    _effectivePreset = value
+                    _effectivePresetUsesFfmpegQualityArgument = False
+                    Return True
+                Case "keyint"
+                    _keyint = value
+                    Return True
+                Case "scd"
+                    _sceneChangeDetection = NormalizeSceneChangeDetection(value)
+                    Return True
+                Case "crf", "input-depth"
+                    ' crf 和输入位深由 ab-av1 的搜索/像素格式流程掌控，且没有可重复传入的等价选项。
+            End Select
+        End If
+
+        _searchOwnedArguments.Add(originalArgument)
+        Return True
+    End Function
+
+    Private Function TryMapDedicatedAbAv1Argument(optionName As String, value As String) As Boolean
+        Dim normalizedName = If(optionName, String.Empty).Trim().TrimStart("-"c)
+
+        Select Case normalizedName.ToLowerInvariant()
+            Case "preset"
+                If value Is Nothing Then Return False
+                _effectivePreset = value
+                _effectivePresetUsesFfmpegQualityArgument = False
+                Return True
+            Case "pix_fmt"
+                If value Is Nothing Then Return False
+                _effectivePixelFormat = value
+                Return True
+            Case "vf", "filter:v"
+                If value Is Nothing Then Return False
+                _effectiveVideoFilter = value
+                Return True
+            Case "c:v", "c:v:0", "codec:v", "codec:v:0", "vcodec"
+                If value Is Nothing Then Return False
+                _effectiveEncoder = value
+                Return True
+            Case "crf", "i", "y", "n", "c:a", "codec:a", "acodec"
+                ' 这些选项由 ab-av1 的搜索输入、动态 CRF 或无音频样本负责。
+                ' 只从搜索子命令排除；3FUI 保存的原预设和最终 FFmpeg 命令不变。
+                _searchOwnedArguments.Add(If(value Is Nothing, optionName, optionName & "=" & value))
+                Return True
+        End Select
+
+        Return False
+    End Function
+
+    Private Function TryMapDedicatedAbAv1InputArgument(optionName As String, value As String) As Boolean
+        Dim normalizedName = If(optionName, String.Empty).Trim().TrimStart("-"c)
+
+        Select Case normalizedName.ToLowerInvariant()
+            Case "preset"
+                _effectivePreset = value
+                _effectivePresetUsesFfmpegQualityArgument = False
+                Return True
+            Case "pix_fmt"
+                _effectivePixelFormat = value
+                Return True
+            Case "vf", "filter:v"
+                _effectiveVideoFilter = value
+                Return True
+            Case "crf", "i", "y", "n"
+                _searchOwnedArguments.Add(optionName & "=" & value)
+                Return True
+        End Select
+
+        Return False
+    End Function
+
+    Private Shared Function NormalizeSceneChangeDetection(value As String) As String
+        Dim normalized = If(value, String.Empty).Trim()
+        If normalized.Equals("1", StringComparison.Ordinal) OrElse
+           normalized.Equals("true", StringComparison.OrdinalIgnoreCase) Then Return "true"
+        If normalized.Equals("0", StringComparison.Ordinal) OrElse
+           normalized.Equals("false", StringComparison.OrdinalIgnoreCase) Then Return "false"
+        Return value
+    End Function
+
     Private Sub AddEncoderArgument(optionName As String, value As String)
-        ' --enc 会把 name=value 还原为 FFmpeg 的 -name value。这里不维护白名单，
-        ' 也不替用户删除冲突或错误参数；最终诊断由 ab-av1/FFmpeg 给出。
+        ' --enc 会把 name=value 还原为 FFmpeg 的 -name value。除 ab-av1 明确保留的选项外，
+        ' 不维护编码器白名单，也不修正用户的名称或值。
         _extraEncoderArguments.Add(If(value Is Nothing, optionName, optionName & "=" & value))
     End Sub
 

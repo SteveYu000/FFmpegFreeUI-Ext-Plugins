@@ -7,7 +7,8 @@
     <OptionExplicit>On</OptionExplicit>
     <OptionInfer>On</OptionInfer>
     <OptionStrict>On</OptionStrict>
-    <!-- 测试项目只有源码 ProjectReference，没有可审计的 NuGet 包。 -->
+    <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
+    <!-- 依赖版本由 PackageReference 和锁文件固定。 -->
     <NuGetAudit>false</NuGetAudit>
     <RootNamespace>FFmpegFreeUI.Ext.AbAv1.Tests</RootNamespace>
     <AssemblyName>FFmpegFreeUI.Ext.AbAv1.Tests</AssemblyName>
@@ -19,8 +20,9 @@
 
   <ItemGroup>
     <ProjectReference Include="..\FFmpegFreeUI.Ext.AbAv1.vbproj" />
-    <ProjectReference Include="..\..\..\FFmpegFreeUI-API-Extended-Edition\FFmpegFreeUI.Ext.PluginSdk\FFmpegFreeUI.Ext.PluginSdk.csproj" />
     <ProjectReference Include="FakeAbAv1\FakeAbAv1.vbproj" ReferenceOutputAssembly="false" />
+    <!-- 测试会直接实例化 SDK 合同类型，因此保留测试运行时资产。 -->
+    <PackageReference Include="FFmpegFreeUI.Ext.PluginSdk" Version="[2.5.0]" PrivateAssets="all" />
   </ItemGroup>
 
   <Target Name="CopyFakeAbAv1" AfterTargets="Build">
