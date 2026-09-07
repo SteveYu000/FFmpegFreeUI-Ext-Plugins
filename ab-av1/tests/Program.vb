@@ -28,6 +28,7 @@ Module Program
         End If
         TestPluginDiscoveryContract()
         TestQualitySettingsPanelState()
+        TestAutomaticVmafModelScan()
         TestPresetOverviewProviderState()
         TestQualitySettingsPanelStyleInheritance()
         TestPluginRegistrationAndPipelineAsync().GetAwaiter().GetResult()
@@ -61,8 +62,9 @@ Module Program
                     Function(editor) editor.BackColor1 = context.NativeTextBox.BackColor1 AndAlso
                                      editor.BorderRadius = context.NativeTextBox.BorderRadius AndAlso
                                      editor.AnimationFPS = context.NativeTextBox.AnimationFPS AndAlso
-                                     editor.BackgroundSource Is context.AnchorControl),
-                "native text style and render source inherited")
+                                     editor.BackColor = Color.Transparent AndAlso
+                                     editor.BackgroundSource Is panel),
+                "native text style and explicit transparent GPU backdrop inherited")
 
             Dim comboBox = Descendants(panel).OfType(Of ModernComboBox)().Single()
             Equal(context.NativeComboBox.BackColor1, comboBox.BackColor1, "native combo background")
@@ -72,7 +74,8 @@ Module Program
                 comboBox.DropDownBackdropBlurRadius,
                 "native combo popup backdrop")
             Equal(context.NativeComboBox.AnimationFPS, comboBox.AnimationFPS, "native combo animation FPS")
-            IsTrue(comboBox.BackgroundSource Is context.AnchorControl, "native combo render source inherited")
+            Equal(Color.Transparent, comboBox.BackColor, "native combo transparent WinForms background")
+            IsTrue(comboBox.BackgroundSource Is panel, "native combo uses the plugin GPU root backdrop")
             IsTrue(
                 Descendants(panel).OfType(Of ModernButton)().All(
                     Function(button) button.AnimationFPS = context.NativeComboBox.AnimationFPS),
@@ -82,13 +85,13 @@ Module Program
                     Function(checkBox) checkBox.AnimationFPS = context.NativeComboBox.AnimationFPS),
                 "checkbox follows host animation FPS")
             IsTrue(
-                Descendants(panel).OfType(Of Label)().All(
-                    Function(label) label.Font.FontFamily.Name = context.AnchorControl.Font.FontFamily.Name),
-                "labels follow host font family")
-            IsTrue(
                 Descendants(panel).OfType(Of HtmlColorLabel)().All(
-                    Function(label) label.Font.FontFamily.Name = context.AnchorControl.Font.FontFamily.Name),
-                "LakeUI captions follow host font family")
+                    Function(label) label.Font.FontFamily.Name = context.AnchorControl.Font.FontFamily.Name AndAlso
+                                    label.BackColor = Color.Transparent AndAlso
+                                    (label.BackgroundSource Is panel OrElse
+                                     (label.Name = QualityValueStatusAdornment.StatusControlName AndAlso
+                                      label.BackgroundSource Is context.AnchorControl))),
+                "LakeUI labels follow host font and transparent explicit backdrop")
 
             Equal("VMAF", context.NativeMetricComboBox.Text, "native metric selector configured")
             Equal("目标分数", context.NativeTextBox.WaterText, "native target score placeholder")
@@ -156,18 +159,14 @@ Module Program
             Equal(114, panel.MinimumSize.Height, "compact settings panel height")
             panel.Width = 807
             panel.PerformLayout()
-            Dim rootLayout = DirectCast(panel.Controls(0), TableLayoutPanel)
-            rootLayout.PerformLayout()
-            Equal(panel.ClientSize.Width, rootLayout.Width, "settings layout constrained to host width")
             IsTrue(
-                rootLayout.Controls.Cast(Of Control)().All(
-                    Function(child) child.Left >= 0 AndAlso child.Right <= rootLayout.ClientSize.Width),
-                "settings rows stay inside host width")
-            IsTrue(
-                Descendants(panel).OfType(Of TableLayoutPanel)().All(
-                    Function(table) table.Controls.Cast(Of Control)().All(
-                        Function(child) child.Left >= 0 AndAlso child.Right <= table.ClientSize.Width)),
-                "nested settings controls stay inside their cells")
+                panel.Controls.Cast(Of Control)().All(
+                    Function(child) child.Left >= 0 AndAlso child.Right <= panel.ClientSize.Width),
+                "flat settings controls stay inside host width")
+            Equal(
+                0,
+                Descendants(panel).OfType(Of TableLayoutPanel)().Count(),
+                "no transparent native table layout HWNDs remain above GPU controls")
             IsTrue(
                 Not Descendants(panel).OfType(Of HtmlColorLabel)().Any(
                     Function(label) label.Text.Contains("AB-AV1 目标 VMAF", StringComparison.Ordinal)),
@@ -189,11 +188,7 @@ Module Program
                 "3FUI text field style inherited")
             Dim modelSelector = Descendants(panel).OfType(Of ModernComboBox)().Single()
             Equal(32, modelSelector.Height, "native 32 px model selector height")
-            Dim modelRow = DirectCast(modelSelector.Parent, TableLayoutPanel)
-            IsTrue(
-                modelRow.Controls.Cast(Of Control)().All(
-                    Function(control) control.Top >= 0 AndAlso control.Bottom <= modelRow.ClientSize.Height),
-                "all model-row controls stay inside the row")
+            IsTrue(modelSelector.Parent Is panel, "model selector is a direct child of the flat GPU layout")
             Equal(ModernComboBox.DropDownDisplayMode.Overlay, modelSelector.DropDownMode, "3FUI combo overlay")
             Equal(
                 context.NativeComboBox.DropDownBackdropBlurRadius,
@@ -227,17 +222,35 @@ Module Program
             Dim firstCaption = captionLabels.Single(Function(label) label.Text = "最小 CRF")
             Equal(10, firstField.Top - firstCaption.Bottom, "native label-to-input spacing")
             Equal(
-                firstField.Parent.Top + firstField.Bottom,
-                thorough.Parent.Top + thorough.Bottom,
+                firstField.Bottom,
+                thorough.Bottom,
                 "thorough bottom aligns with search input bottoms")
 
+            ' Simulate a host/UI update that increases the native quality controls from
+            ' 32 px to 48 px. Plugin controls must follow that actual height and must not
+            ' be clamped by a stale, logical-pixel MaximumSize.
+            context.NativeTextBox.Height = 48
+            context.NativeMetricComboBox.Height = 48
+            panel.PerformLayout()
+            IsTrue(searchFields.All(Function(input) input.Height = 48), "text fields follow updated host height")
+            Equal(48, modelSelector.Height, "model selector follows updated host height")
+            IsTrue(
+                Descendants(panel).OfType(Of ModernButton)().All(Function(button) button.Height = 48),
+                "buttons follow updated host height")
+            Equal(146, panel.MinimumSize.Height, "panel rows expand for updated host control height")
+            context.NativeTextBox.Height = 32
+            context.NativeMetricComboBox.Height = 32
+            panel.PerformLayout()
+            Equal(114, panel.MinimumSize.Height, "panel rows return to the original host height")
+
             context.AnchorControl.PerformLayout()
-            Dim environmentStatus = context.AnchorControl.Controls.OfType(Of Label)().Single(
+            Dim environmentStatus = context.AnchorControl.Controls.OfType(Of HtmlColorLabel)().Single(
                 Function(label) label.Name = QualityValueStatusAdornment.StatusControlName)
             Equal(context.NativeTextBox.Right + 10, environmentStatus.Left, "status follows quality value")
             Equal(context.NativeTextBox.Top, environmentStatus.Top, "status aligns with quality value")
             Equal(context.NativeTextBox.Height, environmentStatus.Height, "status matches quality value height")
             Equal("ab-av1 已就绪", environmentStatus.Text, "compact ready status")
+            IsTrue(environmentStatus.BackgroundSource Is context.AnchorControl, "external status uses host GPU backdrop")
             IsTrue(
                 Not environmentStatus.Text.Contains("搜索在", StringComparison.Ordinal),
                 "task-stage status text removed")
@@ -246,27 +259,30 @@ Module Program
             Equal(QualityScoreMetric.Xpsnr, AbAv1PluginState.Deserialize(context.StateJson).Metric, "XPSNR metric saved")
             Equal("40", context.NativeTextBox.Text, "XPSNR target has its own default")
             Equal(72, panel.MinimumSize.Height, "XPSNR hides and collapses VMAF model row")
-            IsTrue(Not modelRow.Visible, "VMAF model row hidden for XPSNR")
+            IsTrue(Not modelSelector.Visible, "VMAF model row hidden for XPSNR")
             context.NativeTextBox.Text = "-2.5"
             Equal(-2.5, AbAv1PluginState.Deserialize(context.StateJson).TargetXpsnr, "negative XPSNR target accepted")
             context.NativeMetricComboBox.Text = "VMAF"
             Equal("97", context.NativeTextBox.Text, "switching back restores VMAF target")
             Equal(114, panel.MinimumSize.Height, "VMAF model row restores full height")
-            IsTrue(modelRow.Visible, "VMAF model row shown again")
+            IsTrue(modelSelector.Visible, "VMAF model row shown again")
 
-            ' Simulate the absolute row heights WinForms produces at 150% DPI. A mode
-            ' switch must preserve those device-pixel heights instead of restoring the
-            ' unscaled 72/42 px constants and clipping the input controls.
-            rootLayout.RowStyles(0).Height = 108
-            rootLayout.RowStyles(1).Height = 63
-            panel.MinimumSize = New Size(0, 171)
-            panel.Height = 171
-            context.NativeMetricComboBox.Text = "XPSNR"
-            Equal(108, panel.MinimumSize.Height, "XPSNR keeps DPI-scaled score row height")
-            Equal(108, panel.Height, "XPSNR panel keeps DPI-scaled device height")
-            context.NativeMetricComboBox.Text = "VMAF"
-            Equal(63.0F, rootLayout.RowStyles(1).Height, "VMAF restores DPI-scaled model row")
-            Equal(171, panel.MinimumSize.Height, "VMAF restores DPI-scaled full height")
+            Equal(42, QualitySettingsPanel.ScaleModelRowHeight(72), "100-percent DPI model row")
+            Equal(53, QualitySettingsPanel.ScaleModelRowHeight(90), "125-percent DPI model row")
+            Equal(63, QualitySettingsPanel.ScaleModelRowHeight(108), "150-percent DPI model row")
+            Equal(84, QualitySettingsPanel.ScaleModelRowHeight(144), "200-percent DPI model row")
+
+            ' The host's native CBR/TPE transition clears the shared quality textbox before
+            ' RegisterChoice notifies the plugin that it is inactive. That transient empty value
+            ' must not leave a stale error after the Ext choice restores its saved score.
+            context.NativeTextBox.Text = String.Empty
+            IsTrue(
+                environmentStatus.Text.Contains("目标 VMAF", StringComparison.Ordinal),
+                "transient native clear is observed while the Ext choice is still active")
+            panel.SetActive(False)
+            panel.SetActive(True)
+            Equal("97", context.NativeTextBox.Text, "saved VMAF score restored after native round trip")
+            Equal("ab-av1 已就绪", environmentStatus.Text, "transient score error cleared after native round trip")
 
             context.Restore(New AbAv1PluginState With {.Enabled = False}.Serialize())
             IsTrue(Not panel.Visible, "settings hidden for native mode")
@@ -285,6 +301,87 @@ Module Program
         disposedPanel.Dispose()
         disposedPanel.Dispose()
         IsTrue(disposedPanel.IsDisposed, "settings panel disposal is idempotent")
+    End Sub
+
+    Private Sub TestAutomaticVmafModelScan()
+        Dim scanCalls = 0
+        Dim scanner =
+            Function(cancellationToken As CancellationToken) As Task(Of VmafModelScanResult)
+                cancellationToken.ThrowIfCancellationRequested()
+                scanCalls += 1
+                Return Task.FromResult(
+                    New VmafModelScanResult(
+                        New String() {"vmaf_v0.6.1", "vmaf_4k_v0.6.1"},
+                        "ffmpeg.exe",
+                        String.Empty))
+            End Function
+        Dim context As New FakeUiContext With {
+            .ProvideNativeStyleTemplates = True,
+            .StateJson = New AbAv1PluginState With {
+                .Enabled = False,
+                .Metric = QualityScoreMetric.Vmaf
+            }.Serialize()
+        }
+
+        Using panel As New QualitySettingsPanel(context, scanModelsAsync:=scanner)
+            Dim panelHandle = panel.Handle
+            IsTrue(panel.IsHandleCreated, "automatic model scan test panel handle created")
+            Equal(0, scanCalls, "inactive native quality mode does not scan VMAF models")
+
+            panel.SetActive(True)
+            WaitForCondition(
+                Function() scanCalls = 1,
+                "selecting target-score mode starts automatic VMAF model scan")
+            Equal(1, scanCalls, "selecting target-score mode scans VMAF models automatically")
+            Dim modelSelector = Descendants(panel).OfType(Of ModernComboBox)().Single()
+            IsTrue(
+                modelSelector.Items.Cast(Of String)().Contains("vmaf_v0.6.1"),
+                "automatic scan populates standard VMAF model")
+            IsTrue(
+                modelSelector.Items.Cast(Of String)().Contains("vmaf_4k_v0.6.1"),
+                "automatic scan populates 4K VMAF model")
+
+            panel.SetActive(False)
+            panel.SetActive(True)
+            Application.DoEvents()
+            Equal(1, scanCalls, "reselecting target-score mode reuses the populated model list")
+            context.NativeMetricComboBox.Text = "XPSNR"
+            context.NativeMetricComboBox.Text = "VMAF"
+            Equal(1, scanCalls, "switching metrics does not repeat an existing model scan")
+        End Using
+
+        Dim xpsnrCalls = 0
+        Dim xpsnrContext As New FakeUiContext With {
+            .ProvideNativeStyleTemplates = True,
+            .StateJson = New AbAv1PluginState With {
+                .Enabled = False,
+                .Metric = QualityScoreMetric.Xpsnr
+            }.Serialize()
+        }
+        Using panel As New QualitySettingsPanel(
+            xpsnrContext,
+            scanModelsAsync:=
+                Function(cancellationToken)
+                    xpsnrCalls += 1
+                    Return Task.FromResult(
+                        New VmafModelScanResult(Array.Empty(Of String)(), "ffmpeg.exe", String.Empty))
+                End Function)
+            Dim panelHandle = panel.Handle
+            panel.SetActive(True)
+            Application.DoEvents()
+            Equal(0, xpsnrCalls, "XPSNR target-score mode does not scan VMAF models")
+        End Using
+    End Sub
+
+    Private Sub WaitForCondition(condition As Func(Of Boolean), description As String)
+        Dim timeout = Stopwatch.StartNew()
+        Do
+            If condition.Invoke() Then Return
+            Application.DoEvents()
+            Thread.Sleep(10)
+        Loop While timeout.Elapsed < TimeSpan.FromSeconds(2)
+
+        Throw New InvalidOperationException("Timed out: " & description)
     End Sub
 
     Private Sub TestPresetOverviewProviderState()
@@ -449,7 +546,6 @@ Module Program
                     bitmap.Save(outputPath, Imaging.ImageFormat.Png)
                     Dim target = context.NativeTextBox
                     Dim model = Descendants(panel).OfType(Of ModernComboBox)().Single()
-                    Dim rootLayout = DirectCast(panel.Controls(0), TableLayoutPanel)
                     Dim overflowingControl = Descendants(panel).FirstOrDefault(
                         Function(control) control.Parent IsNot Nothing AndAlso
                                           control.Right > control.Parent.ClientSize.Width)
@@ -459,7 +555,7 @@ Module Program
                     End If
                     Console.WriteLine(
                         $"VISUAL_METRICS: panel={panel.Width}x{panel.Height}; " &
-                        $"layout={rootLayout.Width}x{rootLayout.Height}; " &
+                        $"children={panel.Controls.Count}; " &
                         $"target={target.Width}x{target.Height}; model={model.Width}x{model.Height}")
                     Console.WriteLine("VISUAL_RENDER: " & outputPath)
                 End Using
@@ -550,7 +646,7 @@ Module Program
         }
         Dim settingsControl = settingsExtension.CreateControl.Invoke(settingsContext)
         IsTrue(
-            settingsContext.AnchorControl.Controls.OfType(Of Label)().Any(
+            settingsContext.AnchorControl.Controls.OfType(Of HtmlColorLabel)().Any(
                 Function(label) label.Name = QualityValueStatusAdornment.StatusControlName),
             "ready status decorates native quality row")
         Dim targetEditor = settingsContext.NativeTextBox

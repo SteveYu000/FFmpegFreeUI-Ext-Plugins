@@ -2,6 +2,7 @@ Imports System.Drawing
 Imports System.Globalization
 Imports System.IO
 Imports System.Threading
+Imports System.Threading.Tasks
 Imports System.Windows.Forms
 Imports FFmpegFreeUI.Ext.PluginSdk
 Imports LakeUI
@@ -11,7 +12,7 @@ Imports LakeUI
 ''' ModernTextBox / ModernComboBox / ModernButton / ModernCheckBox 的尺寸、圆角和颜色。
 ''' </summary>
 Friend NotInheritable Class QualitySettingsPanel
-    Inherits UserControl
+    Inherits ModernPanel
 
     Private Shared ReadOnly ColorControl As Color = Color.FromArgb(40, 220, 220, 220)
     Private Shared ReadOnly ColorControlHover As Color = Color.FromArgb(60, 220, 220, 220)
@@ -30,6 +31,7 @@ Friend NotInheritable Class QualitySettingsPanel
 
     Private ReadOnly _context As IExtPluginUiContext
     Private ReadOnly _stateChanged As Action(Of String)
+    Private ReadOnly _scanModelsAsync As Func(Of CancellationToken, Task(Of VmafModelScanResult))
     Private ReadOnly _qualityValueStatus As QualityValueStatusAdornment
     Private ReadOnly _lifetimeCancellation As New CancellationTokenSource()
     Private ReadOnly _normalTextBoxBorders As New Dictionary(Of ModernTextBox, TextBoxBorderStyle)()
@@ -51,24 +53,38 @@ Friend NotInheritable Class QualitySettingsPanel
     Private ReadOnly _thorough As ModernCheckBox
     Private ReadOnly _vmafModel As ModernComboBox
     Private ReadOnly _scanModelsButton As ModernButton
-    Private ReadOnly _modelStatus As Label
-    Private ReadOnly _validationStatus As Label
-    Private ReadOnly _environmentStatus As Label
+    Private ReadOnly _browseModelButton As ModernButton
+    Private ReadOnly _minCrfCaption As HtmlColorLabel
+    Private ReadOnly _maxCrfCaption As HtmlColorLabel
+    Private ReadOnly _samplesCaption As HtmlColorLabel
+    Private ReadOnly _sampleDurationCaption As HtmlColorLabel
+    Private ReadOnly _modelCaption As HtmlColorLabel
+    Private ReadOnly _modelStatus As HtmlColorLabel
+    Private ReadOnly _validationStatus As HtmlColorLabel
+    Private ReadOnly _environmentStatus As HtmlColorLabel
     Private ReadOnly _stateRestoredHandler As EventHandler
-    Private _layout As TableLayoutPanel
-    Private _modelRow As TableLayoutPanel
     Private _resourcesDisposed As Boolean
     Private _restoring As Boolean
+    Private _layoutInProgress As Boolean
     Private _qualityFieldsActive As Boolean
+    Private _automaticModelScanPending As Boolean
+    Private _modelScanAttempted As Boolean
+    Private _modelScanInProgress As Boolean
     Private _currentMetric As QualityScoreMetric = QualityScoreMetric.Vmaf
     Private _scoreValidationMessage As String = String.Empty
     Private _settingsValidationMessage As String = String.Empty
 
     Public Sub New(context As IExtPluginUiContext,
-                   Optional stateChanged As Action(Of String) = Nothing)
+                   Optional stateChanged As Action(Of String) = Nothing,
+                   Optional scanModelsAsync As Func(Of CancellationToken, Task(Of VmafModelScanResult)) = Nothing)
         If context Is Nothing Then Throw New ArgumentNullException(NameOf(context))
         _context = context
         _stateChanged = stateChanged
+        If scanModelsAsync Is Nothing Then
+            _scanModelsAsync = AddressOf VmafModelScanner.ScanAsync
+        Else
+            _scanModelsAsync = scanModelsAsync
+        End If
 
         SuspendLayout()
         DoubleBuffered = True
@@ -77,10 +93,10 @@ Friend NotInheritable Class QualitySettingsPanel
             ControlStyles.OptimizedDoubleBuffer Or
             ControlStyles.SupportsTransparentBackColor,
             True)
-        AutoScaleDimensions = New SizeF(96.0F, 96.0F)
-        AutoScaleMode = AutoScaleMode.Dpi
         AutoSize = False
         BackColor = Color.Transparent
+        BackColor1 = Color.Transparent
+        BorderSize = 0
         Dock = DockStyle.Top
         Font = context.AnchorControl.Font
         ForeColor = ColorText
@@ -98,7 +114,9 @@ Friend NotInheritable Class QualitySettingsPanel
         Dim nativeComboBox = TryCast(
             context.GetAnchorControl(ExtFFmpegFreeUIUiAnchors.ParametersVideoQualityMode),
             ModernComboBox)
-        Dim backgroundSource = ResolveBackgroundSource(context.AnchorControl, _qualityValue, nativeComboBox)
+        Dim outerBackgroundSource = ResolveBackgroundSource(context.AnchorControl, _qualityValue, nativeComboBox)
+        Me.BackgroundSource = outerBackgroundSource
+        Dim backgroundSource As Control = Me
 
         If _qualityMetric IsNot Nothing Then
             For index = 0 To _qualityMetric.Items.Count - 1
@@ -128,14 +146,20 @@ Friend NotInheritable Class QualitySettingsPanel
         Dim animationFps = If(nativeComboBox Is Nothing, 60, nativeComboBox.AnimationFPS)
         _thorough = CreateCheckBox(backgroundSource, animationFps)
         _scanModelsButton = CreateButton("扫描模型", backgroundSource, animationFps)
-        Dim browseModelButton = CreateButton("本地 JSON", backgroundSource, animationFps)
+        _browseModelButton = CreateButton("本地 JSON", backgroundSource, animationFps)
 
-        _modelStatus = CreateLabel("留空 = ab-av1 自动模型", ColorMuted, 8.5F)
-        _validationStatus = CreateLabel(String.Empty, ColorDanger, 8.5F)
-        _environmentStatus = CreateLabel(String.Empty, ColorMuted, 8.5F)
+        _minCrfCaption = CreateFieldLabel("最小 CRF", backgroundSource)
+        _maxCrfCaption = CreateFieldLabel("最大 CRF", backgroundSource)
+        _samplesCaption = CreateFieldLabel("采样数量", backgroundSource)
+        _sampleDurationCaption = CreateFieldLabel("单段时长", backgroundSource)
+        _modelCaption = CreateFieldLabel("VMAF 模型", backgroundSource)
+
+        _modelStatus = CreateLabel("留空 = ab-av1 自动模型", ColorMuted, 8.5F, backgroundSource)
+        _validationStatus = CreateLabel(String.Empty, ColorDanger, 8.5F, backgroundSource)
+        _environmentStatus = CreateLabel(String.Empty, ColorMuted, 8.5F, outerBackgroundSource)
         _environmentStatus.Name = QualityValueStatusAdornment.StatusControlName
 
-        Controls.Add(BuildLayout(backgroundSource, browseModelButton))
+        BuildFlatLayout()
         _qualityValueStatus = New QualityValueStatusAdornment(_qualityValue, _environmentStatus)
 
         If _qualityMetric IsNot Nothing Then
@@ -143,6 +167,10 @@ Friend NotInheritable Class QualitySettingsPanel
         End If
         If _qualityValue IsNot Nothing Then
             AddHandler _qualityValue.TextChanged, AddressOf QualityScoreChanged
+            AddHandler _qualityValue.SizeChanged, AddressOf NativeQualityControlSizeChanged
+        End If
+        If _qualityMetric IsNot Nothing Then
+            AddHandler _qualityMetric.SizeChanged, AddressOf NativeQualityControlSizeChanged
         End If
         AddHandler _minCrf.TextChanged, AddressOf SettingsChanged
         AddHandler _maxCrf.TextChanged, AddressOf SettingsChanged
@@ -151,7 +179,7 @@ Friend NotInheritable Class QualitySettingsPanel
         AddHandler _thorough.CheckedChanged, AddressOf SettingsChanged
         AddHandler _vmafModel.TextChanged, AddressOf SettingsChanged
         AddHandler _scanModelsButton.Click, AddressOf ScanModels
-        AddHandler browseModelButton.Click, AddressOf BrowseModel
+        AddHandler _browseModelButton.Click, AddressOf BrowseModel
 
         _refreshTimer = New System.Windows.Forms.Timer With {
             .Interval = RefreshDelayMilliseconds
@@ -172,6 +200,9 @@ Friend NotInheritable Class QualitySettingsPanel
             BeginInvoke(New Action(Of Boolean)(AddressOf SetActive), active)
             Return
         End If
+        ' 宿主先执行原生质量模式联动，再通知安全下拉项插件。切到 CBR/TPE 时，
+        ' 原生联动会暂时清空质量值并触发 TextChanged；该瞬时错误不能带回下一次启用。
+        _scoreValidationMessage = String.Empty
         If active Then
             ConfigureNativeQualityFields(AbAv1PluginState.Deserialize(_context.StateJson))
         Else
@@ -179,6 +210,8 @@ Friend NotInheritable Class QualitySettingsPanel
         End If
         If Visible <> active Then Visible = active
         _qualityValueStatus.SetActive(active)
+        UpdateValidationPresentation()
+        If active Then RequestAutomaticModelScan()
     End Sub
 
     Protected Overrides Sub Dispose(disposing As Boolean)
@@ -190,6 +223,10 @@ Friend NotInheritable Class QualitySettingsPanel
             End If
             If _qualityValue IsNot Nothing AndAlso Not _qualityValue.IsDisposed Then
                 RemoveHandler _qualityValue.TextChanged, AddressOf QualityScoreChanged
+                RemoveHandler _qualityValue.SizeChanged, AddressOf NativeQualityControlSizeChanged
+            End If
+            If _qualityMetric IsNot Nothing AndAlso Not _qualityMetric.IsDisposed Then
+                RemoveHandler _qualityMetric.SizeChanged, AddressOf NativeQualityControlSizeChanged
             End If
             RestoreNativeQualityFields(preserveCurrentText:=False)
             _lifetimeCancellation.Cancel()
@@ -204,7 +241,17 @@ Friend NotInheritable Class QualitySettingsPanel
 
     Protected Overrides Sub OnDpiChangedAfterParent(e As EventArgs)
         MyBase.OnDpiChangedAfterParent(e)
-        If _layout IsNot Nothing Then UpdateMetricLayout(_currentMetric)
+        UpdateMetricLayout(_currentMetric)
+    End Sub
+
+    Protected Overrides Sub OnLayout(e As LayoutEventArgs)
+        MyBase.OnLayout(e)
+        LayoutPluginControls()
+    End Sub
+
+    Protected Overrides Sub OnHandleCreated(e As EventArgs)
+        MyBase.OnHandleCreated(e)
+        TryStartAutomaticModelScan()
     End Sub
 
     Private Sub ConfigureNativeQualityFields(state As AbAv1PluginState)
@@ -254,113 +301,173 @@ Friend NotInheritable Class QualitySettingsPanel
         End Try
     End Sub
 
-    Private Function BuildLayout(backgroundSource As Control,
-                                 browseModelButton As ModernButton) As Control
-        Dim layout As New TableLayoutPanel With {
-            .AutoSize = False,
-            .BackColor = Color.Transparent,
-            .ColumnCount = 5,
-            .Dock = DockStyle.Fill,
-            .Margin = Padding.Empty,
-            .Padding = Padding.Empty,
-            .RowCount = 2
-        }
-        layout.SuspendLayout()
-        layout.ColumnStyles.Add(New ColumnStyle(SizeType.Percent, 15.0F))
-        layout.ColumnStyles.Add(New ColumnStyle(SizeType.Percent, 15.0F))
-        layout.ColumnStyles.Add(New ColumnStyle(SizeType.Percent, 25.0F))
-        layout.ColumnStyles.Add(New ColumnStyle(SizeType.Percent, 20.0F))
-        layout.ColumnStyles.Add(New ColumnStyle(SizeType.Percent, 25.0F))
-        layout.RowStyles.Add(New RowStyle(SizeType.Absolute, FieldLabelHeight + HostControlRowHeight))
-        layout.RowStyles.Add(New RowStyle(SizeType.Absolute, ModelRowHeight))
-
-        layout.Controls.Add(CreateSearchField("最小 CRF", _minCrf, backgroundSource), 0, 0)
-        layout.Controls.Add(CreateSearchField("最大 CRF", _maxCrf, backgroundSource), 1, 0)
-        layout.Controls.Add(CreateSearchField("采样数量", _samples, backgroundSource), 2, 0)
-        layout.Controls.Add(CreateSearchField("单段时长", _sampleDuration, backgroundSource), 3, 0)
-        layout.Controls.Add(CreateThoroughField(_thorough), 4, 0)
-
-        Dim modelRow As New TableLayoutPanel With {
-            .BackColor = Color.Transparent,
-            .ColumnCount = 5,
-            .Dock = DockStyle.Fill,
-            .Margin = Padding.Empty,
-            .Padding = Padding.Empty,
-            .RowCount = 1
-        }
-        modelRow.SuspendLayout()
-        modelRow.RowStyles.Add(New RowStyle(SizeType.Percent, 100.0F))
-        modelRow.ColumnStyles.Add(New ColumnStyle(SizeType.Absolute, 86))
-        modelRow.ColumnStyles.Add(New ColumnStyle(SizeType.Percent, 100))
-        modelRow.ColumnStyles.Add(New ColumnStyle(SizeType.Absolute, 102))
-        modelRow.ColumnStyles.Add(New ColumnStyle(SizeType.Absolute, 108))
-        modelRow.ColumnStyles.Add(New ColumnStyle(SizeType.Absolute, 220))
-
-        Dim modelCaption = CreateFieldLabel("VMAF 模型", backgroundSource)
-        modelCaption.Padding = New Padding(0, 10, 0, 0)
-        modelCaption.TextAlign = HtmlColorLabel.TextAlignEnum.MiddleLeft
-        modelRow.Controls.Add(modelCaption, 0, 0)
-        _vmafModel.Margin = New Padding(0, 10, 10, 0)
-        modelRow.Controls.Add(_vmafModel, 1, 0)
-        _scanModelsButton.Dock = DockStyle.Fill
-        _scanModelsButton.Margin = New Padding(0, 10, 10, 0)
-        modelRow.Controls.Add(_scanModelsButton, 2, 0)
-        browseModelButton.Dock = DockStyle.Fill
-        browseModelButton.Margin = New Padding(0, 10, 10, 0)
-        modelRow.Controls.Add(browseModelButton, 3, 0)
-        Dim statusHost As New Panel With {
-            .BackColor = Color.Transparent,
-            .Dock = DockStyle.Fill,
-            .Margin = Padding.Empty,
-            .Padding = Padding.Empty
-        }
-        _modelStatus.Dock = DockStyle.Fill
+    Private Sub BuildFlatLayout()
+        _modelCaption.Padding = New Padding(0, 10, 0, 0)
+        _modelCaption.TextAlign = HtmlColorLabel.TextAlignEnum.MiddleLeft
         _modelStatus.Padding = New Padding(0, 10, 0, 0)
-        _modelStatus.TextAlign = ContentAlignment.MiddleLeft
-        _validationStatus.Dock = DockStyle.Fill
         _validationStatus.Padding = New Padding(0, 10, 0, 0)
-        _validationStatus.TextAlign = ContentAlignment.MiddleLeft
         _validationStatus.Visible = False
-        statusHost.Controls.Add(_modelStatus)
-        statusHost.Controls.Add(_validationStatus)
-        modelRow.Controls.Add(statusHost, 4, 0)
-        modelRow.ResumeLayout(False)
 
-        layout.Controls.Add(modelRow, 0, 1)
-        layout.SetColumnSpan(modelRow, 5)
+        Dim childControls = New Control() {
+            _minCrfCaption,
+            _maxCrfCaption,
+            _samplesCaption,
+            _sampleDurationCaption,
+            _minCrf,
+            _maxCrf,
+            _samples,
+            _sampleDuration,
+            _thorough,
+            _modelCaption,
+            _vmafModel,
+            _scanModelsButton,
+            _browseModelButton,
+            _modelStatus,
+            _validationStatus
+        }
+        For Each control In childControls
+            control.Dock = DockStyle.None
+            Me.Controls.Add(control)
+        Next
+        LayoutPluginControls()
+    End Sub
 
-        layout.ResumeLayout(False)
-        _layout = layout
-        _modelRow = modelRow
-        Return layout
+    Private Sub LayoutPluginControls()
+        If _layoutInProgress OrElse _minCrf Is Nothing OrElse ClientSize.Width <= 0 Then Return
+        _layoutInProgress = True
+        Try
+            Dim width = ClientSize.Width
+            Dim gap = ScaleLogical(10)
+            Dim labelInset = ScaleLogical(2)
+            Dim scaledFieldLabelHeight = ScaleLogical(FieldLabelHeight)
+            Dim controlHeight = ResolveHostControlHeight()
+            Dim scoreRowHeight = scaledFieldLabelHeight + gap + controlHeight
+            Dim modelRowHeight = gap + controlHeight
+
+            Dim edges = New Integer() {
+                0,
+                CInt(Math.Round(width * 0.15R, MidpointRounding.AwayFromZero)),
+                CInt(Math.Round(width * 0.3R, MidpointRounding.AwayFromZero)),
+                CInt(Math.Round(width * 0.55R, MidpointRounding.AwayFromZero)),
+                CInt(Math.Round(width * 0.75R, MidpointRounding.AwayFromZero)),
+                width
+            }
+            Dim captions = New HtmlColorLabel() {
+                _minCrfCaption, _maxCrfCaption, _samplesCaption, _sampleDurationCaption
+            }
+            Dim editors = New Control() {_minCrf, _maxCrf, _samples, _sampleDuration}
+            For index = 0 To editors.Length - 1
+                Dim columnWidth = Math.Max(0, edges(index + 1) - edges(index))
+                SetBoundsIfChanged(
+                    captions(index),
+                    edges(index) + labelInset,
+                    0,
+                    Math.Max(0, columnWidth - gap - labelInset * 2),
+                    scaledFieldLabelHeight)
+                SetBoundsIfChanged(
+                    editors(index),
+                    edges(index),
+                    scaledFieldLabelHeight + gap,
+                    Math.Max(0, columnWidth - gap),
+                    controlHeight)
+            Next
+            SetBoundsIfChanged(
+                _thorough,
+                edges(4) + gap,
+                scaledFieldLabelHeight,
+                Math.Max(0, edges(5) - edges(4) - gap),
+                Math.Max(0, scoreRowHeight - scaledFieldLabelHeight))
+
+            Dim captionWidth = ScaleLogical(86)
+            Dim scanWidth = ScaleLogical(102)
+            Dim browseWidth = ScaleLogical(108)
+            Dim statusWidth = ScaleLogical(220)
+            Dim fixedWidth = captionWidth + scanWidth + browseWidth + statusWidth
+            Dim comboWidth = Math.Max(0, width - fixedWidth)
+            Dim modelTop = scoreRowHeight
+            SetBoundsIfChanged(_modelCaption, 0, modelTop, captionWidth, modelRowHeight)
+            SetBoundsIfChanged(
+                _vmafModel,
+                captionWidth,
+                modelTop + gap,
+                Math.Max(0, comboWidth - gap),
+                controlHeight)
+            SetBoundsIfChanged(
+                _scanModelsButton,
+                captionWidth + comboWidth,
+                modelTop + gap,
+                Math.Max(0, scanWidth - gap),
+                controlHeight)
+            SetBoundsIfChanged(
+                _browseModelButton,
+                captionWidth + comboWidth + scanWidth,
+                modelTop + gap,
+                Math.Max(0, browseWidth - gap),
+                controlHeight)
+            Dim statusLeft = captionWidth + comboWidth + scanWidth + browseWidth
+            SetBoundsIfChanged(_modelStatus, statusLeft, modelTop, Math.Max(0, width - statusLeft), modelRowHeight)
+            SetBoundsIfChanged(_validationStatus, statusLeft, modelTop, Math.Max(0, width - statusLeft), modelRowHeight)
+        Finally
+            _layoutInProgress = False
+        End Try
+    End Sub
+
+    Private Function ScaleLogical(value As Integer) As Integer
+        Return Math.Max(
+            1,
+            CInt(Math.Round(value * DeviceDpi / 96.0R, MidpointRounding.AwayFromZero)))
     End Function
+
+    Private Function ResolveHostControlHeight() As Integer
+        If _qualityValue IsNot Nothing AndAlso
+           Not _qualityValue.IsDisposed AndAlso
+           _qualityValue.Height > 0 Then Return _qualityValue.Height
+        If _qualityMetric IsNot Nothing AndAlso
+           Not _qualityMetric.IsDisposed AndAlso
+           _qualityMetric.Height > 0 Then Return _qualityMetric.Height
+        Return ScaleLogical(HostControlHeight)
+    End Function
+
+    Private Shared Sub SetBoundsIfChanged(control As Control,
+                                          left As Integer,
+                                          top As Integer,
+                                          width As Integer,
+                                          height As Integer)
+        Dim bounds = New Rectangle(left, top, width, height)
+        If control.Bounds <> bounds Then control.Bounds = bounds
+    End Sub
 
     Private Sub UpdateMetricLayout(metric As QualityScoreMetric)
         _currentMetric = metric
-        If _layout Is Nothing OrElse _modelRow Is Nothing Then Return
+        If _modelCaption Is Nothing Then Return
 
         Dim showVmafModel = metric = QualityScoreMetric.Vmaf
-        ' Absolute RowStyle heights are scaled by WinForms when the panel is attached to
-        ' a high-DPI host. Reusing the logical 72/42 px constants after that point shrinks
-        ' the outer panel back to unscaled pixels and clips the already-scaled editors.
-        Dim scoreRowHeight = ResolveCurrentScoreRowHeight()
-        Dim scaledModelRowHeight = ScaleModelRowHeight(scoreRowHeight)
-        _layout.RowStyles(1).Height = If(showVmafModel, scaledModelRowHeight, 0)
-        _modelRow.Visible = showVmafModel
+        Dim gap = ScaleLogical(10)
+        Dim scoreRowHeight = ScaleLogical(FieldLabelHeight) + gap + ResolveHostControlHeight()
+        Dim scaledModelRowHeight = gap + ResolveHostControlHeight()
+        For Each control In New Control() {
+            _modelCaption,
+            _vmafModel,
+            _scanModelsButton,
+            _browseModelButton,
+            _modelStatus,
+            _validationStatus
+        }
+            control.Visible = showVmafModel
+        Next
         Dim desiredHeight = scoreRowHeight + If(showVmafModel, scaledModelRowHeight, 0)
         If MinimumSize.Height <> desiredHeight Then MinimumSize = New Size(0, desiredHeight)
         If Height <> desiredHeight Then Height = desiredHeight
-        _layout.PerformLayout()
+        LayoutPluginControls()
         Parent?.PerformLayout()
         Parent?.Parent?.PerformLayout()
         UpdateValidationPresentation()
     End Sub
 
-    Private Function ResolveCurrentScoreRowHeight() As Integer
-        If _layout Is Nothing OrElse _layout.RowStyles.Count = 0 Then Return ScoreSettingsHeight
-        Dim currentHeight = CInt(Math.Ceiling(_layout.RowStyles(0).Height))
-        Return If(currentHeight > 0, currentHeight, ScoreSettingsHeight)
-    End Function
+    Private Sub NativeQualityControlSizeChanged(sender As Object, e As EventArgs)
+        If _resourcesDisposed OrElse IsDisposed Then Return
+        UpdateMetricLayout(_currentMetric)
+    End Sub
 
     Friend Shared Function ScaleModelRowHeight(scoreRowHeight As Integer) As Integer
         If scoreRowHeight <= 0 Then scoreRowHeight = ScoreSettingsHeight
@@ -475,6 +582,7 @@ Friend NotInheritable Class QualitySettingsPanel
             _restoring = wasRestoring
         End Try
         SaveState(state)
+        If metric = QualityScoreMetric.Vmaf Then RequestAutomaticModelScan()
     End Sub
 
     Private Sub QualityScoreChanged(sender As Object, e As EventArgs)
@@ -510,24 +618,61 @@ Friend NotInheritable Class QualitySettingsPanel
     End Sub
 
     Private Async Sub ScanModels(sender As Object, e As EventArgs)
+        Await ScanModelsAsync(force:=True)
+    End Sub
+
+    Private Sub RequestAutomaticModelScan()
+        If _resourcesDisposed OrElse IsDisposed OrElse
+           _modelScanAttempted OrElse _modelScanInProgress OrElse
+           Not _qualityFieldsActive OrElse _currentMetric <> QualityScoreMetric.Vmaf Then Return
+
+        _automaticModelScanPending = True
+        TryStartAutomaticModelScan()
+    End Sub
+
+    Private Sub TryStartAutomaticModelScan()
+        If Not _automaticModelScanPending OrElse
+           _resourcesDisposed OrElse IsDisposed OrElse
+           _modelScanAttempted OrElse _modelScanInProgress OrElse
+           Not _qualityFieldsActive OrElse _currentMetric <> QualityScoreMetric.Vmaf OrElse
+           Not IsHandleCreated Then Return
+
+        _automaticModelScanPending = False
+        StartAutomaticModelScan()
+    End Sub
+
+    Private Async Sub StartAutomaticModelScan()
+        Await ScanModelsAsync(force:=False)
+    End Sub
+
+    Private Async Function ScanModelsAsync(force As Boolean) As Task
+        If _resourcesDisposed OrElse IsDisposed OrElse
+           _currentMetric <> QualityScoreMetric.Vmaf OrElse
+           _modelScanInProgress OrElse (Not force AndAlso _modelScanAttempted) Then Return
+
+        _automaticModelScanPending = False
+        _modelScanAttempted = True
+        _modelScanInProgress = True
         _scanModelsButton.Enabled = False
         _modelStatus.ForeColor = ColorMuted
         _modelStatus.Text = "正在扫描当前 ffmpeg/libvmaf……"
 
         Try
-            Dim result = Await VmafModelScanner.ScanAsync(_lifetimeCancellation.Token)
-            If IsDisposed OrElse _lifetimeCancellation.IsCancellationRequested Then Return
+            Dim result = Await _scanModelsAsync(_lifetimeCancellation.Token)
+            If _resourcesDisposed OrElse IsDisposed OrElse
+               _lifetimeCancellation.IsCancellationRequested Then Return
 
             Dim missing As New List(Of String)()
             For Each model In result.Models
                 If Not ComboBoxContains(_vmafModel, model) Then missing.Add(model)
             Next
             If missing.Count > 0 Then
+                Dim wasRestoring = _restoring
                 _restoring = True
                 Try
                     _vmafModel.Items.AddRange(missing)
                 Finally
-                    _restoring = False
+                    _restoring = wasRestoring
                 End Try
             End If
 
@@ -541,14 +686,15 @@ Friend NotInheritable Class QualitySettingsPanel
         Catch ex As OperationCanceledException
             ' 参数页关闭时正常取消。
         Catch ex As Exception
-            If Not IsDisposed Then
+            If Not _resourcesDisposed AndAlso Not IsDisposed Then
                 _modelStatus.ForeColor = ColorDanger
                 _modelStatus.Text = "扫描失败：" & ex.Message
             End If
         Finally
-            If Not IsDisposed Then _scanModelsButton.Enabled = True
+            _modelScanInProgress = False
+            If Not _resourcesDisposed AndAlso Not IsDisposed Then _scanModelsButton.Enabled = True
         End Try
-    End Sub
+    End Function
 
     Private Sub BrowseModel(sender As Object, e As EventArgs)
         Using dialog As New OpenFileDialog With {
@@ -675,52 +821,14 @@ Friend NotInheritable Class QualitySettingsPanel
         Return anchorControl
     End Function
 
-    Private Function CreateSearchField(caption As String,
-                                       editor As Control,
-                                       backgroundSource As Control) As Control
-        Dim layout As New TableLayoutPanel With {
-            .BackColor = Color.Transparent,
-            .ColumnCount = 1,
-            .Dock = DockStyle.Fill,
-            .Margin = New Padding(0, 0, 10, 0),
-            .Padding = Padding.Empty,
-            .RowCount = 2
-        }
-        layout.SuspendLayout()
-        layout.ColumnStyles.Add(New ColumnStyle(SizeType.Percent, 100.0F))
-        layout.RowStyles.Add(New RowStyle(SizeType.Absolute, FieldLabelHeight))
-        layout.RowStyles.Add(New RowStyle(SizeType.Absolute, HostControlRowHeight))
-        Dim label = CreateFieldLabel(caption, backgroundSource)
-        layout.Controls.Add(label, 0, 0)
-        layout.Controls.Add(editor, 0, 1)
-        layout.ResumeLayout(False)
-        Return layout
-    End Function
-
-    Private Shared Function CreateThoroughField(editor As Control) As Control
-        Dim layout As New TableLayoutPanel With {
-            .BackColor = Color.Transparent,
-            .ColumnCount = 1,
-            .Dock = DockStyle.Fill,
-            .Margin = Padding.Empty,
-            .Padding = Padding.Empty,
-            .RowCount = 2
-        }
-        layout.SuspendLayout()
-        layout.ColumnStyles.Add(New ColumnStyle(SizeType.Percent, 100.0F))
-        layout.RowStyles.Add(New RowStyle(SizeType.Absolute, FieldLabelHeight))
-        layout.RowStyles.Add(New RowStyle(SizeType.Absolute, HostControlRowHeight))
-        editor.Margin = New Padding(10, 0, 0, 0)
-        layout.Controls.Add(editor, 0, 1)
-        layout.ResumeLayout(False)
-        Return layout
-    End Function
-
     Private Shared Function CreateTextBox(waterText As String,
                                           backgroundSource As Control,
                                           template As ModernTextBox) As ModernTextBox
+        ' 高 DPI 下布局会使用宿主原生控件的设备像素高度，不能用未缩放的
+        ' 32 px MaximumSize 再次截断控件。
         Dim editor As New ModernTextBox With {
             .AutoScaleMode = System.Windows.Forms.AutoScaleMode.None,
+            .BackColor = Color.Transparent,
             .BackColor1 = ColorControl,
             .BackgroundSource = backgroundSource,
             .BorderColor = Color.Transparent,
@@ -731,7 +839,7 @@ Friend NotInheritable Class QualitySettingsPanel
             .Dock = DockStyle.Fill,
             .ForeColor = ColorText,
             .Margin = New Padding(0, 10, 0, 0),
-            .MaximumSize = New Size(0, HostControlHeight),
+            .MaximumSize = Size.Empty,
             .MinimumSize = Size.Empty,
             .MultiLine = False,
             .Padding = New Padding(10, 0, 10, 0),
@@ -766,6 +874,7 @@ Friend NotInheritable Class QualitySettingsPanel
         Dim comboBox As New ModernComboBox With {
             .ArrowColor = ColorMuted,
             .AutoScaleMode = System.Windows.Forms.AutoScaleMode.None,
+            .BackColor = Color.Transparent,
             .BackColor1 = ColorControl,
             .BackColor2 = ColorControl,
             .BackgroundSource = backgroundSource,
@@ -789,7 +898,7 @@ Friend NotInheritable Class QualitySettingsPanel
             .HoverBackColor2 = ColorControlHover,
             .Margin = New Padding(0, 10, 0, 0),
             .MaxDropDownItems = 12,
-            .MaximumSize = New Size(0, HostControlHeight),
+            .MaximumSize = Size.Empty,
             .MinimumSize = Size.Empty,
             .Padding = New Padding(10, 0, 10, 0),
             .PressedBackColor1 = ColorControlPressed,
@@ -872,6 +981,7 @@ Friend NotInheritable Class QualitySettingsPanel
         Return New ModernCheckBox With {
             .AnimationFPS = animationFps,
             .AutoScaleMode = System.Windows.Forms.AutoScaleMode.None,
+            .BackColor = Color.Transparent,
             .BackgroundSource = backgroundSource,
             .Checked = False,
             .ClickAnywhere = True,
@@ -890,6 +1000,7 @@ Friend NotInheritable Class QualitySettingsPanel
         Return New ModernButton With {
             .AnimationFPS = animationFps,
             .AutoScaleMode = System.Windows.Forms.AutoScaleMode.None,
+            .BackColor = Color.Transparent,
             .BackColor1 = ColorControl,
             .BackColor2 = ColorControl,
             .BackgroundSource = backgroundSource,
@@ -900,7 +1011,7 @@ Friend NotInheritable Class QualitySettingsPanel
             .HoverBackColor1 = ColorControlHover,
             .HoverBackColor2 = ColorControlHover,
             .HoverBorderColor = Color.Transparent,
-            .MaximumSize = New Size(0, HostControlHeight),
+            .MaximumSize = Size.Empty,
             .MinimumSize = Size.Empty,
             .PressedBackColor1 = ColorControlPressed,
             .PressedBackColor2 = ColorControlPressed,
@@ -914,6 +1025,7 @@ Friend NotInheritable Class QualitySettingsPanel
         Return New HtmlColorLabel With {
             .AutoScaleMode = System.Windows.Forms.AutoScaleMode.None,
             .AutoSizeMode = AutoSizeMode.GrowAndShrink,
+            .BackColor = Color.Transparent,
             .BackColor1 = Color.Transparent,
             .BackgroundSource = backgroundSource,
             .BorderSize = 0,
@@ -929,15 +1041,20 @@ Friend NotInheritable Class QualitySettingsPanel
 
     Private Function CreateLabel(text As String,
                                  color As Color,
-                                 size As Single) As Label
-        Return New Label With {
-            .AutoEllipsis = True,
+                                 size As Single,
+                                 backgroundSource As Control) As HtmlColorLabel
+        Return New HtmlColorLabel With {
+            .AutoScaleMode = System.Windows.Forms.AutoScaleMode.None,
+            .AutoSize = False,
             .BackColor = Color.Transparent,
+            .BackColor1 = Color.Transparent,
+            .BackgroundSource = backgroundSource,
+            .BorderSize = 0,
             .Font = New Font(Font.FontFamily, size, FontStyle.Regular),
             .ForeColor = color,
             .Margin = Padding.Empty,
             .Text = text,
-            .UseMnemonic = False
+            .TextAlign = HtmlColorLabel.TextAlignEnum.MiddleLeft
         }
     End Function
 

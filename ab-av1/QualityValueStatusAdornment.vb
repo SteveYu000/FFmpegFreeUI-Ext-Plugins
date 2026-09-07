@@ -1,5 +1,6 @@
 Imports System.Drawing
 Imports System.Windows.Forms
+Imports LakeUI
 
 ''' <summary>
 ''' 将 ab-av1 环境状态放在原生“质量值”输入框右侧，不参与宿主 Dock 布局。
@@ -12,21 +13,20 @@ Friend NotInheritable Class QualityValueStatusAdornment
 
     Private ReadOnly _qualityValue As Control
     Private ReadOnly _hostRow As Control
-    Private ReadOnly _status As Label
+    Private ReadOnly _status As HtmlColorLabel
     Private _active As Boolean
     Private _disposed As Boolean
 
-    Public Sub New(qualityValue As Control, status As Label)
+    Public Sub New(qualityValue As Control, status As HtmlColorLabel)
         If status Is Nothing Then Throw New ArgumentNullException(NameOf(status))
         _qualityValue = qualityValue
         _hostRow = qualityValue?.Parent
         _status = status
         _status.Anchor = AnchorStyles.Top Or AnchorStyles.Left Or AnchorStyles.Right
-        _status.AutoEllipsis = True
-        _status.BackColor = Color.Transparent
+        _status.BackColor1 = Color.Transparent
         _status.Dock = DockStyle.None
         _status.TabStop = False
-        _status.TextAlign = ContentAlignment.MiddleLeft
+        _status.TextAlign = HtmlColorLabel.TextAlignEnum.MiddleLeft
         _status.Visible = False
 
         If _qualityValue Is Nothing OrElse _hostRow Is Nothing Then Return
