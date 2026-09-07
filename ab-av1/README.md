@@ -1,5 +1,8 @@
 # FFmpegFreeUI Ext AB-AV1 插件
 
+> [!Note]
+> 插件的v1.x版本开始面向最新版 3FUI（内置 LakeUI 5.5）适配，不再保证旧版 3FUI/LakeUI 的显示兼容性。
+
 这是个使用AB-AV1和FFmpeg作为后端，高度集成进3FUI编码面板的插件。
 插件使用了AB-AV1的功能，计算目标VMAF或者xpsnr分数所需的最小crf值。
 
