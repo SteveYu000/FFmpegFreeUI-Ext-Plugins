@@ -6,13 +6,15 @@
 这是个使用AB-AV1和FFmpeg作为后端，高度集成进3FUI编码面板的插件。
 插件使用了AB-AV1的功能，计算目标VMAF或者xpsnr分数所需的最小crf值。
 
+版本更新内容见 [CHANGELOG.md](./CHANGELOG.md)。
+
 ## 使用方法
 打开“参数面板 → 质量”，即可在“控制方式”中看到“使用目标分数（ab-av1）”。
 ## 原生集成方式
 
 - `host.Ui.RegisterChoice`：向第一个原生质量控制方式下拉框添加稳定选项；第二、第三栏通过 `ParametersVideoQualityFields` 有序资源租约切换为指标和目标分数，离开插件模式或卸载时完整恢复原生条目与样式。
 - `IExtPluginUiContext.StateJson`：参数随 3FUI v6 预设保存和恢复，不使用插件自己的预设文件。
-- `host.PresetOverview.RegisterRowProvider`：使用 Ext API 2.5 的正式预设总览提供器，从宿主当前正在展示的完整预设快照读取插件私有状态。参数面板、预设管理、任务参数查看和 Agent 读取预设均由宿主统一追加同一组 AB-AV1 行；插件不再监听或改写原生文本框，也不输出启用/未启用状态。
+- `host.PresetOverview.RegisterRowProvider`：使用 Ext API 2.5 的正式预设总览提供器，从宿主当前正在展示的完整预设快照读取插件私有状态。仅在 AB-AV1 模式启用时，参数面板、预设管理、任务参数查看和 Agent 读取预设才会由宿主统一追加同一组 AB-AV1 行；插件不再监听或改写原生文本框，也不输出启用/未启用状态。
 - `host.Commands.RegisterStepProvider`：仅在原生命令模板预览中贡献 `ab-av1 crf-search` 步骤。编码器、编码预设、像素格式、解码输入参数和自定义编码参数均来自当前预设；未选择编码器时不生成 `--encoder`，也不回退或补全为 `libsvtav1`。实际任务仍由准备阶段处理器执行一次搜索，避免重复运行。
 - `ext.preset.after-capture`：把仅用于显示的 VMAF/XPSNR 和目标分数从原生 FFmpeg 质量字段中清除；真实值保存在插件私有状态，防止原生命令模板误生成 `-VMAF`/`-XPSNR` 参数。
 - `ext.task.before-prepare`：在任务准备阶段执行可取消的 ab-av1 搜索，并将 CRF 写回当前任务快照。

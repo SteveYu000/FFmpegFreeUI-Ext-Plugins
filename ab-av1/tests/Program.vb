@@ -391,7 +391,7 @@ Module Program
         Equal(92.5, migrated.TargetScore, "legacy target VMAF is retained")
 
         Dim storedState As New AbAv1PluginState With {
-            .Enabled = False,
+            .Enabled = True,
             .TargetVmaf = 96.5,
             .MinCrf = 10,
             .MaxCrf = 42,
@@ -428,6 +428,24 @@ Module Program
                 Function(row) Not row.Text.Contains("已启用", StringComparison.Ordinal) AndAlso
                               Not row.Text.Contains("未启用", StringComparison.Ordinal)),
             "overview omits enabled state")
+
+        Dim choice = host.UiRegistry.ChoiceExtensions.Single()
+        Dim nativeChoiceContext As New FakeChoiceContext With {
+            .StateJson = storedState.Serialize()
+        }
+        choice.SelectionChanged.Invoke(nativeChoiceContext, False)
+        IsTrue(
+            Not AbAv1PluginState.Deserialize(nativeChoiceContext.StateJson).Enabled,
+            "switching back to native quality mode disables AB-AV1 state")
+        Dim nativeOverviewContext As New ExtPluginPresetOverviewContext(
+            AbAv1Plugin.PluginId,
+            CreateMinimalPresetJson(),
+            nativeChoiceContext.StateJson)
+        provider.Callback.Invoke(nativeOverviewContext)
+        Equal(
+            0,
+            nativeOverviewContext.Rows.Count,
+            "switching back to native quality mode removes AB-AV1 overview rows")
 
         Dim selectedPresetState As New AbAv1PluginState With {
             .Enabled = True,

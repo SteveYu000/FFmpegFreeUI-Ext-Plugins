@@ -183,6 +183,8 @@ Public NotInheritable Class AbAv1Plugin
            Not AbAv1PluginState.HasStoredState(context.PluginStateJson) Then Return
 
         Dim state = AbAv1PluginState.Deserialize(context.PluginStateJson)
+        If Not state.Enabled Then Return
+
         Dim order = 0
         For Each line In state.ToOverviewLines()
             context.Rows.Add(New ExtPluginPresetOverviewRow(line) With {
