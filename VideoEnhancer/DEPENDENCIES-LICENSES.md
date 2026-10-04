@@ -4,7 +4,7 @@
 
 ## 自有代码的许可证建议
 
-自有、可独立使用的 C# / VB 代码可以继续采用 MIT；已确认的 SDK、SharpCompress 和构建工具没有要求将这些代码改为 GPL。继承的 MIT 版权与许可声明必须保留。
+自有、可独立使用的 C# / VB 代码可以继续采用 MIT；已确认的 SDK、SharpCompress、构建工具以及 FFF.Native 本体没有要求将这些代码改为 GPL。继承的 MIT 版权与许可声明必须保留。FFF.Native 来自 [FFF_Project](https://github.com/Lake1059/FFF_Project)，已核对其 [MIT 许可证](https://github.com/Lake1059/FFF_Project/blob/2a09d5b1ea913b44996059d0896ba3a96400ca54/LICENSE.txt)。
 
 RVE 集成需要另行界定：本项目的 Python 包装器导入 RVE 模块，`BackendServices.cs` 还包含修改 RVE 源文件的补丁文本。RVE 及其派生部分应遵守上游 AGPLv3，不能因为通过 Python 子进程执行就将其全部认定为 MIT。[RVE 许可证](https://github.com/TNTwise/REAL-Video-Enhancer/blob/v2-main/LICENSE)
 
@@ -57,13 +57,15 @@ RTX 的 MIT 许可不覆盖 nvngx_vsr.dll、nvngx_truehdr.dll 和配套 FFmpeg �
 
 本次没有将所有便携 Python 依赖或全部下载模型认定为已完成逐版本审查；下载源仍需要把许可证和精确版本与归档关联。
 
-## 内嵌原生预览组件：来源尚未核实
+## 内嵌原生预览组件：已确认上游，构建对应关系待核实
 
-`Frontend/EmbeddedFffNativePayload.vb` 内嵌以下二进制，预览时释放到插件数据目录。仓库没有提供 FFF.Native 源码、构建记录或对应许可证，也没有给配套库提供精确来源记录。这里列出的上游许可仅用于定位，不能证明内嵌二进制的构建授权。
+`Frontend/EmbeddedFffNativePayload.vb` 内嵌以下二进制，预览时释放到插件数据目录。FFF.Native 来源已由项目维护者确认是 Lake1059/FFF_Project，其本体采用 MIT；上游许可证和来源说明随 ZIP 的 `licenses/FFF.Native` 提供。已核对 API 11 参考提交 `2a09d5b1ea913b44996059d0896ba3a96400ca54` 的原生工程，FFmpeg 和 libass 使用 delay-load 动态链接，依赖名称与随包 DLL 一致。
+
+该参考提交使用 vcpkg baseline `e03dc9b29710050cd1018bc5674688108658d327` 安装 libass 及其传递依赖；当前 master `15995b807bf8a27037d2697fcdb89d13064ee247` 则已使用 API 16。本插件使用 API 11，两个参考提交都不能代替尚未提供的精确二进制构建记录。上游 MIT 许可文件的版权行仍含占位文本，随包原样保留，未擅自补写作者或年份。
 
 | 文件 | 上游通常适用的许可 | 当前 SHA-256 |
 | --- | --- | --- |
-| FFF.Native.dll | 未知，需要作者、源码和授权来源 | `1b196833b06141ad227a37e78673dbb51077754959255dfc91e2340056f990d0` |
+| FFF.Native.dll | FFF_Project：MIT，API 11；精确构建提交待关联 | `1b196833b06141ad227a37e78673dbb51077754959255dfc91e2340056f990d0` |
 | ass-9.dll | libass：ISC | `c2571f763f2e768cb19d7b5c26746c55b8a70ed74615fc484a14a1123c084d2b` |
 | brotlicommon.dll | Brotli：MIT | `115071a35873940b559f98ebadec848f4364cb65444ef56f0312e403649ea52f` |
 | brotlidec.dll | Brotli：MIT | `6ebb5aa59b70e5e0ae8d4aec3fca4c97eea700d50c5ddf6c7b7dca22a56daf4a` |
@@ -76,4 +78,4 @@ RTX 的 MIT 许可不覆盖 nvngx_vsr.dll、nvngx_truehdr.dll 和配套 FFmpeg �
 
 上游声明：[libass](https://github.com/libass/libass/blob/master/COPYING)、[Brotli](https://github.com/google/brotli/blob/master/LICENSE)、[bzip2](https://sourceware.org/bzip2/manual/manual.html)、[FreeType FTL](https://github.com/freetype/freetype/blob/master/docs/FTL.TXT)、[FriBidi](https://github.com/fribidi/fribidi/blob/master/COPYING)、[HarfBuzz](https://github.com/harfbuzz/harfbuzz/blob/main/COPYING)、[libpng](https://github.com/pnggroup/libpng/blob/libpng16/LICENSE)、[zlib](https://github.com/madler/zlib/blob/develop/LICENSE)。
 
-其中 FriBidi 的 LGPL 义务需要针对实际构建补充对应源码和许可证；当前释放逻辑保留已有非空 DLL，允许替换。FFF.Native 是否静态包含其他库、是否动态加载特定 FFmpeg 构建，也需要源码和构建材料确认。来源未补齐前，不能把整个 ZIP 描述为许可材料齐全。
+FFF.Native 本体的 MIT 不覆盖配套库。FriBidi 的 LGPL 义务仍需要针对实际构建补充对应源码和许可证；当前释放逻辑保留已有非空 DLL，允许替换。插件初始 ZIP 没有嵌入 FFmpeg 的 avcodec 等 DLL；用户提供的 Shared 构建仍应核对其许可与配置。配套原生库的精确版本、补丁、版权声明和对应源码材料尚未逐项关联，不能把整个 ZIP 描述为许可材料齐全。

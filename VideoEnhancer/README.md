@@ -61,7 +61,7 @@ python -B tests/FrameBackendTests.py
 
 `Frontend` 为 VB / LakeUI 界面，`Backend` 为 C# 服务与处理链，构建后合并为一个 DLL。界面通过类型化服务调用管理操作，不解析插件命令行输入。RVE / Python、FFmpeg、RTX 和 aria2-next 保留各自的外部进程协议。
 
-自有代码许可建议、RVE 的 AGPL 边界、RTX 专有组件和原生预览库的来源缺口见 [依赖许可说明](DEPENDENCIES-LICENSES.md)。第三方材料随 ZIP 提供；整个发行包不能统一视为 MIT。
+自有代码许可建议、RVE 的 AGPL 边界、RTX 专有组件、FFF.Native 的 MIT 许可及配套库材料见 [依赖许可说明](DEPENDENCIES-LICENSES.md)。第三方材料随 ZIP 提供；整个发行包不能统一视为 MIT。
 
 默认数据目录为 DLL 同目录下的 `videoenhancer`。可用 `VIDEOENHANCER_ROOT` 指定数据目录（支持环境变量展开、相对 DLL 目录的路径），用 `VIDEOENHANCER_FFMPEG` 指定 FFmpeg。项目引用和构建脚本采用相对路径、NuGet 或环境变量，不依赖开发机其他仓库目录。
 

@@ -6,7 +6,7 @@ Namespace videoenhancer
 
     ''' <summary>
     ''' FFF.Player / 3FP API 11 的轻量预览桥。只暴露对比窗口需要的打开、播放、暂停、
-    ''' 精确拖动与快照；渲染仍完全由最新版 FFF.Native 的 D3D11 内核完成。
+    ''' 精确拖动与快照；渲染由随包 API 11 的 FFF.Native D3D11 内核完成。
     ''' </summary>
     Friend NotInheritable Class FffPreviewSession
         Implements IDisposable

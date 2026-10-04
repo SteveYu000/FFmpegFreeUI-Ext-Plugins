@@ -25,10 +25,11 @@ try {
     [IO.Directory]::CreateDirectory($ariaDestination) | Out-Null
     Copy-Item -LiteralPath (Join-Path $ariaCache 'aria2-next.exe') -Destination $ariaDestination
     $licenses = Join-Path $data 'licenses'
-    foreach ($component in @('aria2-next', 'SharpCompress', '7zip')) { [IO.Directory]::CreateDirectory((Join-Path $licenses $component)) | Out-Null }
+    foreach ($component in @('aria2-next', 'SharpCompress', '7zip', 'FFF.Native')) { [IO.Directory]::CreateDirectory((Join-Path $licenses $component)) | Out-Null }
     Get-ChildItem -LiteralPath (Join-Path $projectRoot 'Backend/third-party/aria2-next') -File | Copy-Item -Destination (Join-Path $licenses 'aria2-next')
     Copy-Item -LiteralPath (Join-Path $ariaCache 'aria2-next-v2.8.3-source.tar.gz') -Destination (Join-Path $licenses 'aria2-next')
     Copy-Item -LiteralPath (Join-Path $projectRoot 'Backend/third-party/SharpCompress/LICENSE.txt') -Destination (Join-Path $licenses 'SharpCompress')
+    Get-ChildItem -LiteralPath (Join-Path $projectRoot 'Backend/third-party/FFF.Native') -File | Copy-Item -Destination (Join-Path $licenses 'FFF.Native')
     $sevenCache = Join-Path $projectRoot 'Backend/obj/third-party/7zip/26.03'
     Copy-Item -LiteralPath (Join-Path $sevenCache 'extra/License.txt') -Destination (Join-Path $licenses '7zip')
     Copy-Item -LiteralPath (Join-Path $sevenCache '7z2603-src.tar.xz') -Destination (Join-Path $licenses '7zip')

@@ -1,0 +1,37 @@
+FFF.Native 来源与许可证
+======================
+
+上游项目：https://github.com/Lake1059/FFF_Project
+项目维护者：Lake1059（GitHub）
+上游许可证：MIT
+随包许可证：LICENSE.txt，原样保留上游版权行；上游当前版权行含 [year] [fullname] 占位文本。
+
+插件使用 FFF.Player / 3FP API 11。
+已核对 API 11 参考源码提交：
+2a09d5b1ea913b44996059d0896ba3a96400ca54
+https://github.com/Lake1059/FFF_Project/tree/2a09d5b1ea913b44996059d0896ba3a96400ca54
+许可文件：
+https://github.com/Lake1059/FFF_Project/blob/2a09d5b1ea913b44996059d0896ba3a96400ca54/LICENSE.txt
+
+随包 FFF.Native.dll SHA-256：
+1b196833b06141ad227a37e78673dbb51077754959255dfc91e2340056f990d0
+
+参考源码与随包 DLL 的依赖名称一致：
+ass-9.dll、avcodec-63.dll、avformat-63.dll、avutil-61.dll、
+swresample-7.dll、swscale-10.dll、avfilter-12.dll。
+原生工程采用 delay-load 的动态链接方式。
+
+API 11 参考提交的 vcpkg.json：
+builtin-baseline=e03dc9b29710050cd1018bc5674688108658d327
+dependencies=libass
+配套 Brotli、bzip2、FreeType、FriBidi、HarfBuzz、libpng、zlib
+通过 libass 的构建依赖安装，各自许可不被 FFF_Project 的 MIT 取代。
+
+当前 master 参考提交 15995b807bf8a27037d2697fcdb89d13064ee247 使用 API 16，
+不能直接把该版本作为随包 API 11 DLL 的对应源码。
+上述 API 11 提交也是参考版本：尚无构建记录证明随包 DLL 确由该提交生成。
+配套 DLL 的精确源码、补丁及构建材料仍须与二进制逐一关联。
+
+FFF.Native 的 MIT 许可不覆盖另行提供的 FFmpeg Shared 构建。
+FFmpeg 的许可取决于实际构建配置；FriBidi 的 LGPL 义务也需单独履行。
+完整许可边界和配套二进制校验值见发行包 DEPENDENCIES-LICENSES.md。

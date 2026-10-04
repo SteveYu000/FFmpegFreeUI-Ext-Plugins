@@ -2,7 +2,7 @@ VideoEnhancer 第三方组件声明
 ===========================
 
 根目录保留继承项目的 MIT 声明。第三方代码、工具、运行组件和模型
-按各自许可证分发；RVE 集成与未核实原生组件的边界见下文及许可审查文档。
+按各自许可证分发；RVE 集成与原生运行库的发布材料见下文及许可审查文档。
 
 aria2-next 2.8.3
 ----------------
@@ -57,7 +57,10 @@ RTX sidecar 的应用代码为 MIT，NVIDIA RTX Video SDK DLL 为专有组件，
 https://github.com/Zennmn/RTXHDR-RTXVSR/blob/main/THIRD_PARTY.md
 https://ffmpeg.org/legal.html
 
-DLL 还内嵌 FFF.Native 及字幕、字体、压缩库。FFF.Native 来源和授权尚未核实；
-FriBidi 等配套库的对应构建源码与许可材料也尚未补齐。
+DLL 还内嵌 FFF.Native 及字幕、字体、压缩库。FFF.Native 来自 Lake1059/FFF_Project，
+本体采用 MIT，使用 API 11；上游 LICENSE.txt 和来源说明见 licenses/FFF.Native。
+https://github.com/Lake1059/FFF_Project
+FFF.Native 本体的 MIT 不覆盖另行提供的 FFmpeg Shared 构建及配套库。
+FriBidi 等配套库的对应构建源码与许可材料尚未补齐。
 具体文件校验值、许可边界和未核实事项见随包 DEPENDENCIES-LICENSES.md。
 本文件和根 MIT 许可证不构成对所有第三方二进制的统一授权。
