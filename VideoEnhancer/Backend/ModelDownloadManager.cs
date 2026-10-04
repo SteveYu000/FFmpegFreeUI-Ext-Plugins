@@ -131,7 +131,7 @@ internal sealed class ModelDownloadManager
 
         if (IsArchiveFile(destination))
         {
-            // 旧镜像压缩包包含一级分类目录；新版补帧包只包含架构目录，需直接解到 Frame-Interpolation。
+            // 模型包按分类解压；补帧包只包含架构目录，直接解到 Frame-Interpolation。
             var extractionRoot = category.Equals("Backend", StringComparison.OrdinalIgnoreCase)
                 ? _coreRoot
                 : category.Equals("Bin", StringComparison.OrdinalIgnoreCase)
@@ -397,5 +397,4 @@ internal sealed class ModelDownloadManager
         return 2;
     }
 
-    /// <summary>把 preview.2 旧下载逻辑生成的 models 下 FFmpeg 目录迁移到标准 bin 目录。</summary>
 }

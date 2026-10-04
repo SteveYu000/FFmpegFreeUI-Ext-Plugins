@@ -2,7 +2,6 @@ Imports VideoEnhancer
 Imports System
 Imports System.Collections.Generic
 Imports System.Diagnostics
-Imports Process = VideoEnhancer.BackendOperation
 Imports System.Drawing
 Imports System.IO
 Imports System.Linq
@@ -139,7 +138,6 @@ Namespace videoenhancer
         ' 页签懒加载钩子索引：构建页签时按实际顺序捕获，插入新页后不再依赖固定数字。
         Private _tabIndexDownloader As Integer = -1
         Private _tabIndexImporter As Integer = -1
-        Private _tabIndexSegmented As Integer = -1
         Private _tabIndexTutorial As Integer = -1
         ' ModernContextMenu 的菜单项不是 WinForms 控件，使用 LakeUI 的浮动提示窗显示当前悬停模型说明。
         Private NotInheritable Class ModelMenuToolTipController
@@ -385,8 +383,8 @@ Namespace videoenhancer
             SuspendLayout()
             AutoScaleMode = AutoScaleMode.None
             Try
-                If Not LakeUiScrollTransactionsAvailable() Then
-                    InitializeCompatibilityErrorUi()
+                If Not LakeUiRequiredVersionAvailable() Then
+                    InitializeDependencyErrorUi()
                     Return
                 End If
                 InitializeUi()
@@ -436,8 +434,6 @@ Namespace videoenhancer
             If Not _parameterMode AndAlso _config.AutoCheckUpdates Then OnCheckUpdates(Me, EventArgs.Empty)
             AddHandler _tabs.SelectedIndexChanged, AddressOf OnTabChanged
         End Sub
-
-        Private Sub OnQueueMenuTick(sender As Object, e As EventArgs)        End Sub
 
         Private Async Sub StartAutomaticUpdateCheck()
             Await Task.Delay(1500)
@@ -845,8 +841,9 @@ Namespace videoenhancer
                 CloseModelMenuToolTip()
                 CloseUserModelContextMenu()
                 CloseDownloadModelContextMenu()
-                _downloadProcessLifetime.Dispose()
-                StopEnvironmentCheck(5000)
+                For Each cancellation In _downloadCancellations.Values.ToArray()
+                    cancellation.Cancel()
+                Next
                 ' LakeUI 5.x 在 TabControl 隐藏时会重新显示当前绑定页。
                 ' 先解除绑定，避免父窗体销毁期间访问已经 Dispose 的 ModernPanel。
                 Try
@@ -861,11 +858,6 @@ Namespace videoenhancer
                 Try
                     _statusClearTimer.Stop()
                     _statusClearTimer.Dispose()
-                Catch
-                End Try
-                Try
-                    _queueMenuTimer.Stop()
-                    _queueMenuTimer.Dispose()
                 Catch
                 End Try
                 If _quadForm IsNot Nothing Then
@@ -884,8 +876,8 @@ Namespace videoenhancer
                 End If
                 If _lastPreviewImage IsNot Nothing Then
                     Try
-                        _picPreview.Image = Nothing
-                        _lastPreviewImage.Dispose()
+                        _picPreview.Source = Nothing
+                        PreviewPictureSource.Release(_lastPreviewImage)
                     Catch
                     End Try
                     _lastPreviewImage = Nothing

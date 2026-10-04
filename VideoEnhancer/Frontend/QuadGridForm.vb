@@ -1,7 +1,6 @@
 ﻿Imports System
 Imports System.Collections.Generic
 Imports System.Diagnostics
-Imports Process = VideoEnhancer.BackendOperation
 Imports System.Drawing
 Imports System.Drawing.Drawing2D
 Imports System.Globalization
@@ -726,9 +725,9 @@ Namespace videoenhancer
             End If
             Dim oldComposite = _compositeFrame
             _compositeFrame = Nothing
-            If oldComposite IsNot Nothing Then Try : oldComposite.Dispose() : Catch : End Try
+            _preview.Source = Nothing
+            If oldComposite IsNot Nothing Then Try : PreviewPictureSource.Release(oldComposite) : Catch : End Try
             UpdateLayoutCombo()
-            _preview.Image = Nothing
             _previewEmptyLabel.Visible = True
             _previewEmptyLabel.BringToFront()
             ProbeDurationAsync(idx, path)
@@ -1284,8 +1283,8 @@ Namespace videoenhancer
             End If
             Dim old = _compositeFrame
             _compositeFrame = image
-            If old IsNot Nothing Then Try : old.Dispose() : Catch : End Try
-            _preview.Image = image
+            _preview.Source = PreviewPictureSource.Create(image)
+            If old IsNot Nothing Then Try : PreviewPictureSource.Release(old) : Catch : End Try
             _previewEmptyLabel.Visible = False
             UpdatePreviewSurfaces()
             _preview.Invalidate()
@@ -1762,9 +1761,9 @@ Namespace videoenhancer
                 If _pendingDisplayImage IsNot Nothing Then Try : _pendingDisplayImage.Dispose() : Catch : End Try
                 _pendingDisplayImage = Nothing
             End SyncLock
-            If _compositeFrame IsNot Nothing Then Try : _compositeFrame.Dispose() : Catch : End Try
+            _preview.Source = Nothing
+            If _compositeFrame IsNot Nothing Then Try : PreviewPictureSource.Release(_compositeFrame) : Catch : End Try
             _compositeFrame = Nothing
-            _preview.Image = Nothing
             For Each slot As VideoSlotCard In _slotLabels
                 If slot IsNot Nothing Then slot.SetPreviewImage(Nothing)
             Next

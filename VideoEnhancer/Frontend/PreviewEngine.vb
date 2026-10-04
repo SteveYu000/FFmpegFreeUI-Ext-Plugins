@@ -1,7 +1,6 @@
 ﻿Imports System
 Imports System.Collections.Generic
 Imports System.Diagnostics
-Imports Process = VideoEnhancer.BackendOperation
 Imports System.Drawing
 Imports System.Globalization
 Imports System.IO
@@ -235,7 +234,7 @@ Namespace videoenhancer
                 If task.进度 IsNot Nothing Then
                     progressSeconds = task.进度.当前时间.TotalSeconds
                 End If
-                ' CLI 中转任务没有 3FUI 原生 ffmpeg 进度：用遥测帧号 + 输入帧率换算内容位置
+                ' AI 推理阶段使用遥测帧号和输入帧率换算当前内容位置
                 If progressSeconds <= 0 AndAlso frame > 0 Then
                     Dim inputFps = ProbeInputFps(task.输入文件)
                     If inputFps > 0 Then

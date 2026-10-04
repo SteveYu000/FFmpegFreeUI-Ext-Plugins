@@ -36,7 +36,8 @@ try {
     Copy-Item -LiteralPath (Join-Path $projectRoot 'Backend/THIRD-PARTY-NOTICES.txt') -Destination $data
     Copy-Item -LiteralPath (Join-Path $projectRoot 'LICENSE') -Destination (Join-Path $data 'LICENSE.txt')
     Copy-Item -LiteralPath (Join-Path $projectRoot 'README.md') -Destination (Join-Path $data 'README.md')
-    $manifest = [ordered]@{ id = 'videoenhancer'; version = $version; extApi = '2.5.0'; lakeUi = '5.110.0'; entry = 'videoenhancer.3fui.dll'; runtime = 'videoenhancer'; distribution = 'zip' }
+    Copy-Item -LiteralPath (Join-Path $projectRoot 'DEPENDENCIES-LICENSES.md') -Destination $data
+    $manifest = [ordered]@{ id = 'videoenhancer'; version = $version; extApi = '2.5.0'; lakeUi = '5.112.0'; entry = 'videoenhancer.3fui.dll'; runtime = 'videoenhancer'; distribution = 'zip' }
     [IO.File]::WriteAllText((Join-Path $stage 'videoenhancer.manifest.json'), ($manifest | ConvertTo-Json), [Text.UTF8Encoding]::new($false))
     $package = Join-Path $outputRoot "VideoEnhancer-$version-win-x64.zip"
     if (Test-Path -LiteralPath $package) { Remove-Item -LiteralPath $package }

@@ -21,7 +21,7 @@ https://github.com/AnInsomniacy/aria2-next/archive/refs/tags/v2.8.3.tar.gz
 SHA-256：420E31256B5E29DE6AB9B295423ED29431494527B4FDC9AFB3946DFF4A73EAF7
 
 VideoEnhancer 正式发布流程会把该归档以
-aria2-next-2.8.3-source.tar.gz 的名称一同发布并镜像，避免只依赖外部链接。
+aria2-next-v2.8.3-source.tar.gz 的名称一同发布并镜像，避免只依赖外部链接。
 源码归档包含上游列入 third_party 的构建依赖源码。许可证全文见同目录 COPYING。
 
 2.8.3 官方 Windows 构建启用了 HLS/DASH，随该独立组件静态链接的依赖包含

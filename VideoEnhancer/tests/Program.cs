@@ -18,6 +18,12 @@ internal static partial class Program
     static int Main(string[] args)
     {
         if(args.Length>0&&args[0]=="--port")return RtxSidecarFixture.Run(args).GetAwaiter().GetResult();
+        if(args.Length>1&&Path.GetFileName(args[0])=="inspect_upscale_models.py"&&Environment.GetEnvironmentVariable("VIDEOENHANCER_TEST_SERVICE_CHILD") is {} marker)
+        {
+            File.WriteAllText(marker,Environment.ProcessId.ToString());
+            Thread.Sleep(TimeSpan.FromSeconds(30));
+            return 0;
+        }
         _root=Path.Combine(Path.GetTempPath(),"VideoEnhancer-tests-"+Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(_root);
         Environment.SetEnvironmentVariable("VIDEOENHANCER_ROOT",Path.Combine(_root,"runtime"));
@@ -36,6 +42,7 @@ internal static partial class Program
             TestMergedAssembly();
             System.Console.WriteLine("运行：TestRvePreview");
             TestRvePreview();
+            TestManagementServices();
             TestModelRemoval();
             TestSegmentFallback();
             System.Console.WriteLine("运行：TestMediaPipelineAsync");
@@ -121,6 +128,19 @@ internal static partial class Program
         context.Restore(new EnhancementSettings{InterpEnabled=true,InterpFactor=4}.ToJson());
         var interp=typeof(videoenhancer.PluginPanel).GetField("_switchInterp",BindingFlags.NonPublic|BindingFlags.Instance)!.GetValue(page)!;
         Check((bool)interp.GetType().GetProperty("Checked")!.GetValue(interp)!,"恢复预设更新功能开关");
+        using var bitmap=new System.Drawing.Bitmap(2,2);
+        bitmap.SetPixel(1,0,System.Drawing.Color.FromArgb(128,80,120,240));
+        var pictureFactory=typeof(videoenhancer.Entry).Assembly.GetType("videoenhancer.PreviewPictureSource",true)!;
+        var source=(LakeUI.IPixelPictureSource)pictureFactory.GetMethod("Create",BindingFlags.Static|BindingFlags.NonPublic)!.Invoke(null,[bitmap])!;
+        Check(source.Width==2&&source.Height==2&&source.ColorSpace==LakeUI.PixelPictureColorSpace.SRgb&&!source.IsHdr,"预览图像源保留尺寸和 SDR 色彩声明");
+        LakeUI.PixelPicturePixel pixel=default;
+        Check(source.TryGetPixel(1,0,0,ref pixel)&&Math.Abs(pixel.Red-80f/255)<0.00001f&&Math.Abs(pixel.Blue-240f/255)<0.00001f&&Math.Abs(pixel.Alpha-128f/255)<0.00001f,"预览源返回原帧 RGBA 像素");
+        Check(!source.TryGetPixel(-1,0,0,ref pixel)&&!source.TryGetPixel(2,0,0,ref pixel),"预览像素查询拒绝越界坐标");
+        using var picture=new LakeUI.PixelPictureBox{Source=source};
+        Check(picture.ImageWidth==2&&picture.ImageHeight==2,"LakeUI 5.112 通过 Source 接收预览帧");
+        picture.Source=null;
+        pictureFactory.GetMethod("Release",BindingFlags.Static|BindingFlags.NonPublic)!.Invoke(null,[bitmap]);
+        Check(!source.TryGetPixel(0,0,0,ref pixel),"释放后的预览帧不会继续读取 GDI 资源");
         using var toolPage=new videoenhancer.PluginPanel(new(),previewOnly:true);
         var tabs=typeof(videoenhancer.PluginPanel).GetField("_tabs",BindingFlags.NonPublic|BindingFlags.Instance)!.GetValue(toolPage)!;
         var items=(System.Collections.IEnumerable)tabs.GetType().GetProperty("Items")!.GetValue(tabs)!;
@@ -139,13 +159,20 @@ internal static partial class Program
         Check(assembly.GetType("VideoEnhancer.BackendServices") is not null&&assembly.GetType("videoenhancer.Entry") is not null,"同一 DLL 同时包含前端和后端");
         Check(!assembly.GetReferencedAssemblies().Any(reference=>reference.Name is "VideoEnhancer.Backend" or "SharpCompress" or "FFmpegFreeUI"),"没有私有依赖 DLL 或宿主主程序集引用");
         Check(assembly.GetManifestResourceNames().Contains("VideoEnhancer.Embedded.rve-ext-launch.py"),"真实 RVE 启动资源包含在 DLL 中");
-        var backend=context.LoadFromAssemblyPath(merged).GetType("VideoEnhancer.BackendOperation")!;
-        using var operation=(IDisposable)Activator.CreateInstance(backend)!;
-        backend.GetProperty("StartInfo")!.SetValue(operation,new ProcessStartInfo(merged,"--version"));
-        backend.GetMethod("Start",Type.EmptyTypes)!.Invoke(operation,null);
-        backend.GetMethod("WaitForExit",Type.EmptyTypes)!.Invoke(operation,null);
-        using var reader=(StreamReader)backend.GetProperty("StandardOutput")!.GetValue(operation)!;
-        Check(reader.ReadToEnd().Contains("0.1.0"),"合并 DLL 的管理服务可直接调用");
+        var services=assembly.GetType("VideoEnhancer.BackendServices")!;
+        Check((string)services.GetProperty("Version")!.GetValue(null)! == "0.1.0","合并 DLL 的版本从 0.1.0 开始");
+        Check(assembly.GetType("VideoEnhancer.ServiceRequestParser") is null&&assembly.GetType("VideoEnhancer.ServiceOptions") is null&&
+            assembly.GetType("VideoEnhancer.BackendOperation") is null,"合并 DLL 没有旧 CLI 参数解析和伪进程类型");
+        services.GetMethod("ConfigureRuntime")!.Invoke(null,[Path.Combine(_root,"merged-runtime")]);
+        var requestType=assembly.GetType("VideoEnhancer.BackendRequest")!;
+        var actionType=assembly.GetType("VideoEnhancer.BackendAction")!;
+        var jobType=assembly.GetType("VideoEnhancer.BackendServiceJob")!;
+        var request=Activator.CreateInstance(requestType,Enum.Parse(actionType,"ListUserModels"))!;
+        using var operation=(IDisposable)jobType.GetMethod("Start",[requestType,typeof(CancellationToken)])!.Invoke(null,[request,CancellationToken.None])!;
+        using var reader=(StreamReader)jobType.GetProperty("Output")!.GetValue(operation)!;
+        jobType.GetMethod("Wait",Type.EmptyTypes)!.Invoke(operation,null);
+        using var result=JsonDocument.Parse(reader.ReadToEnd());
+        Check((int)jobType.GetProperty("ResultCode")!.GetValue(operation)! == 0&&result.RootElement.GetArrayLength()==0,"合并 DLL 通过类型化请求直接读取模型目录");
         context.Unload();
     }
     private static async Task TestMediaPipelineAsync()

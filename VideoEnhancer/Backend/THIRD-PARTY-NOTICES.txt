@@ -1,8 +1,8 @@
 VideoEnhancer 第三方组件声明
 ===========================
 
-发行包包含以下第三方组件。VideoEnhancer 项目源码采用 MIT 许可证，
-第三方组件按各自许可证分发。
+根目录保留继承项目的 MIT 声明。第三方代码、工具、运行组件和模型
+按各自许可证分发；RVE 集成与未核实原生组件的边界见下文及许可审查文档。
 
 aria2-next 2.8.3
 ----------------
@@ -35,3 +35,29 @@ SharpCompress 0.50.3
 项目：https://github.com/ip7z/7zip
 许可证：GNU LGPL 2.1 or later，部分代码使用 BSD 许可证。
 完整声明与对应源码：licenses/7zip/License.txt、SOURCE.txt、7z2603-src.tar.xz。
+
+Ext SDK 与构建依赖
+-----------------
+
+FFmpegFreeUI.Ext.PluginSdk 2.5.0 采用 MIT，编译时引用，运行时由宿主提供。
+ILRepack.Lib.MSBuild.Task 2.0.48 采用 MIT，只用于构建。
+Vortice 3.8.3、Vortice.Mathematics 2.1.0、SharpGen.Runtime / COM 2.4.2-beta
+采用 MIT，作为 LakeUI 传递依赖由宿主提供，不随 ZIP 复制。
+LakeUI 按项目维护者的赞助者许可使用，本文件不将其开源许可用于本项目授权判断。
+
+RVE、RTX 与原生预览组件
+----------------------
+
+RVE 主项目采用 AGPLv3。导入 RVE 的 Python 包装器和 RVE 源文件补丁
+需要按实际代码来源履行上游义务，不能仅以独立进程执行就认定全部属于 MIT。
+https://github.com/TNTwise/REAL-Video-Enhancer/blob/v2-main/LICENSE
+
+RTX sidecar 的应用代码为 MIT，NVIDIA RTX Video SDK DLL 为专有组件，
+配套 FFmpeg 库依其实际构建适用 LGPL 或 GPL。
+https://github.com/Zennmn/RTXHDR-RTXVSR/blob/main/THIRD_PARTY.md
+https://ffmpeg.org/legal.html
+
+DLL 还内嵌 FFF.Native 及字幕、字体、压缩库。FFF.Native 来源和授权尚未核实；
+FriBidi 等配套库的对应构建源码与许可材料也尚未补齐。
+具体文件校验值、许可边界和未核实事项见随包 DEPENDENCIES-LICENSES.md。
+本文件和根 MIT 许可证不构成对所有第三方二进制的统一授权。

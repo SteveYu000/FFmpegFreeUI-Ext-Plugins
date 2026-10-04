@@ -31,7 +31,7 @@ Namespace videoenhancer
                 If File.Exists(configuredTool) Then Return Path.GetFullPath(configuredTool)
             End If
 
-            ' 未在工作目录找到时，继续兼容放在 3FUI 根目录的工具。
+            ' 未在工作目录找到时，继续查找 Ext 宿主根目录的工具。
             Dim hostRoot = Directory.GetParent(PortableRuntime.PluginRoot)
             If hostRoot IsNot Nothing Then
                 Dim hostTool = Path.Combine(hostRoot.FullName, fileName)

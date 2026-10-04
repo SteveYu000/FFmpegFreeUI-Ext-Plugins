@@ -1,26 +1,14 @@
 ﻿Imports System
-Imports System.Collections.Generic
 Imports System.Reflection
 Imports System.Windows.Forms
 
 Namespace videoenhancer
 
-    ''' <summary>访问 3fui 宿主内部对象（VB 默认实例 / 私有字段），并提供测试注入点。</summary>
+    ''' <summary>访问当前 Ext 宿主的 VB 默认窗体实例与内部控件。</summary>
     Friend Class HostAccess
-
-        Private Shared ReadOnly TestOverrides As New Dictionary(Of String, Object)(StringComparer.Ordinal)
-
-        ''' <summary>供测试注入指定类型的实例（优先于 My.Forms 默认实例）。</summary>
-        Public Shared Sub SetTestOverride(formClassName As String, instance As Object)
-            TestOverrides(formClassName) = instance
-        End Sub
 
         ''' <summary>获取 3fui 中 VB 默认实例（My.Forms）对应的窗体。</summary>
         Public Shared Function GetDefaultInstance(formClassName As String) As Object
-            If TestOverrides.ContainsKey(formClassName) Then
-                Return TestOverrides(formClassName)
-            End If
-
             Dim asm = HostRuntime.GetHostAssembly()
             Dim instance = If(asm Is Nothing, Nothing, ResolveMyFormsInstance(asm, formClassName))
             If instance IsNot Nothing Then
@@ -145,21 +133,6 @@ Namespace videoenhancer
                 Return Nothing
             End If
             Return p.GetValue(target)
-        End Function
-
-        Public Shared Sub SetProperty(target As Object, name As String, value As Object)
-            If target Is Nothing Then
-                Return
-            End If
-            Dim p = target.GetType().GetProperty(name, BindingFlags.Public Or BindingFlags.NonPublic Or BindingFlags.Instance)
-            If p IsNot Nothing Then
-                p.SetValue(target, value)
-            End If
-        End Sub
-
-        ''' <summary>寻找"加入编码队列"按钮（兼容编译后带下划线前缀的字段名）。</summary>
-        Public Shared Function FindQueueButton(prepareForm As Object) As Control
-            Return TryCast(GetField(prepareForm, "_MB_加入编码队列", "MB_加入编码队列"), Control)
         End Function
 
         ''' <summary>获取准备文件列表（UltraDetailListView）。</summary>

@@ -26,13 +26,10 @@ internal sealed record BackendPatchEdge(
     string Path,
     long Size,
     string Sha256);
-internal sealed record BackendSentinel(string Path, string Sha256);
-internal sealed record BackendLegacyBaseline(string Version, IReadOnlyList<BackendSentinel> Sentinels);
 internal sealed record BackendUpdateChannel(
     string LatestVersion,
     BackendArtifact Full,
-    IReadOnlyList<BackendPatchEdge> Patches,
-    IReadOnlyList<BackendLegacyBaseline> LegacyBaselines);
+    IReadOnlyList<BackendPatchEdge> Patches);
 internal sealed record BackendUpdateStatus(
     string State,
     string InstalledVersion,
@@ -79,24 +76,7 @@ internal static class BackendUpdateManager
             }
         }
 
-        var baselines = new List<BackendLegacyBaseline>();
-        if (root.TryGetProperty("legacyBaselines", out var baselineElements))
-        {
-            foreach (var baseline in baselineElements.EnumerateArray())
-            {
-                var sentinels = new List<BackendSentinel>();
-                foreach (var sentinel in baseline.GetProperty("sentinels").EnumerateArray())
-                {
-                    sentinels.Add(new BackendSentinel(
-                        NormalizeRelativePath(RequiredString(sentinel, "path")),
-                        RequiredString(sentinel, "sha256")));
-                }
-                if (sentinels.Count == 0)
-                    throw new InvalidOperationException("旧版后端基线必须至少包含一个哨兵文件");
-                baselines.Add(new BackendLegacyBaseline(RequiredString(baseline, "version"), sentinels));
-            }
-        }
-        return new BackendUpdateChannel(latestVersion, full, patches, baselines);
+        return new BackendUpdateChannel(latestVersion, full, patches);
     }
 
     internal static BackendUpdateStatus GetStatus(string coreRoot, BackendUpdateChannel channel)
@@ -109,7 +89,7 @@ internal static class BackendUpdateManager
             return new BackendUpdateStatus("not-installed", "", channel.LatestVersion, "full",
                 channel.Full.Size, Array.Empty<BackendPatchEdge>(), channel.Full);
 
-        var installedVersion = ReadInstalledVersion(coreRoot) ?? DetectLegacyVersion(pythonRoot, channel);
+        var installedVersion = ReadInstalledVersion(coreRoot);
         if (string.IsNullOrWhiteSpace(installedVersion))
             return new BackendUpdateStatus("full-required", "unknown", channel.LatestVersion, "full",
                 channel.Full.Size, Array.Empty<BackendPatchEdge>(), channel.Full);
@@ -122,32 +102,13 @@ internal static class BackendUpdateManager
             return new BackendUpdateStatus("full-required", installedVersion, channel.LatestVersion, "full",
                 channel.Full.Size, route, channel.Full);
         return new BackendUpdateStatus(
-            ReadInstalledVersion(coreRoot) is null ? "legacy-update-available" : "update-available",
+            "update-available",
             installedVersion,
             channel.LatestVersion,
             "patch",
             route.Sum(item => Math.Max(0, item.Size)),
             route,
             channel.Full);
-    }
-
-    private static string? DetectLegacyVersion(string pythonRoot, BackendUpdateChannel channel)
-    {
-        foreach (var baseline in channel.LegacyBaselines)
-        {
-            var matched = true;
-            foreach (var sentinel in baseline.Sentinels)
-            {
-                var path = SafeCombine(pythonRoot, sentinel.Path);
-                if (!File.Exists(path) || !HashMatches(path, sentinel.Sha256))
-                {
-                    matched = false;
-                    break;
-                }
-            }
-            if (matched) return baseline.Version;
-        }
-        return null;
     }
 
     private static IReadOnlyList<BackendPatchEdge> FindSmallestPatchRoute(

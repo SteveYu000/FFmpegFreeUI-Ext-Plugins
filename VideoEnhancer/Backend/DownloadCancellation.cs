@@ -1,6 +1,6 @@
 namespace VideoEnhancer;
 
-/// <summary>由插件在便携工作目录写入取消标记；安装事务开始后不再中断。</summary>
+/// <summary>使用当前 DLL 调用的取消令牌；安装事务开始后由更新器保证原子恢复。</summary>
 internal static class DownloadCancellation
 {
     internal static CancellationToken Token => BackendInvocation.Current?.Cancellation.Token ?? CancellationToken.None;

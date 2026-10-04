@@ -95,7 +95,7 @@ public static partial class BackendServices
                         int multiple=Math.Max(1,capability2.InputMultiple);
                         engineWidth=(engineWidth+multiple-1)/multiple*multiple;engineHeight=(engineHeight+multiple-1)/multiple*multiple;
                     }
-                    model=EnsureTensorRtEngine(model,engineWidth,engineHeight,null,settings.UpscaleTileSize,nativeScale,settings.UpscaleHalfPrecision?"auto":"float32");
+                    model=EnsureTensorRtEngine(model,engineWidth,engineHeight,settings.UpscaleTileSize,nativeScale,settings.UpscaleHalfPrecision?"auto":"float32");
                     if(model.Length==0)throw new InvalidOperationException("TensorRT 超分 Engine 构建失败");
                 }
                 string upPrecision=ResolveUpscalePrecision(model,settings.Backend,settings.UpscaleHalfPrecision?"auto":"float32");
@@ -340,7 +340,7 @@ public static partial class BackendServices
                 if(ModelCapabilityCatalog.TryGet(model,ModelsDir,out var capability))multiple=Math.Max(1,capability.InputMultiple);
                 if(prepare&&backend=="tensorrt")
                 {
-                    model=EnsureTensorRtEngine(model,(width+multiple-1)/multiple*multiple,(height+multiple-1)/multiple*multiple,null,
+                    model=EnsureTensorRtEngine(model,(width+multiple-1)/multiple*multiple,(height+multiple-1)/multiple*multiple,
                         plan.Settings.UpscaleTileSize,scale,plan.Settings.UpscaleHalfPrecision?"auto":"float32");
                     if(model.Length==0)throw new InvalidOperationException("分段 TensorRT Engine 构建失败");
                 }

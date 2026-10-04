@@ -11,9 +11,9 @@ $sdkVersion = [Version][Diagnostics.FileVersionInfo]::GetVersionInfo($sdk).FileV
 $pluginHostVersion = [Reflection.AssemblyName]::GetAssemblyName((Join-Path $hostRoot 'FFmpegFreeUI.Ext.PluginHost.dll')).Version
 if ($sdkVersion -lt [Version]'2.5.0' -or $pluginHostVersion -lt [Version]'2.5.0') { throw '需要 Ext API 2.5 或更新版本' }
 $lakeUi = Join-Path $hostRoot 'LakeUI.dll'
-if (-not (Test-Path -LiteralPath $lakeUi)) { throw '目标目录缺少 LakeUI（需要 5.110 或更新的 5.x）' }
+if (-not (Test-Path -LiteralPath $lakeUi)) { throw '目标目录缺少 LakeUI（需要 5.112 或更新的 5.x）' }
 $lakeVersion = [Reflection.AssemblyName]::GetAssemblyName($lakeUi).Version
-if ($lakeVersion.Major -ne 5 -or $lakeVersion -lt [Version]'5.110.0') { throw "需要 LakeUI 5.110 或更新的 5.x；当前为 $lakeVersion" }
+if ($lakeVersion.Major -ne 5 -or $lakeVersion -lt [Version]'5.112.0') { throw "需要 LakeUI 5.112 或更新的 5.x；当前为 $lakeVersion" }
 $activeHost = Get-Process -ErrorAction SilentlyContinue | Where-Object { $_.Path -and [IO.Path]::GetDirectoryName($_.Path) -eq $hostRoot -and $_.ProcessName -like 'FFmpegFreeUI*' }
 if ($activeHost) { throw '请先关闭目标宿主，再安装插件' }
 & (Join-Path $projectRoot 'release/Build-Zip.ps1') -SkipBuild:$SkipBuild

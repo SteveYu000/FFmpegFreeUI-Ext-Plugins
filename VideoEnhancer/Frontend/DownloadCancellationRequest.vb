@@ -1,23 +1,25 @@
-Imports System
-Imports System.IO
-Imports System.Text
+Imports System.Threading
 
 Namespace videoenhancer
-    ' 通过文件请求子进程自行取消，避免强杀正在替换后端的安装事务。
+    ' 下载操作直接使用 DLL 内的取消令牌；安装事务开始后等待它安全完成。
     Friend NotInheritable Class DownloadCancellationRequest
-        Friend ReadOnly Marker As String = Path.Combine(PortableRuntime.WorkRoot, "download-cancel-" & Guid.NewGuid().ToString("N"))
+        Private ReadOnly _source As New CancellationTokenSource()
+        Friend ReadOnly Property Token As CancellationToken
+            Get
+                Return _source.Token
+            End Get
+        End Property
         Friend Property Requested As Boolean
         Friend Property Installing As Boolean
 
         Friend Sub Cancel()
             If Requested OrElse Installing Then Return
-            Directory.CreateDirectory(Path.GetDirectoryName(Marker))
-            File.WriteAllText(Marker, "cancel", New UTF8Encoding(False))
             Requested = True
+            _source.Cancel()
         End Sub
 
         Friend Sub Clean()
-            If File.Exists(Marker) Then File.Delete(Marker)
+            _source.Dispose()
         End Sub
     End Class
 End Namespace

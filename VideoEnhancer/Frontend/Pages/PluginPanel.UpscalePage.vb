@@ -1,7 +1,6 @@
 Imports System
 Imports System.Collections.Generic
 Imports System.Diagnostics
-Imports Process = VideoEnhancer.BackendOperation
 Imports System.Drawing
 Imports System.IO
 Imports System.Linq
@@ -19,10 +18,6 @@ Namespace videoenhancer
     Public Partial Class PluginPanel
 
         Private Const UpscaleContentHeight As Integer = 744
-        Private _environmentCheckCompleted As Boolean = False
-        Private ReadOnly _environmentCheckSync As New Object()
-        Private _environmentCheckCancellation As System.Threading.CancellationTokenSource
-        Private _environmentCheckTask As Task
         Private ReadOnly _cmbModel As New WheelLockedComboBox()
         Private ReadOnly _cmbInterp As New WheelLockedComboBox()
         Private ReadOnly _lblStatus As New HtmlColorLabel()
@@ -94,12 +89,6 @@ Namespace videoenhancer
 
         Private _upscaleRoot As DpiLayoutPanel
         Private _upscaleRootSyncPending As Boolean
-        Public Function TryEnable(assemblyPath As String, Optional silent As Boolean = False) As Boolean
-            RefreshUi()
-            RefreshModels()
-            Return True
-        End Function
-
         ' ────────────────────────── 超分 / 补帧开关 ──────────────────────────
 
         ''' <summary>"超分开关"切换：开 → 直接修改预设中的功能开关。</summary>
@@ -109,7 +98,7 @@ Namespace videoenhancer
             End If
 
             _config.UpscaleEnabled = _switchUpscale.Checked
-            ' 开启超分：CUDA 模式下放大模型列表切换为 models 下的 .pth 模型（空列表时自动回退 ncnn）
+            ' 开启超分后按当前后端刷新模型能力清单。
             If _switchUpscale.Checked AndAlso (_config.Backend = "cuda" OrElse _config.Backend = "tensorrt" OrElse _config.Backend = "onnx" OrElse _config.Backend = "flashvsr") Then
                 RefreshUpscaleModels()
             End If
@@ -253,87 +242,42 @@ Namespace videoenhancer
             StartInterpModelLoad()
         End Sub
 
-        Private Sub StartModelLoad()
-            If _loadingModels Then
-                Return
-            End If
-            If Not File.Exists(_config.RuntimeAssemblyPath) Then
-                ShowStatus("请先启用并指定 videoenhancer.3fui.dll", True)
-                Return
-            End If
+        Private Async Sub StartModelLoad()
+            If _loadingModels Then Return
             _loadingModels = True
             _cmbModel.WaterText = "正在读取模型列表…"
-            Dim exePath = _config.RuntimeAssemblyPath
             Dim backend = If(String.IsNullOrWhiteSpace(_config.Backend), "ncnn", _config.Backend)
-            Task.Run(Sub()
-                         Dim catalog = ModelCatalogClient.RunModelCatalog(exePath, "--list-model-catalog", "-backend", backend)
-                         Dim models As List(Of String) = Nothing
-                         If catalog.Count = 0 Then
-                             models = ModelCatalogClient.RunListModels(exePath, "--search-models", "-backend", backend)
-                         End If
-                         Try
-                             If Me.IsHandleCreated Then
-                                 Me.BeginInvoke(New Action(Sub()
-                                                               If catalog.Count > 0 Then
-                                                                   ApplyModelCatalog(catalog, False)
-                                                               Else
-                                                                   ApplyModelList(If(models, New List(Of String)()))
-                                                               End If
-                                                               _loadingModels = False
-                                                           End Sub))
-                             Else
-                                 If catalog.Count > 0 Then
-                                     ApplyModelCatalog(catalog, False)
-                                 Else
-                                     ApplyModelList(If(models, New List(Of String)()))
-                                 End If
-                                 _loadingModels = False
-                             End If
-                         Catch
-                             _loadingModels = False
-                         End Try
-                     End Sub)
+            Try
+                Dim catalog = Await Task.Run(Function() ModelCatalogClient.RunModelCatalog(backend))
+                If IsDisposed OrElse Disposing Then Return
+                ApplyModelCatalog(catalog, False)
+            Catch ex As Exception
+                If Not IsDisposed AndAlso Not Disposing Then
+                    _cmbModel.WaterText = "模型列表读取失败，点击重试"
+                    ShowStatus("模型列表读取失败：" & ex.Message, True)
+                End If
+            Finally
+                _loadingModels = False
+            End Try
         End Sub
 
-        Private Sub StartInterpModelLoad()
-            If _loadingInterpModels Then
-                Return
-            End If
-            If Not File.Exists(_config.RuntimeAssemblyPath) Then
-                Return
-            End If
+        Private Async Sub StartInterpModelLoad()
+            If _loadingInterpModels Then Return
             _loadingInterpModels = True
             _cmbInterp.WaterText = "正在读取补帧模型…"
-            Dim exePath = _config.RuntimeAssemblyPath
             Dim backend = If(String.IsNullOrWhiteSpace(_config.InterpBackend), "ncnn", _config.InterpBackend)
-            Task.Run(Sub()
-                         Dim catalog = ModelCatalogClient.RunModelCatalog(exePath, "--list-interp-model-catalog", "-interp-backend", backend)
-                         Dim models As List(Of String) = Nothing
-                         If catalog.Count = 0 Then
-                             models = ModelCatalogClient.RunListModels(exePath, "--list-interp-models", "-interp-backend", backend)
-                         End If
-                         Try
-                             If Me.IsHandleCreated Then
-                                 Me.BeginInvoke(New Action(Sub()
-                                                               _loadingInterpModels = False
-                                                               If catalog.Count > 0 Then
-                                                                   ApplyModelCatalog(catalog, True)
-                                                               Else
-                                                                   ApplyInterpModelList(If(models, New List(Of String)()))
-                                                               End If
-                                                           End Sub))
-                             Else
-                                 _loadingInterpModels = False
-                                 If catalog.Count > 0 Then
-                                     ApplyModelCatalog(catalog, True)
-                                 Else
-                                     ApplyInterpModelList(If(models, New List(Of String)()))
-                                 End If
-                             End If
-                         Catch
-                             _loadingInterpModels = False
-                         End Try
-                     End Sub)
+            Try
+                Dim catalog = Await Task.Run(Function() ModelCatalogClient.RunModelCatalog(backend, interpolation:=True))
+                If IsDisposed OrElse Disposing Then Return
+                ApplyModelCatalog(catalog, True)
+            Catch ex As Exception
+                If Not IsDisposed AndAlso Not Disposing Then
+                    _cmbInterp.WaterText = "补帧模型读取失败，点击重试"
+                    ShowStatus("补帧模型读取失败：" & ex.Message, True)
+                End If
+            Finally
+                _loadingInterpModels = False
+            End Try
         End Sub
 
         Private Sub ApplyModelCatalog(catalog As List(Of ModelCatalogItem), interpolation As Boolean)
@@ -347,6 +291,8 @@ Namespace videoenhancer
             If selected Is Nothing AndAlso targetCatalog.Count > 0 Then selected = targetCatalog(0)
             If selected IsNot Nothing Then
                 SetCatalogSelection(selected, interpolation, saveConfig:=Not matchedConfigured)
+            Else
+                If interpolation Then _cmbInterp.Items.Clear() Else _cmbModel.Items.Clear()
             End If
             If interpolation Then
                 _interpModelsLoaded = targetCatalog.Count > 0
@@ -368,17 +314,17 @@ Namespace videoenhancer
             End If
         End Sub
 
-        ''' <summary>工作台滚动依赖 LakeUI 5.110 的公开渲染事务。</summary>
-        Private Shared Function LakeUiScrollTransactionsAvailable() As Boolean
+        ''' <summary>工作台滚动依赖 LakeUI 5.112 的公开渲染事务。</summary>
+        Private Shared Function LakeUiRequiredVersionAvailable() As Boolean
             Try
                 Dim version = GetType(ModernPanel).Assembly.GetName().Version
-                Return version IsNot Nothing AndAlso version.Major = 5 AndAlso version.Minor >= 110
+                Return version IsNot Nothing AndAlso version.Major = 5 AndAlso version.Minor >= 112
             Catch
                 Return False
             End Try
         End Function
 
-        Private Sub InitializeCompatibilityErrorUi()
+        Private Sub InitializeDependencyErrorUi()
             BackColor = UiCanvas
             Dock = DockStyle.Fill
             MinimumSize = New Size(640, 220)
@@ -397,7 +343,7 @@ Namespace videoenhancer
                 .ForeColor = UiDanger,
                 .TextAlign = HtmlColorLabel.TextAlignEnum.MiddleLeft,
                 .Text = "<font color=#EB5D5D><b>无法加载视频超分插件</b></font><br/>" &
-                        "<font color=#C0C0C0>需要升级 3FUI/LakeUI 5.110 或更新的 5.x 版本后才能继续使用。</font>"
+                        "<font color=#C0C0C0>需要升级 3FUI/LakeUI 5.112 或更新的 5.x 版本后才能继续使用。</font>"
             }
             ModernPanel1.Controls.Add(message)
             Controls.Add(ModernPanel1)
@@ -504,130 +450,6 @@ Namespace videoenhancer
                 End If
             End If
             SyncOutputScaleControls()
-        End Sub
-
-        Private Sub ApplyModelList(models As List(Of String))
-            ' CLI 版本不一致或旧进程缓存时，从候选 models 目录补扫 TensorRT PTH/Engine。
-            If models.Count = 0 AndAlso String.Equals(_config.Backend, "tensorrt", StringComparison.OrdinalIgnoreCase) Then
-                Try
-                    Dim dirs = New List(Of String) From {
-                        Path.Combine(PluginConfig.ApplicationRoot, "models")
-                    }
-                    For Each modelDir In dirs.Distinct(StringComparer.OrdinalIgnoreCase)
-                        If Not Directory.Exists(modelDir) Then Continue For
-                        For Each pattern In New String() {"*.engine", "*.pth", "*.pt", "*.pkl"}
-                            For Each p In Directory.GetFiles(modelDir, pattern, SearchOption.AllDirectories)
-                                Dim relative = Path.GetRelativePath(modelDir, p).Replace(Convert.ToChar(92), "/"c)
-                                If relative.StartsWith("Frame-Interpolation/", StringComparison.OrdinalIgnoreCase) OrElse
-                                   relative.StartsWith("RIFE/", StringComparison.OrdinalIgnoreCase) Then Continue For
-                                If relative.StartsWith("TensorRT-Cache/", StringComparison.OrdinalIgnoreCase) Then Continue For
-                                Dim n = Path.ChangeExtension(relative, Nothing)
-                                If Not String.IsNullOrWhiteSpace(n) AndAlso Not models.Contains(n, StringComparer.OrdinalIgnoreCase) Then models.Add(n)
-                            Next
-                        Next
-                    Next
-                Catch
-                End Try
-            End If
-            _cmbModel.Items.Clear()
-            _modelCatalog.Clear()
-            For Each modelId In models
-                _modelCatalog.Add(New ModelCatalogItem With {
-                    .Id = modelId,
-                    .DisplayName = Path.GetFileName(modelId.Replace("/"c, Convert.ToChar(92))),
-                    .Architecture = ModelDescriptionProvider.FallbackArchitecture(modelId),
-                    .Purpose = "SR",
-                    .Source = "discovered"
-                })
-            Next
-            If models.Count > 0 Then
-                _cmbModel.Items.AddRange(models)
-                _modelsLoaded = True
-                Dim selected As String = Nothing
-                If Not String.IsNullOrEmpty(_config.Model) Then
-                    selected = models.FirstOrDefault(Function(m) String.Equals(m, _config.Model, StringComparison.OrdinalIgnoreCase))
-                End If
-                If selected IsNot Nothing Then
-                    _cmbModel.SelectedIndex = Math.Max(0, models.IndexOf(selected))
-                Else
-                    _cmbModel.SelectedIndex = 0
-                End If
-                Dim modeText = If(_config.Backend = "basicvsrpp",
-                    "（BasicVSR++，官方 .pth 或 config.py/chkpts.pth 优化目录）",
-                    If(_config.Backend = "tensorrt",
-                    "（TensorRT，PTH 首次使用自动构建 Engine）",
-                    If(_config.Backend = "onnx",
-                    "（ONNX Runtime，models 下的 .onnx 文件）",
-                    If(_config.Backend = "flashvsr",
-                    "（FlashVSR，连续视频帧专用模型目录）",
-                    If(_config.Backend = "cuda",
-                    "（CUDA，models 下的 .pth/.pt/.pkl/.ckpt/.safetensors 文件）",
-                    "（models 目录，.param/.bin 文件夹）")))))
-                ShowStatus($"已从 videoenhancer.3fui.dll 读取 {models.Count} 个可用模型 " & modeText, False)
-            Else
-                If Not _environmentCheckCompleted Then
-                    _cmbModel.WaterText = "正在读取模型列表…"
-                    ShowStatus("正在检查环境并读取模型列表…", False)
-                    Return
-                End If
-                If (_config.Backend = "cuda" OrElse _config.Backend = "tensorrt" OrElse _config.Backend = "onnx" OrElse _config.Backend = "flashvsr" OrElse _config.Backend = "basicvsrpp") AndAlso _config.UpscaleEnabled Then
-                    Dim missingExt = If(_config.Backend = "basicvsrpp", "BasicVSR++ .pth 或优化目录", If(_config.Backend = "flashvsr", "FlashVSR 完整模型目录", If(_config.Backend = "tensorrt", "PTH 或 .engine", If(_config.Backend = "onnx", ".onnx", ".pth"))))
-                    _cmbModel.WaterText = "未找到 " & missingExt & " 放大模型"
-                    ShowStatus("未找到 " & missingExt & " 放大模型，请确认 models 目录", True)
-                    ' 保留用户选择的 TensorRT，不因一次扫描失败自动改回 NCNN。
-                    _loadingModels = False
-                Else
-                    _cmbModel.WaterText = "未找到可用模型"
-                    ShowStatus("未在 models 目录找到含 .param/.bin 的模型", True)
-                End If
-            End If
-        End Sub
-
-        Private Sub ApplyInterpModelList(models As List(Of String))
-            _cmbInterp.Items.Clear()
-            _interpModelCatalog.Clear()
-            For Each modelId In models
-                _interpModelCatalog.Add(New ModelCatalogItem With {
-                    .Id = modelId,
-                    .DisplayName = Path.GetFileName(modelId.Replace("/"c, Convert.ToChar(92))),
-                    .Architecture = ModelDescriptionProvider.FallbackArchitecture(modelId),
-                    .Purpose = "Interpolation",
-                    .Scale = 1,
-                    .Source = "discovered"
-                })
-            Next
-            If models.Count > 0 Then
-                _cmbInterp.Items.AddRange(models)
-                _interpModelsLoaded = True
-                Dim selected As String = Nothing
-                If Not String.IsNullOrEmpty(_config.InterpModel) Then
-                    selected = models.FirstOrDefault(Function(m) String.Equals(m, _config.InterpModel, StringComparison.OrdinalIgnoreCase))
-                End If
-                If selected IsNot Nothing Then
-                    _cmbInterp.SelectedIndex = Math.Max(0, models.IndexOf(selected))
-                Else
-                    _cmbInterp.SelectedIndex = 0
-                End If
-                Dim modeText = If(_config.InterpBackend = "tensorrt",
-                    "（TensorRT，RIFE 权重首次使用自动构建 Engine）",
-                    If(_config.InterpBackend = "cuda",
-                    "（CUDA/PyTorch，Frame-Interpolation）",
-                    "（NCNN，Frame-Interpolation 下的模型目录）"))
-                ShowStatus($"已读取 {models.Count} 个补帧模型 " & modeText, False)
-            Else
-                If Not _environmentCheckCompleted Then
-                    _cmbInterp.WaterText = "正在读取补帧模型…"
-                    ShowStatus("正在检查环境并读取补帧模型…", False)
-                    Return
-                End If
-                If _config.InterpBackend = "cuda" OrElse _config.InterpBackend = "tensorrt" Then
-                    _cmbInterp.WaterText = "未找到兼容的补帧模型"
-                    ShowStatus("未在 models" & Convert.ToChar(92) & "Frame-Interpolation 找到与 " & If(_config.InterpBackend = "tensorrt", "TensorRT", "CUDA/PyTorch") & " 兼容的补帧模型", _config.InterpEnabled)
-                Else
-                    _cmbInterp.WaterText = "未找到补帧模型"
-                    ShowStatus("未在 models" & Convert.ToChar(92) & "Frame-Interpolation 找到含 .param/.bin 的补帧模型；旧 models" & Convert.ToChar(92) & "RIFE 仍可读取", True)
-                End If
-            End If
         End Sub
 
         Private Sub OnModelSelected(sender As Object, e As EventArgs)
@@ -796,136 +618,6 @@ Namespace videoenhancer
             _modelsLoaded = False
             StartModelLoad()
         End Sub
-
-        ' ────────────────────────── 环境检查 ──────────────────────────
-
-        Private Sub RunEnvironmentCheck(exePath As String)
-            StopEnvironmentCheck(0)
-            _environmentCheckCompleted = False
-            ShowStatus("正在检查运行环境…", False)
-            Dim cancellation As New System.Threading.CancellationTokenSource()
-            SyncLock _environmentCheckSync
-                _environmentCheckCancellation = cancellation
-            End SyncLock
-            Dim checkTask = Task.Run(Sub()
-                         Try
-                             cancellation.Token.ThrowIfCancellationRequested()
-                             Dim psi As New ProcessStartInfo With {
-                                 .FileName = exePath,
-                                 .UseShellExecute = False,
-                                 .RedirectStandardOutput = True,
-                                 .RedirectStandardError = True,
-                                 .CreateNoWindow = True,
-                                 .StandardOutputEncoding = Encoding.UTF8,
-                                 .StandardErrorEncoding = Encoding.UTF8
-                             }
-                             PortableRuntime.ConfigureProcess(psi)
-                             psi.ArgumentList.Add("--check")
-                             psi.ArgumentList.Add("-backend")
-                             psi.ArgumentList.Add(_config.Backend)
-                             Using p = Process.Start(psi)
-                                 If p Is Nothing Then
-                                     Return
-                                 End If
-                                 Using cancellation.Token.Register(
-                                     Sub()
-                                         Try
-                                             If Not p.HasExited Then p.Kill(entireProcessTree:=True)
-                                         Catch
-                                         End Try
-                                     End Sub)
-                                     Dim stdoutTask = p.StandardOutput.ReadToEndAsync()
-                                     Dim stderrTask = p.StandardError.ReadToEndAsync()
-                                     Dim exited = p.WaitForExit(120000)
-                                     If Not exited Then
-                                         Try
-                                             p.Kill(entireProcessTree:=True)
-                                             p.WaitForExit()
-                                         Catch
-                                         End Try
-                                         cancellation.Token.ThrowIfCancellationRequested()
-                                         ShowStatus("环境检查耗时较长，模型列表仍在加载…", False)
-                                         Return
-                                     End If
-                                     cancellation.Token.ThrowIfCancellationRequested()
-                                     Dim stdout = stdoutTask.GetAwaiter().GetResult()
-                                     Dim stderr = stderrTask.GetAwaiter().GetResult()
-                                     Dim lines = (stdout & Environment.NewLine & stderr).Split(
-                                         {Convert.ToChar(13), Convert.ToChar(10)}, StringSplitOptions.RemoveEmptyEntries)
-                                     Dim ok = p.ExitCode = 0
-                                     ' --check 的最终汇总行也会提到“[缺失]”，不能把它本身当作缺失项。
-                                     ' 模型库、补帧库和设备专用 TensorRT Engine 属于可选运行资源，不阻断插件启动。
-                                     Dim missingLines = lines.Where(Function(l) l.TrimStart().StartsWith("[缺失]", StringComparison.Ordinal)).ToList()
-                                     Dim infrastructureMissing = missingLines.FirstOrDefault(
-                                         Function(l)
-                                             Dim normalized = l.Trim().ToLowerInvariant()
-                                             Return Not normalized.Contains("模型库") AndAlso
-                                                 Not normalized.Contains("补帧模型库") AndAlso
-                                                 Not normalized.Contains("tensorrt engine") AndAlso
-                                                 Not normalized.Contains("gpu") AndAlso
-                                                 Not normalized.Contains("cuda")
-                                         End Function)
-                                     Dim text As String
-                                     Dim isError As Boolean
-                                     If ok Then
-                                         text = "环境检测通过：基础组件与模型库就绪"
-                                         isError = False
-                                     ElseIf Not String.IsNullOrWhiteSpace(infrastructureMissing) Then
-                                         text = "环境检测未通过：" & infrastructureMissing.Trim()
-                                         isError = True
-                                     Else
-                                         ' 启动时模型目录可能仍由宿主/下载器准备中；这不是基础环境故障。
-                                         text = "基础环境已就绪，模型列表仍在加载…"
-                                         isError = False
-                                     End If
-                                     Try
-                                         Me.BeginInvoke(New Action(Sub() ShowStatus(text, isError)))
-                                     Catch
-                                     End Try
-                                 End Using
-                              End Using
-                          Catch ex As OperationCanceledException
-                          Catch
-                          End Try
-                          SyncLock _environmentCheckSync
-                              If Object.ReferenceEquals(_environmentCheckCancellation, cancellation) Then
-                                  _environmentCheckCancellation = Nothing
-                                  _environmentCheckTask = Nothing
-                                  _environmentCheckCompleted = True
-                              End If
-                          End SyncLock
-                          cancellation.Dispose()
-                       End Sub)
-            SyncLock _environmentCheckSync
-                If Object.ReferenceEquals(_environmentCheckCancellation, cancellation) Then
-                    _environmentCheckTask = checkTask
-                End If
-            End SyncLock
-        End Sub
-
-        ''' <summary>只停止插件自身的启动自检；真实视频任务仍由后端更新器单独拦截。</summary>
-        Private Function StopEnvironmentCheck(timeoutMilliseconds As Integer) As Boolean
-            Dim cancellation As System.Threading.CancellationTokenSource
-            Dim checkTask As Task
-            SyncLock _environmentCheckSync
-                cancellation = _environmentCheckCancellation
-                checkTask = _environmentCheckTask
-            End SyncLock
-            If cancellation Is Nothing Then Return True
-
-            Try
-                cancellation.Cancel()
-            Catch ex As ObjectDisposedException
-                Return True
-            End Try
-            If checkTask Is Nothing OrElse checkTask.IsCompleted Then Return True
-            If timeoutMilliseconds <= 0 Then Return False
-            Try
-                Return checkTask.Wait(timeoutMilliseconds)
-            Catch ex As AggregateException
-                Return ex.InnerExceptions.All(Function(inner) TypeOf inner Is OperationCanceledException)
-            End Try
-        End Function
 
         ' ────────────────────────── UI ──────────────────────────
 
@@ -1244,7 +936,7 @@ Namespace videoenhancer
             _pageUpscale.ScrollBarThumbColor = UiScrollThumb
             _pageUpscale.ScrollBarThumbHoverColor = UiScrollThumbHover
             _pageUpscale.VerticalScrollStep = 48
-            _pageUpscale.AllowDrop = True
+            _pageUpscale.AllowDrop = True
             ' 根容器保持固定内容高度；窗口较小时由页面滚动承载。
             ' 横向由一次性的宿主布局同步，避免 LakeUI 自定义 Dock/Anchor 布局重入。
             ' 滚动根及其 V5 子控件使用稳定的 ModernPanel1 背景源。
@@ -1272,7 +964,8 @@ Namespace videoenhancer
             AddHandler _pageUpscale.Layout, Sub(sender, e) SyncUpscaleRootBounds()
             AddHandler _pageUpscale.VisibleChanged, Sub(sender, e) SyncUpscaleRootBounds()
             AddHandler _tabs.ClientSizeChanged, Sub(sender, e) SyncUpscaleRootBounds()
-            AddHandler _tabs.Layout, Sub(sender, e) SyncUpscaleRootBounds()            ' 页面第一次构建时 ClientSize 可能还是宿主的初始窄尺寸；等 TabControl
+            AddHandler _tabs.Layout, Sub(sender, e) SyncUpscaleRootBounds()
+            ' 页面第一次构建时 ClientSize 可能还是宿主的初始窄尺寸；等 TabControl
             ' 完成布局后必须同步根面板宽度，否则所有内容会永久停留在左半边。
             SyncUpscaleRootBounds()
 
@@ -1478,7 +1171,8 @@ Namespace videoenhancer
             UpdateModeStateLabels()
             UpdateAdvancedControlState()
         End Sub
-        Private Sub UpdateModeStateLabels()            _lblSwitch.Text = If(_config.UpscaleEnabled,
+        Private Sub UpdateModeStateLabels()
+            _lblSwitch.Text = If(_config.UpscaleEnabled,
                 "<font color=#479CFF><b>已开启</b></font>",
                 "<font color=#888888>关闭</font>")
             _lblSwitchInterp.Text = If(_config.InterpEnabled,
@@ -1581,7 +1275,8 @@ Namespace videoenhancer
                         text &= "；原生推理后缩放至 " & _config.OutputScale.ToString() & "x"
                     End If
                 End If
-                If _outputScaleHint IsNot Nothing Then _outputScaleHint.Text = text            Finally
+                If _outputScaleHint IsNot Nothing Then _outputScaleHint.Text = text
+            Finally
                 _syncingOutputScale = False
             End Try
         End Sub
@@ -1595,7 +1290,8 @@ Namespace videoenhancer
             If Not _uiReady Then
                 Return
             End If
-            ' 同步各功能开关            _syncingSwitch = True
+            ' 同步各功能开关
+            _syncingSwitch = True
             _switchUpscale.Checked = _config.UpscaleEnabled
             _switchUpscale.Enabled = True
             _syncingSwitch = False

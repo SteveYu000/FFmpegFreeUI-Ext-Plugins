@@ -12,13 +12,6 @@ Namespace videoenhancer
         ''' <summary>配置保存完成后通知界面订阅者；事件不参与 JSON 持久化。</summary>
         Public Event Saved As EventHandler
 
-        ''' <summary>处理程序路径由插件 DLL 所在目录唯一确定，不再允许配置外部 EXE。</summary>
-        <JsonIgnore>
-        Public ReadOnly Property RuntimeAssemblyPath As String
-            Get
-                Return ResolvePluginAssemblyPath()
-            End Get
-        End Property
         Public Property Model As String = ""
         <JsonIgnore>
         Public ReadOnly Property Enabled As Boolean
@@ -26,11 +19,11 @@ Namespace videoenhancer
                 Return UpscaleEnabled OrElse InterpEnabled OrElse RtxHdrEnabled OrElse SegmentedEnabled
             End Get
         End Property
-        ''' <summary>超分开关：是否将"加入编码队列"hook 到 videoenhancer.3fui.dll 中转。</summary>
+        ''' <summary>超分开关：启用 Ext 任务链的视频流增强阶段。</summary>
         Public Property UpscaleEnabled As Boolean = False
         ''' <summary>补帧开关：启用 RIFE、GIMM-VFI 或 GMFSS 补帧，可与超分组合。</summary>
         Public Property InterpEnabled As Boolean = False
-        ''' <summary>补帧模型：优先使用 models\Frame-Interpolation 下的架构相对路径；旧 models\RIFE 继续兼容。</summary>
+        ''' <summary>补帧模型：使用 models\Frame-Interpolation 下的架构相对路径。</summary>
         Public Property InterpModel As String = ""
         ''' <summary>补帧倍率（RIFE --interpolate_factor，默认 2；须为大于 1 的数字）。</summary>
         Public Property InterpFactor As Double = 2.0
@@ -41,7 +34,7 @@ Namespace videoenhancer
         ''' <summary>超分分块边长；0 表示使用 RVE 默认处理，不按显存自动试探。</summary>
         Public Property UpscaleTileSize As Integer = 0
         Private _outputScale As Integer = 0
-        ''' <summary>0 表示原生；旧配置超过8倍时按8倍载入，两页及队列保持一致。</summary>
+        ''' <summary>0 表示模型原生倍率；可选倍率范围为 1～8。</summary>
         Public Property OutputScale As Integer
             Get
                 Return _outputScale
@@ -74,7 +67,7 @@ Namespace videoenhancer
         Public Property RtxTarget As String = "2x"
         ''' <summary>RTX VSR 质量等级（1-4）。</summary>
         Public Property RtxQuality As Integer = 3
-        ''' <summary>按完整视频路径保存的分段超分配置；默认秒级关键帧断点，兼容精确帧。</summary>
+        ''' <summary>按完整视频路径保存的分段超分配置；支持秒级关键帧断点与精确帧。</summary>
         Public Property SegmentedEnabled As Boolean = False
         Public Property SegmentedVideos As New Collections.Generic.List(Of SegmentedVideoConfig)()
         ''' <summary>插件页面首次加载后是否在后台检查稳定版更新。</summary>
@@ -115,7 +108,7 @@ Namespace videoenhancer
         End Function
 
         ''' <summary>
-        ''' 将旧配置缺少的 HDR 字段保留为属性默认值，并把越界值钳制到 sidecar 合法范围。
+        ''' 把 HDR 参数钳制到 RTX 后端的合法范围。
         ''' 返回是否发生修正，供 Load() 决定是否回写配置文件。
         ''' </summary>
         Public Function NormalizeRtxHdrParameters() As Boolean
@@ -145,11 +138,6 @@ Namespace videoenhancer
 
         Public Shared Function ClampRtxHdrMaxLuminance(value As Integer) As Integer
             Return Math.Max(400, Math.Min(2000, value))
-        End Function
-
-        ''' <summary>处理程序固定为插件 DLL 同目录下的 videoenhancer\videoenhancer.3fui.dll。</summary>
-        Public Shared Function ResolvePluginAssemblyPath() As String
-            Return GetType(PluginConfig).Assembly.Location
         End Function
 
         Public Shared Function FromStateJson(json As String) As PluginConfig

@@ -1,7 +1,6 @@
 Imports System
 Imports System.Collections.Generic
 Imports System.Diagnostics
-Imports Process = VideoEnhancer.BackendOperation
 Imports System.Drawing
 Imports System.IO
 Imports System.Linq
@@ -30,7 +29,6 @@ Namespace videoenhancer
         Private ReadOnly _btnQuad As New ModernButton()
 
         ' 定期把「预览输出」右键菜单项挂到编码队列窗体（窗体实例重建后自动恢复）
-        Private ReadOnly _queueMenuTimer As New Timer() With {.Interval = 2000}
         Private ReadOnly _taskIds As New List(Of String)()
         Private _pendingPreviewTaskId As String = ""
         Private _quadForm As QuadGridForm
@@ -303,14 +301,10 @@ Namespace videoenhancer
             If image Is Nothing Then
                 Return
             End If
-            If _lastPreviewImage IsNot Nothing AndAlso Not ReferenceEquals(_lastPreviewImage, image) Then
-                _lastPreviewImage.Dispose()
-            End If
+            Dim old = _lastPreviewImage
+            _picPreview.Source = PreviewPictureSource.Create(image)
             _lastPreviewImage = image
-            Try
-                _picPreview.Image = image
-            Catch
-            End Try
+            If old IsNot Nothing AndAlso Not ReferenceEquals(old, image) Then PreviewPictureSource.Release(old)
         End Sub
 
         Private Sub OnPreviewStatusChanged(sender As Object, text As String, isError As Boolean)
@@ -334,7 +328,7 @@ Namespace videoenhancer
             If _tabs.SelectedIndex = _tabIndexImporter Then
                 LoadUserModels()
             End If
-            If _tabs.SelectedIndex = _tabIndexSegmented Then ActivateSegmentedPage()        End Sub
+        End Sub
 
         Private Sub OnStatusClearTick(sender As Object, e As EventArgs)
             ClearStatus()

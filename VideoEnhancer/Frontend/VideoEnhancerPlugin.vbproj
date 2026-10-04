@@ -21,7 +21,7 @@
   <ItemGroup>
     <!-- 宿主提供 SDK 和 LakeUI；插件只合并自身前后端与私有托管依赖。 -->
     <PackageReference Include="FFmpegFreeUI.Ext.PluginSdk" Version="[2.5.0]" PrivateAssets="all" ExcludeAssets="runtime" />
-    <PackageReference Include="LakeUI" Version="[5.110.0]" PrivateAssets="all" ExcludeAssets="runtime" />
+    <PackageReference Include="LakeUI" Version="[5.112.0]" PrivateAssets="all" ExcludeAssets="runtime" />
     <PackageReference Include="ILRepack.Lib.MSBuild.Task" Version="[2.0.48]" PrivateAssets="all" />
     <ProjectReference Include="..\Backend\VideoEnhancer.Backend.csproj" />
     <EmbeddedResource Include="..\README.md" LogicalName="VideoEnhancer.ExtGuide" />

@@ -14,7 +14,6 @@ internal sealed class BackendInvocation
     internal TextWriter Error = TextWriter.Null;
     internal string FfmpegPath = "";
     internal string FfprobePath = "";
-    internal ConsoleCancelEventHandler? CancelKeyPress;
     internal void Stop()
     {
         Cancellation.Cancel();
@@ -28,13 +27,10 @@ internal static class Console
 {
     internal static TextWriter Out => BackendInvocation.Current?.Output ?? TextWriter.Null;
     internal static TextWriter Error => BackendInvocation.Current?.Error ?? TextWriter.Null;
-    internal static Encoding OutputEncoding { get; set; } = Encoding.UTF8;
-    internal static Encoding InputEncoding { get; set; } = Encoding.UTF8;
     internal static void Write(string? value) => Out.Write(value);
     internal static void WriteLine() => Out.WriteLine();
     internal static void WriteLine(string? value) => Out.WriteLine(value);
     internal static Stream OpenStandardOutput() => BackendInvocation.Current?.Output is ServiceTextWriter writer ? writer.OutputStream : Stream.Null;
-    internal static event ConsoleCancelEventHandler CancelKeyPress { add { if(BackendInvocation.Current is {} c) c.CancelKeyPress += value; } remove { if(BackendInvocation.Current is {} c) c.CancelKeyPress -= value; } }
 }
 
 // 后端创建的子进程随当前 DLL 调用取消，宿主自身不会被加入该集合。
@@ -43,6 +39,7 @@ internal sealed class Process : System.Diagnostics.Process
     private CancellationTokenRegistration _registration;
     public new bool Start()
     {
+        BackendInvocation.Current?.Cancellation.Token.ThrowIfCancellationRequested();
         PortablePaths.ConfigureChildProcess(StartInfo);
         var started = base.Start();
         if(started && BackendInvocation.Current is {} invocation)

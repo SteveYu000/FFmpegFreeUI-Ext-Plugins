@@ -1,7 +1,6 @@
 Imports System
 Imports System.Collections.Generic
 Imports System.Diagnostics
-Imports Process = VideoEnhancer.BackendOperation
 Imports System.Drawing
 Imports System.IO
 Imports System.Linq
@@ -306,17 +305,17 @@ Namespace videoenhancer
             psi.ArgumentList.Add(inputPath)
             psi.ArgumentList.Add("--output-dir")
             psi.ArgumentList.Add(outputDir)
-            Using child As VideoEnhancer.BackendOperation = VideoEnhancer.BackendOperation.Start(psi)
+            Using child As System.Diagnostics.Process = System.Diagnostics.Process.Start(psi)
                 If child Is Nothing Then Return New Tuple(Of Integer, String)(1, "无法启动模型转换进程")
                 Dim output As New StringBuilder()
-                Dim outputHandler As EventHandler(Of VideoEnhancer.BackendOutputEventArgs) = Sub(sender, e)
+                Dim outputHandler As DataReceivedEventHandler = Sub(sender, e)
                                                                       If String.IsNullOrWhiteSpace(e.Data) Then Return
                                                                       SyncLock output
                                                                           output.AppendLine(e.Data)
                                                                       End SyncLock
                                                                       progress?.Invoke(e.Data)
                                                                   End Sub
-                Dim errorHandler As EventHandler(Of VideoEnhancer.BackendOutputEventArgs) = Sub(sender, e)
+                Dim errorHandler As DataReceivedEventHandler = Sub(sender, e)
                                                                      If String.IsNullOrWhiteSpace(e.Data) Then Return
                                                                      SyncLock output
                                                                          output.AppendLine(e.Data)
@@ -370,8 +369,8 @@ Namespace videoenhancer
             Return LastNonEmptyLine(text)
         End Function
 
-        ''' <summary>从 CLI 标准错误中提取可直接展示给用户的错误正文。</summary>
-        Private Shared Function CliErrorMessage(text As String, fallback As String) As String
+        ''' <summary>从后端诊断输出中提取可直接展示给用户的错误正文。</summary>
+        Private Shared Function BackendErrorMessage(text As String, fallback As String) As String
             If String.IsNullOrWhiteSpace(text) Then Return fallback
             Dim lines = text.Replace(Convert.ToChar(13), Convert.ToChar(10)).Split(Convert.ToChar(10))
             For Each rawLine In lines
@@ -432,7 +431,7 @@ Namespace videoenhancer
             For Each argument In arguments
                 psi.ArgumentList.Add(argument)
             Next
-            Using child = VideoEnhancer.BackendOperation.Start(psi)
+            Using child = System.Diagnostics.Process.Start(psi)
                 If child Is Nothing Then Return New Tuple(Of Integer, String)(1, "无法启动模型检查进程")
                 Dim stdout = child.StandardOutput.ReadToEnd()
                 Dim stderr = child.StandardError.ReadToEnd()
@@ -455,10 +454,10 @@ Namespace videoenhancer
             For Each argument In New String() {prepareScript, inputPath, "--width", width.ToString(), "--height", height.ToString()}
                 psi.ArgumentList.Add(argument)
             Next
-            Using child = VideoEnhancer.BackendOperation.Start(psi)
+            Using child = System.Diagnostics.Process.Start(psi)
                 If child Is Nothing Then Return New Tuple(Of Integer, String)(1, "无法启动 RIFE TensorRT 构建进程")
                 Dim output As New StringBuilder()
-                Dim outputHandler As EventHandler(Of VideoEnhancer.BackendOutputEventArgs) =
+                Dim outputHandler As DataReceivedEventHandler =
                     Sub(sender, e)
                         If String.IsNullOrWhiteSpace(e.Data) Then Return
                         SyncLock output
@@ -466,7 +465,7 @@ Namespace videoenhancer
                         End SyncLock
                         progress?.Invoke(e.Data)
                     End Sub
-                Dim errorHandler As EventHandler(Of VideoEnhancer.BackendOutputEventArgs) =
+                Dim errorHandler As DataReceivedEventHandler =
                     Sub(sender, e)
                         If String.IsNullOrWhiteSpace(e.Data) Then Return
                         SyncLock output

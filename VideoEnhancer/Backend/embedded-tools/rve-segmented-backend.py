@@ -94,14 +94,14 @@ def read_exact(stream, size: int) -> bytes:
     return bytes(chunks)
 
 
-def load_image_backend(backend_root: Path):
-    path = backend_root / "rve-image-backend.py"
-    spec = importlib.util.spec_from_file_location("videoenhancer_image_backend", path)
+def load_frame_backend(backend_root: Path):
+    path = backend_root / "rve-frame-backend.py"
+    spec = importlib.util.spec_from_file_location("videoenhancer_frame_backend", path)
     if spec is None or spec.loader is None:
-        raise RuntimeError(f"无法加载图片后端：{path}")
+        raise RuntimeError(f"无法加载视频帧推理模块：{path}")
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
-    return module.ImageUpscaler
+    return module.FrameUpscaler
 
 
 def open_pause_map(name: str):
@@ -152,7 +152,7 @@ def main() -> int:
     encoder_args = [str(value) for value in decode_json(args.encoder_args_base64)]
     width, height, total_frames, frame_rate = probe_video(ffprobe, source)
     output_width, output_height = validate_segments(segments, total_frames)
-    ImageUpscaler = None
+    FrameUpscaler = None
     np = None
 
     reader_command = [
@@ -223,15 +223,15 @@ def main() -> int:
                 )
                 os.environ["VIDEOENHANCER_UPSCALE_INPUT_MULTIPLE"] = str(multiple)
                 os.environ["VIDEOENHANCER_ONNX_INPUT_MULTIPLE"] = str(multiple)
-                if ImageUpscaler is None:
-                    ImageUpscaler = load_image_backend(backend_root)
+                if FrameUpscaler is None:
+                    FrameUpscaler = load_frame_backend(backend_root)
                 if np is None:
                     import numpy as numpy_module
                     np = numpy_module
-                current_model = ImageUpscaler(
+                current_model = FrameUpscaler(
                     backend, Path(model_path), width, height,
                     tile_size=max(0, args.tile_size) if backend == "ncnn" else 0,
-                    use_rve_ncnn=backend == "ncnn",
+                    native_scale=int(segment["scale"]),
                 )
                 current_processor_key = processor_key
                 current_processor_started_at = time.perf_counter()
@@ -239,7 +239,7 @@ def main() -> int:
                 current_processor_backend = backend
             if current_model is None:
                 raise RuntimeError(f"第 {frame_number} 帧没有可用的模型处理器")
-            if backend == "ncnn" and getattr(current_model, "use_rve_ncnn", False):
+            if backend == "ncnn":
                 output_payload = current_model.process_bytes(payload)
                 expected_size = output_width * output_height * 3
                 if len(output_payload) != expected_size:

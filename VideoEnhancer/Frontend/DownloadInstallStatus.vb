@@ -7,7 +7,7 @@ Imports System.Text.RegularExpressions
 
 Namespace videoenhancer
     Friend NotInheritable Class DownloadInstallStatus
-        Friend Shared Function IsDownloadInstalled(relativePath As String, coreRoot As String, resolvedExe As String) As Boolean
+        Friend Shared Function IsDownloadInstalled(relativePath As String, coreRoot As String) As Boolean
             If String.IsNullOrWhiteSpace(relativePath) Then Return False
             Try
                 Dim normalized = relativePath.Replace("\"c, "/"c).TrimStart("/"c)
@@ -15,12 +15,10 @@ Namespace videoenhancer
                 If slash <= 0 Then Return False
                 Dim category = normalized.Substring(0, slash)
                 Dim suffix = normalized.Substring(slash + 1).Replace("/"c, Path.DirectorySeparatorChar)
-                Dim destinationRoot = If(category.Equals("Plugin", StringComparison.OrdinalIgnoreCase),
-                    If(String.IsNullOrWhiteSpace(resolvedExe), coreRoot, Path.GetDirectoryName(resolvedExe)),
-                    If(category.Equals("Backend", StringComparison.OrdinalIgnoreCase),
-                        Path.Combine(coreRoot, "python"),
-                        If(category.Equals("Bin", StringComparison.OrdinalIgnoreCase),
-                            Path.Combine(coreRoot, "bin"), Path.Combine(coreRoot, "models", category))))
+                Dim destinationRoot = If(category.Equals("Backend", StringComparison.OrdinalIgnoreCase),
+                    Path.Combine(coreRoot, "python"),
+                    If(category.Equals("Bin", StringComparison.OrdinalIgnoreCase),
+                        Path.Combine(coreRoot, "bin"), Path.Combine(coreRoot, "models", category)))
                 Dim downloaded = Path.Combine(destinationRoot, suffix)
                 If File.Exists(downloaded & ".pending") OrElse File.Exists(downloaded & ".aria2") OrElse
                    File.Exists(downloaded & ".part") Then Return False
@@ -52,11 +50,6 @@ Namespace videoenhancer
                 If category.Equals("Frame-Interpolation", StringComparison.OrdinalIgnoreCase) Then
                     Return IsDownloadArchive(suffix) AndAlso
                         File.Exists(FrameInterpolationArchiveMarkerPath(coreRoot, normalized))
-                End If
-                If category.Equals("RIFE", StringComparison.OrdinalIgnoreCase) Then
-                    Return Directory.Exists(Path.Combine(coreRoot, "models", "RIFE")) AndAlso
-                        Directory.EnumerateFiles(Path.Combine(coreRoot, "models", "RIFE"), "*.param", SearchOption.AllDirectories).Any() AndAlso
-                        Directory.EnumerateFiles(Path.Combine(coreRoot, "models", "RIFE"), "*.bin", SearchOption.AllDirectories).Any()
                 End If
                 If category.Equals("Param-Bin", StringComparison.OrdinalIgnoreCase) Then
                     Dim modelsRoot = Path.Combine(coreRoot, "models")

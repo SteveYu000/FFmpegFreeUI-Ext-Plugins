@@ -1,7 +1,6 @@
 Imports System
 Imports System.Collections.Generic
 Imports System.Diagnostics
-Imports Process = VideoEnhancer.BackendOperation
 Imports System.Drawing
 Imports System.Globalization
 Imports System.IO
@@ -155,7 +154,7 @@ Namespace videoenhancer
 
             ConfigureCombo(_cmbSegmentMode)
             _cmbSegmentMode.Items.Add("按秒（默认，断点自动吸附关键帧）")
-            _cmbSegmentMode.Items.Add("精确帧（兼容旧模式）")
+            _cmbSegmentMode.Items.Add("精确帧")
             AddHandler _cmbSegmentMode.SelectedIndexChanged, AddressOf OnSegmentModeChanged
             AddWorkbenchControl(root, CreateOfficialField("分段计数模式", _cmbSegmentMode), 112, UiFieldHeight, 0.0F, 1.0F)
 
@@ -292,17 +291,12 @@ Namespace videoenhancer
         Private Async Sub LoadSegmentModelCatalogs()
             EnsureBuiltinSegmentChoices()
             If _segmentModelsLoaded OrElse _segmentModelsLoading Then Return
-            Dim exePath = PluginConfig.ResolvePluginAssemblyPath()
-            If String.IsNullOrWhiteSpace(exePath) OrElse Not File.Exists(exePath) Then
-                RenderSegmentRows()
-                Return
-            End If
             _segmentModelsLoading = True
             Try
                 Dim choices = Await Task.Run(Function()
                     Dim result As New List(Of SegmentModelChoice)()
                     For Each backend In New String() {"ncnn", "cuda", "tensorrt", "onnx"}
-                        For Each item In ModelCatalogClient.RunModelCatalog(exePath, "--list-model-catalog", "-backend", backend)
+                        For Each item In ModelCatalogClient.RunModelCatalog(backend)
                             Dim scale = If(item.Scale > 0, item.Scale, InferSegmentScale(item.Id))
                             If scale <= 0 Then Continue For
                             result.Add(New SegmentModelChoice With {
@@ -319,6 +313,8 @@ Namespace videoenhancer
                 _segmentModelChoices.AddRange(choices)
                 _segmentModelsLoaded = True
                 RenderSegmentRows()
+            Catch ex As Exception
+                ShowStatus("分段模型列表读取失败：" & ex.Message, True)
             Finally
                 _segmentModelsLoading = False
             End Try

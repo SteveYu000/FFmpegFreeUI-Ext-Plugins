@@ -16,9 +16,9 @@
       },
       "LakeUI": {
         "type": "Direct",
-        "requested": "[5.110.0, 5.110.0]",
-        "resolved": "5.110.0",
-        "contentHash": "cs/i1AinERKcJkYvm/q8LotfK7TWd1nHPLPOoESzKBFy7nsSSyQ32DIqUCN/kFduBdrdVg8IcszUjtAsR0UVEw==",
+        "requested": "[5.112.0, 5.112.0]",
+        "resolved": "5.112.0",
+        "contentHash": "MNAKsD4JeLnDJKTM6JAkp60xDjumhspEcJwcj5adTucMtI2UW6A5Bl76nnpChGoJSG7jR3Mz1Aip45kSwYRXlw==",
         "dependencies": {
           "Vortice.Direct2D1": "3.8.3",
           "Vortice.Direct3D11": "3.8.3",

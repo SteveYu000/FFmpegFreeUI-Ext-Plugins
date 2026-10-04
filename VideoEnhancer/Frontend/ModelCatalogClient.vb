@@ -25,12 +25,6 @@ Namespace videoenhancer
             End Using
         End Function
 
-        Friend Shared Function RunListModels(backend As String, Optional interpolation As Boolean = False) As List(Of String)
-            Dim json = ReadResult(New BackendRequest(If(interpolation, BackendAction.ListInterpolationModels, BackendAction.ListModels)) With {.Backend = backend}, 180000)
-            If String.IsNullOrWhiteSpace(json) Then Return New List(Of String)()
-            Return JsonSerializer.Deserialize(Of List(Of String))(json).Distinct(StringComparer.OrdinalIgnoreCase).ToList()
-        End Function
-
         Friend Shared Function RunModelCatalog(backend As String, Optional interpolation As Boolean = False) As List(Of ModelCatalogItem)
             Dim json = ReadResult(New BackendRequest(If(interpolation, BackendAction.ListInterpolationCatalog, BackendAction.ListModelCatalog)) With {.Backend = backend}, 180000)
             If String.IsNullOrWhiteSpace(json) Then Return New List(Of ModelCatalogItem)()

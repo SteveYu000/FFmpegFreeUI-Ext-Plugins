@@ -1,7 +1,7 @@
 Imports System
 Imports System.Collections.Generic
 Imports System.Diagnostics
-Imports Process = VideoEnhancer.BackendOperation
+Imports VideoEnhancer
 Imports System.Drawing
 Imports System.IO
 Imports System.Linq
@@ -22,7 +22,7 @@ Namespace videoenhancer
         Private Const DownloadActionColumn As Integer = 3
         Private ReadOnly _downloadList As New UltraDetailListView()
         Private ReadOnly _btnRefreshDownloads As New ModernButton()
-        Private ReadOnly _btnDownloadPluginUpdate As New ModernButton()
+        Private ReadOnly _btnDownloadAll As New ModernButton()
         Private ReadOnly _btnCleanArchives As New ModernButton()
         Private ReadOnly _btnCheckUpdates As New ModernButton()
         Private _downloadsLoaded As Boolean = False
@@ -31,7 +31,6 @@ Namespace videoenhancer
         Private _archiveCleanupBusy As Boolean = False
         Private _updateCheckBusy As Boolean = False
         Private ReadOnly _downloadCoordinator As New ModelDownloadCoordinator()
-        Private ReadOnly _downloadProcessLifetime As New DownloadProcessLifetime()
         Private _downloadActionsEnabled As Boolean = True
         Private _downloadAllBusy As Boolean = False
         Private _downloadAllStopRequested As Boolean = False
@@ -109,13 +108,13 @@ Namespace videoenhancer
             header.RowStyles.Add(New RowStyle(SizeType.Percent, 100.0F))
             header.AddAt(CreateOfficialSectionHeading(
                 "模型资源库", "从 ModelScope 获取模型与后端组件"), 0, 0)
-            _btnDownloadPluginUpdate.Text = "下载全部"
-            _btnDownloadPluginUpdate.Dock = DockStyle.Fill
-            _btnDownloadPluginUpdate.AutoSize = False
-            _btnDownloadPluginUpdate.Margin = New Padding(UiColumnGap, 4, 0, 4)
-            ConfigureSecondaryButton(_btnDownloadPluginUpdate)
-            AddHandler _btnDownloadPluginUpdate.Click, AddressOf OnDownloadAllClick
-            header.AddAt(_btnDownloadPluginUpdate, 2, 0)
+            _btnDownloadAll.Text = "下载全部"
+            _btnDownloadAll.Dock = DockStyle.Fill
+            _btnDownloadAll.AutoSize = False
+            _btnDownloadAll.Margin = New Padding(UiColumnGap, 4, 0, 4)
+            ConfigureSecondaryButton(_btnDownloadAll)
+            AddHandler _btnDownloadAll.Click, AddressOf OnDownloadAllClick
+            header.AddAt(_btnDownloadAll, 2, 0)
             _btnRefreshDownloads.Text = "刷新资源"
             _btnRefreshDownloads.Dock = DockStyle.Fill
             _btnRefreshDownloads.Margin = New Padding(UiColumnGap, 4, 0, 4)
@@ -157,8 +156,16 @@ Namespace videoenhancer
             ConfigureDpiListColumns(_downloadList, 260)
         End Sub
 
-        Private Function DownloadExecutablePath() As String
-            Return PluginConfig.ResolvePluginAssemblyPath()
+        Private Shared Function CaptureBackendResult(request As BackendRequest, timeout As Integer) As Tuple(Of Integer, String, String)
+            Using job = BackendServiceJob.Start(request)
+                Dim output = job.Output.ReadToEndAsync()
+                Dim errors = job.Error.ReadToEndAsync()
+                If Not job.Wait(timeout) Then
+                    job.Cancel()
+                    Throw New TimeoutException("后台服务操作超时")
+                End If
+                Return Tuple.Create(job.ResultCode, output.GetAwaiter().GetResult(), errors.GetAwaiter().GetResult())
+            End Using
         End Function
 
         Private Sub ResetDownloadList()
@@ -181,15 +188,10 @@ Namespace videoenhancer
         Private Sub LoadDownloadModels(force As Boolean)
             If _downloadsLoading OrElse _archiveCleanupBusy OrElse _downloadCoordinator.ActiveCount > 0 OrElse
                 (_downloadsLoaded AndAlso Not force) Then Return
-            Dim exePath = DownloadExecutablePath()
-            If String.IsNullOrWhiteSpace(exePath) Then
-                ShowStatus("插件 DLL 未正确加载", True)
-                Return
-            End If
             _downloadsLoading = True
             _btnRefreshDownloads.Enabled = False
             _btnCleanArchives.Enabled = False
-            _btnDownloadPluginUpdate.Enabled = False
+            _btnDownloadAll.Enabled = False
             _downloadActionsEnabled = False
             _downloadList.BeginUpdate()
             Try
@@ -207,58 +209,14 @@ Namespace videoenhancer
                     Dim backendStdout = ""
                     Dim backendExitCode = -1
                     Try
-                        Dim psi As New ProcessStartInfo With {
-                            .FileName = exePath, .WorkingDirectory = Path.GetDirectoryName(exePath),
-                            .UseShellExecute = False, .RedirectStandardOutput = True,
-                            .RedirectStandardError = True, .CreateNoWindow = True,
-                            .StandardOutputEncoding = Encoding.UTF8, .StandardErrorEncoding = Encoding.UTF8
-                        }
-                        PortableRuntime.ConfigureProcess(psi)
-                        psi.ArgumentList.Add("--list-download-models")
-                        psi.ArgumentList.Add("--json")
-                        Using runningProcess As Process = VideoEnhancer.BackendOperation.Start(psi)
-                            If runningProcess IsNot Nothing Then
-                                Dim outputTask = runningProcess.StandardOutput.ReadToEndAsync()
-                                Dim errorTask = runningProcess.StandardError.ReadToEndAsync()
-                                If runningProcess.WaitForExit(45000) Then
-                                    stdout = outputTask.GetAwaiter().GetResult()
-                                    stderr = errorTask.GetAwaiter().GetResult()
-                                    exitCode = runningProcess.ExitCode
-                                Else
-                                    Try
-                                        runningProcess.Kill(True)
-                                    Catch
-                                    End Try
-                                    stderr = "[错误] 读取 ModelScope 模型列表超时"
-                                    exitCode = -2
-                                End If
-                            End If
-                        End Using
-                        Dim backendPsi As New ProcessStartInfo With {
-                            .FileName = exePath, .WorkingDirectory = Path.GetDirectoryName(exePath),
-                            .UseShellExecute = False, .RedirectStandardOutput = True,
-                            .RedirectStandardError = True, .CreateNoWindow = True,
-                            .StandardOutputEncoding = Encoding.UTF8, .StandardErrorEncoding = Encoding.UTF8
-                        }
-                        PortableRuntime.ConfigureProcess(backendPsi)
-                        backendPsi.ArgumentList.Add("--backend-status")
-                        backendPsi.ArgumentList.Add("--json")
-                        Using backendProcess As Process = VideoEnhancer.BackendOperation.Start(backendPsi)
-                            If backendProcess IsNot Nothing Then
-                                Dim backendOutputTask = backendProcess.StandardOutput.ReadToEndAsync()
-                                Dim backendErrorTask = backendProcess.StandardError.ReadToEndAsync()
-                                If backendProcess.WaitForExit(45000) Then
-                                    backendStdout = backendOutputTask.GetAwaiter().GetResult()
-                                    backendExitCode = backendProcess.ExitCode
-                                    If backendExitCode <> 0 Then stderr &= Environment.NewLine & backendErrorTask.GetAwaiter().GetResult()
-                                Else
-                                    Try
-                                        backendProcess.Kill(True)
-                                    Catch
-                                    End Try
-                                End If
-                            End If
-                        End Using
+                        Dim catalog = CaptureBackendResult(New BackendRequest(BackendAction.ListDownloadModels), 45000)
+                        exitCode = catalog.Item1
+                        stdout = catalog.Item2
+                        stderr = catalog.Item3
+                        Dim status = CaptureBackendResult(New BackendRequest(BackendAction.BackendStatus), 45000)
+                        backendExitCode = status.Item1
+                        backendStdout = status.Item2
+                        If backendExitCode <> 0 Then stderr &= Environment.NewLine & status.Item3
                     Catch ex As Exception
                         stderr = ex.Message
                     End Try
@@ -289,7 +247,7 @@ Namespace videoenhancer
                     Else
                         _downloadOnline = True
                         AddDownloadMessage("模型列表读取失败", "点击右上角刷新资源重试", UiDanger)
-                        ShowStatus(CliErrorMessage(stderr, "模型列表读取失败"), True)
+                        ShowStatus(BackendErrorMessage(stderr, "模型列表读取失败"), True)
                     End If
                     Return
                 End If
@@ -317,7 +275,7 @@ Namespace videoenhancer
                             Dim size = item.GetProperty("size").GetInt64()
                             Dim entry = New DownloadModelEntry With {
                                 .Name = If(name, relativePath), .RelativePath = If(relativePath, ""), .Size = size,
-                                .Installed = DownloadInstallStatus.IsDownloadInstalled(If(relativePath, ""), ResolveCoreRoot(), PluginConfig.ResolvePluginAssemblyPath())
+                                .Installed = DownloadInstallStatus.IsDownloadInstalled(If(relativePath, ""), ResolveCoreRoot())
                             }
                             entry.IsBackend = DownloadCategory(entry.RelativePath).Equals("Backend", StringComparison.OrdinalIgnoreCase)
                             If entry.IsBackend Then ApplyBackendDownloadStatus(entry, backendStatus)
@@ -364,7 +322,7 @@ Namespace videoenhancer
                     ' 状态列较窄，长文本会被列表控件按两行高度布局而显得上浮。
                     entry.StatusText = "已是最新"
                     entry.ActionText = "无需操作"
-                Case "update-available", "legacy-update-available"
+                Case "update-available"
                     entry.Installed = False
                     entry.Name &= " " & status.InstalledVersion & " → " & status.LatestVersion
                     entry.StatusText = If(status.Mode = "patch", "可增量更新", "需要完整修复")
@@ -395,7 +353,6 @@ Namespace videoenhancer
                 Case "ONNX" : Return "ONNX 模型"
                 Case "PARAM-BIN" : Return "Param-Bin 模型"
                 Case "FRAME-INTERPOLATION" : Return "Frame-Interpolation 补帧模型"
-                Case "RIFE" : Return "旧版 RIFE 补帧模型"
                 Case "PTH" : Return "PTH 模型"
                 Case "BASICVSR++" : Return "BasicVSR++ 模型"
                 Case "BACKEND" : Return "Backend 后端"
@@ -474,8 +431,7 @@ Namespace videoenhancer
                 Return
             End If
             If Not _downloadActionsEnabled OrElse Not _downloadOnline OrElse _downloadsLoading OrElse _archiveCleanupBusy Then Return
-            If row.Entry IsNot Nothing AndAlso Not row.Entry.Installed AndAlso Not row.Entry.IsBackend AndAlso
-                Not row.Entry.RelativePath.Equals("Plugin/videoenhancer.3fui.dll", StringComparison.OrdinalIgnoreCase) Then
+            If row.Entry IsNot Nothing AndAlso Not row.Entry.Installed AndAlso Not row.Entry.IsBackend Then
                 Dim queued = _downloadCoordinator.Enqueue(DownloadCategory(row.Entry.RelativePath), row.Entry.RelativePath)
                 Select Case queued
                     Case ModelDownloadCoordinator.EnqueueResult.Enqueued, ModelDownloadCoordinator.EnqueueResult.AlreadyQueued
@@ -569,19 +525,14 @@ Namespace videoenhancer
                 Environment.NewLine & Environment.NewLine & "路径：" & entry.RelativePath
             If Not ShowLakeConfirm(Me, question, dialogTitle, defaultYes:=False) Then Return
 
-            Dim exePath = DownloadExecutablePath()
-            If String.IsNullOrWhiteSpace(exePath) OrElse Not File.Exists(exePath) Then
-                ShowStatus("删除失败：找不到 videoenhancer.3fui.dll", True)
-                Return
-            End If
             SetDownloadActionsEnabled(False)
             Try
-                Dim errorText = Await Task.Run(Function() RunDownloadedModelDelete(exePath, entry.RelativePath))
+                Dim errorText = Await Task.Run(Function() RunDownloadedModelDelete(entry.RelativePath))
                 If errorText.Length > 0 Then
                     ShowStatus("本地模型删除失败：" & errorText, True)
                     Return
                 End If
-                entry.Installed = DownloadInstallStatus.IsDownloadInstalled(entry.RelativePath, ResolveCoreRoot(), PluginConfig.ResolvePluginAssemblyPath())
+                entry.Installed = DownloadInstallStatus.IsDownloadInstalled(entry.RelativePath, ResolveCoreRoot())
                 SetDownloadRowState(entry.RelativePath, "未安装", "下载", UiTextMuted, UiAccent)
                 RefreshDownloadGroupSummary(DownloadCategory(entry.RelativePath))
                 RefreshModels()
@@ -592,30 +543,10 @@ Namespace videoenhancer
             End Try
         End Sub
 
-        Private Shared Function RunDownloadedModelDelete(exePath As String, relativePath As String) As String
+        Private Shared Function RunDownloadedModelDelete(relativePath As String) As String
             Try
-                Dim psi As New ProcessStartInfo With {
-                    .FileName = exePath, .WorkingDirectory = Path.GetDirectoryName(exePath),
-                    .UseShellExecute = False, .RedirectStandardOutput = True,
-                    .RedirectStandardError = True, .CreateNoWindow = True,
-                    .StandardOutputEncoding = Encoding.UTF8, .StandardErrorEncoding = Encoding.UTF8
-                }
-                PortableRuntime.ConfigureProcess(psi)
-                psi.ArgumentList.Add("--delete-download-model")
-                psi.ArgumentList.Add(relativePath)
-                Using child = VideoEnhancer.BackendOperation.Start(psi)
-                    If child Is Nothing Then Return "无法启动模型删除进程"
-                    Dim stdout = child.StandardOutput.ReadToEnd()
-                    Dim stderr = child.StandardError.ReadToEnd()
-                    If Not child.WaitForExit(45000) Then
-                        Try
-                            child.Kill(entireProcessTree:=True)
-                        Catch
-                        End Try
-                        Return "模型删除进程超时"
-                    End If
-                    If child.ExitCode <> 0 Then Return LastNonEmptyLine(If(String.IsNullOrWhiteSpace(stderr), stdout, stderr))
-                End Using
+                Dim result = CaptureBackendResult(New BackendRequest(BackendAction.DeleteDownloadModel) With {.Path = relativePath}, 45000)
+                If result.Item1 <> 0 Then Return LastNonEmptyLine(If(String.IsNullOrWhiteSpace(result.Item3), result.Item2, result.Item3))
                 Return ""
             Catch ex As Exception
                 Return ex.Message
@@ -638,14 +569,13 @@ Namespace videoenhancer
             End If
             If Not _downloadActionsEnabled OrElse Not _downloadOnline OrElse _downloadsLoading OrElse
                 _archiveCleanupBusy OrElse _downloadCoordinator.ActiveCount > 0 OrElse _downloadAllBusy Then Return
-            ' 插件 EXE 由自动更新流程管理；Backend 先按状态选择增量或完整事务安装。
+            ' 后端先按状态选择增量或完整安装，其余模型进入并行下载队列。
             Dim paths As New List(Of String)()
             For Each item As UltraDetailListView.ListItem In _downloadList.Items
                 Dim row = TryCast(item.Tag, DownloadListRowTag)
                 If row Is Nothing OrElse row.Entry Is Nothing Then Continue For
                 Dim path = row.Entry.RelativePath
-                If Not path.Equals("Plugin/videoenhancer.3fui.dll", StringComparison.OrdinalIgnoreCase) AndAlso
-                    Not DownloadCategory(path).Equals("Backend", StringComparison.OrdinalIgnoreCase) Then paths.Add(path)
+                If Not DownloadCategory(path).Equals("Backend", StringComparison.OrdinalIgnoreCase) Then paths.Add(path)
             Next
             Dim backendEntry As DownloadModelEntry = Nothing
             For Each pair In _downloadItemsByPath
@@ -695,8 +625,6 @@ Namespace videoenhancer
                 ShowStatus("当前已有 3 个并行下载，请等待任一文件完成。", True)
                 Return
             End If
-            Dim exePath = DownloadExecutablePath()
-            If String.IsNullOrWhiteSpace(exePath) Then Return
             If entry.IsBackend AndAlso entry.ForceBackendFull Then
                 Dim sizeText = If(entry.BackendFullSize > 0, FormatDownloadSize(entry.BackendFullSize), "未知大小")
                 Dim message = "完整修复包约 " & sizeText & "，将用干净后端整体替换现有 Backend。" &
@@ -710,7 +638,7 @@ Namespace videoenhancer
                 Return
             End If
             SetDownloadRowState(relativePath, "下载中", "准备中...", UiAccent, UiAccent)
-            Dim result = Await ExecuteDownloadAsync(exePath, relativePath,
+            Dim result = Await ExecuteDownloadAsync(relativePath,
                 Sub(text)
                     Try
                         BeginInvoke(New Action(Sub() SetDownloadRowState(relativePath, "下载中", text, UiAccent, UiAccent)))
@@ -739,7 +667,7 @@ Namespace videoenhancer
                 ShowStatus("增量补丁与本地后端文件不一致，已安全回滚。请点击““下载完整修复包””。", True)
             Else
                 SetDownloadRowState(relativePath, "下载失败", "重试", UiDanger, UiAccent)
-                ShowStatus(CliErrorMessage(result.Errors, "模型下载失败"), True)
+                ShowStatus(BackendErrorMessage(result.Errors, "模型下载失败"), True)
             End If
             RefreshDownloadGroupSummary(DownloadCategory(relativePath))
         End Function
@@ -761,8 +689,6 @@ Namespace videoenhancer
                 RefreshDownloadGroupSummary(category)
                 Return
             End If
-            Dim exePath = DownloadExecutablePath()
-            If String.IsNullOrWhiteSpace(exePath) Then Return
             SetDownloadGroupState(category, "待下载 " & paths.Count, "下载中", UiAccent)
             For Each path In paths
                 SetDownloadRowState(path, "待下载", "排队中", UiTextMuted, UiTextMuted)
@@ -772,7 +698,7 @@ Namespace videoenhancer
                 Function(relativePath)
                     UpdateDownloadUtilityButtons()
                     SetDownloadRowState(relativePath, "下载中", "准备中...", UiAccent, UiAccent)
-                    Return ExecuteDownloadAsync(exePath, relativePath,
+                    Return ExecuteDownloadAsync(relativePath,
                         Sub(text)
                             Try
                                 BeginInvoke(New Action(Sub()
@@ -831,14 +757,14 @@ Namespace videoenhancer
             End If
         End Function
 
-        Private Async Function ExecuteDownloadAsync(exePath As String, relativePath As String,
+        Private Async Function ExecuteDownloadAsync(relativePath As String,
                                                      progress As Action(Of String),
                                                      Optional forceBackendFull As Boolean = False) As Task(Of DownloadExecutionResult)
             Dim cancellation As New DownloadCancellationRequest()
             _downloadCancellations(relativePath) = cancellation
             Dim watch = Stopwatch.StartNew()
             Try
-                Dim result = Await Task.Run(Function() ExecuteModelDownload(exePath, relativePath,
+                Dim result = Await Task.Run(Function() ExecuteModelDownload(relativePath,
                     Sub(text)
                         If Not cancellation.Requested Then progress(text)
                     End Sub, cancellation, forceBackendFull))
@@ -869,34 +795,17 @@ Namespace videoenhancer
             End Try
         End Function
 
-        Private Function ExecuteModelDownload(exePath As String, relativePath As String, progress As Action(Of String),
+        Private Function ExecuteModelDownload(relativePath As String, progress As Action(Of String),
                                               cancellation As DownloadCancellationRequest, Optional forceBackendFull As Boolean = False) As DownloadExecutionResult
             Dim result As New DownloadExecutionResult()
             Dim errors As New StringBuilder()
             Try
                 Dim isBackendUpdate = DownloadCategory(relativePath).Equals("Backend", StringComparison.OrdinalIgnoreCase)
-                If isBackendUpdate AndAlso Not StopEnvironmentCheck(10000) Then
-                    errors.AppendLine("启动环境检查未能及时停止，请稍后重试")
-                    result.Errors = errors.ToString()
-                    Return result
-                End If
-                Dim psi As New ProcessStartInfo With {
-                    .FileName = exePath, .WorkingDirectory = Path.GetDirectoryName(exePath),
-                    .UseShellExecute = False, .RedirectStandardOutput = True,
-                    .RedirectStandardError = True, .CreateNoWindow = True,
-                    .StandardOutputEncoding = Encoding.UTF8, .StandardErrorEncoding = Encoding.UTF8
+                Dim request = New BackendRequest(If(isBackendUpdate, BackendAction.UpdateBackend, BackendAction.DownloadModel)) With {
+                    .Path = relativePath, .ForceFullPackage = forceBackendFull
                 }
-                PortableRuntime.ConfigureProcess(psi)
-                psi.Environment("VIDEOENHANCER_CANCEL_FILE") = cancellation.Marker
-                If isBackendUpdate Then
-                    psi.ArgumentList.Add("--update-backend")
-                    If forceBackendFull Then psi.ArgumentList.Add("--force-backend-full")
-                Else
-                    psi.ArgumentList.Add("--download-model")
-                    psi.ArgumentList.Add(relativePath)
-                End If
-                Using process As New Process With {.StartInfo = psi}
-                    AddHandler process.OutputDataReceived,
+                Using process As New BackendServiceJob(request, cancellation.Token)
+                    AddHandler process.OutputLine,
                         Sub(s, ev)
                             If ev.Data Is Nothing Then Return
                             If ev.Data.StartsWith("DOWNLOAD_PROGRESS|", StringComparison.Ordinal) Then
@@ -922,21 +831,12 @@ Namespace videoenhancer
                                 progress("补丁已应用")
                             End If
                         End Sub
-                    AddHandler process.ErrorDataReceived, Sub(s, ev) If ev.Data IsNot Nothing Then errors.AppendLine(ev.Data)
+                    AddHandler process.ErrorLine, Sub(s, ev) If ev.Data IsNot Nothing Then errors.AppendLine(ev.Data)
                     process.Start()
-                    Try
-                        _downloadProcessLifetime.Register(process)
-                    Catch
-                        Try
-                            process.Kill(entireProcessTree:=True)
-                        Catch
-                        End Try
-                        Throw
-                    End Try
-                    process.BeginOutputReadLine()
-                    process.BeginErrorReadLine()
-                    process.WaitForExit()
-                    result.ExitCode = process.ExitCode
+                    process.BeginOutputRead()
+                    process.BeginErrorRead()
+                    process.Wait()
+                    result.ExitCode = process.ResultCode
                 End Using
             Catch ex As Exception
                 errors.AppendLine(ex.Message)
@@ -1043,8 +943,8 @@ Namespace videoenhancer
         Private Sub UpdateDownloadUtilityButtons()
             _btnRefreshDownloads.Enabled = Not _downloadsLoading AndAlso
                 _downloadCoordinator.ActiveCount = 0 AndAlso Not _archiveCleanupBusy AndAlso Not _downloadAllBusy
-            _btnDownloadPluginUpdate.Text = If(_downloadAllBusy, If(_downloadAllStopRequested, "正在停止", "停止全部"), "下载全部")
-            _btnDownloadPluginUpdate.Enabled = If(_downloadAllBusy, Not _downloadAllStopRequested,
+            _btnDownloadAll.Text = If(_downloadAllBusy, If(_downloadAllStopRequested, "正在停止", "停止全部"), "下载全部")
+            _btnDownloadAll.Enabled = If(_downloadAllBusy, Not _downloadAllStopRequested,
                 _downloadsLoaded AndAlso _downloadActionsEnabled AndAlso _downloadOnline AndAlso
                 _downloadCoordinator.ActiveCount = 0 AndAlso Not _archiveCleanupBusy)
             _btnCleanArchives.Enabled = _downloadCoordinator.ActiveCount = 0 AndAlso Not _archiveCleanupBusy AndAlso Not _downloadAllBusy
@@ -1068,10 +968,6 @@ Namespace videoenhancer
                 ShowStatus("请等待当前模型下载完成后再清理压缩包。", True)
                 Return
             End If
-            If Not File.Exists(_config.RuntimeAssemblyPath) Then
-                ShowStatus("插件 DLL 未正确加载", True)
-                Return
-            End If
             _archiveCleanupBusy = True
             SetDownloadActionsEnabled(False)
             _btnCleanArchives.Enabled = False
@@ -1081,22 +977,10 @@ Namespace videoenhancer
             Dim exitCode = Await Task.Run(
                 Function()
                     Try
-                        Dim psi As New ProcessStartInfo With {
-                            .FileName = _config.RuntimeAssemblyPath,
-                            .WorkingDirectory = Path.GetDirectoryName(_config.RuntimeAssemblyPath),
-                            .UseShellExecute = False, .CreateNoWindow = True,
-                            .RedirectStandardOutput = True, .RedirectStandardError = True,
-                            .StandardOutputEncoding = Encoding.UTF8, .StandardErrorEncoding = Encoding.UTF8
-                        }
-                        PortableRuntime.ConfigureProcess(psi)
-                        psi.ArgumentList.Add("--clean-download-archives")
-                        Using process As New Process With {.StartInfo = psi}
-                            process.Start()
-                            output.Append(process.StandardOutput.ReadToEnd())
-                            errors.Append(process.StandardError.ReadToEnd())
-                            process.WaitForExit()
-                            Return process.ExitCode
-                        End Using
+                        Dim result = CaptureBackendResult(New BackendRequest(BackendAction.CleanDownloadArchives), 120000)
+                        output.Append(result.Item2)
+                        errors.Append(result.Item3)
+                        Return result.Item1
                     Catch ex As Exception
                         errors.Append(ex.Message)
                         Return -1

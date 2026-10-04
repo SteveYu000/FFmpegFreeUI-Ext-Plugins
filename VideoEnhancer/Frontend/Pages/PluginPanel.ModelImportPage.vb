@@ -1,7 +1,7 @@
 Imports System
 Imports System.Collections.Generic
 Imports System.Diagnostics
-Imports Process = VideoEnhancer.BackendOperation
+Imports VideoEnhancer
 Imports System.Drawing
 Imports System.IO
 Imports System.Linq
@@ -206,16 +206,11 @@ Namespace videoenhancer
 
         Private Async Sub LoadUserModels()
             If _userModelsLoading Then Return
-            Dim exePath = PluginConfig.ResolvePluginAssemblyPath()
             _importModelList.Items.Clear()
-            If String.IsNullOrWhiteSpace(exePath) OrElse Not File.Exists(exePath) Then
-                AddImportModelMessage("找不到 videoenhancer.3fui.dll，请先在超分工作台指定处理程序")
-                Return
-            End If
             _userModelsLoading = True
             AddImportModelMessage("正在读取用户模型能力清单…")
             Try
-                Dim models = Await Task.Run(Function() ModelCatalogClient.RunUserModelList(exePath))
+                Dim models = Await Task.Run(Function() ModelCatalogClient.RunUserModelList())
                 _importModelList.Items.Clear()
                 If models.Count = 0 Then
                     AddImportModelMessage("尚未导入用户模型；可从上方选择文件、文件夹或压缩包")
@@ -364,26 +359,19 @@ Namespace videoenhancer
         End Sub
 
         Private Shared Function ReadUserModelInspection(model As UserModelItem) As UserModelItem
-            Dim psi As New ProcessStartInfo With {
-                .FileName = PluginConfig.ResolvePluginAssemblyPath(), .UseShellExecute = False,
-                .RedirectStandardOutput = True, .RedirectStandardError = True, .CreateNoWindow = True,
-                .StandardOutputEncoding = Encoding.UTF8, .StandardErrorEncoding = Encoding.UTF8
+            Dim request = New BackendRequest(BackendAction.InspectUpscaleModel) With {
+                .Path = Path.Combine(PluginConfig.ApplicationRoot, "models", model.RelativePath)
             }
-            PortableRuntime.ConfigureProcess(psi)
-            psi.ArgumentList.Add("--inspect-upscale-model")
-            psi.ArgumentList.Add(Path.Combine(PluginConfig.ApplicationRoot, "models", model.RelativePath))
-            Using child = VideoEnhancer.BackendOperation.Start(psi)
-                If child Is Nothing Then Throw New InvalidOperationException("无法启动模型检测")
-                Dim stdoutTask = child.StandardOutput.ReadToEndAsync()
-                Dim stderrTask = child.StandardError.ReadToEndAsync()
-                child.WaitForExit()
-                Dim output = stdoutTask.GetAwaiter().GetResult()
-                Dim errorText = stderrTask.GetAwaiter().GetResult()
-                If child.ExitCode <> 0 Then Throw New InvalidOperationException(LastNonEmptyLine(If(String.IsNullOrWhiteSpace(errorText), output, errorText)))
+            Using job = BackendServiceJob.Start(request)
+                Dim stdout = job.Output.ReadToEndAsync()
+                Dim stderr = job.Error.ReadToEndAsync()
+                job.Wait()
+                Dim output = stdout.GetAwaiter().GetResult()
+                Dim errorText = stderr.GetAwaiter().GetResult()
+                If job.ResultCode <> 0 Then Throw New InvalidOperationException(LastNonEmptyLine(If(String.IsNullOrWhiteSpace(errorText), output, errorText)))
                 Dim line = output.Split(New Char() {Convert.ToChar(10)}, StringSplitOptions.RemoveEmptyEntries).
                     Last(Function(value) value.Trim().StartsWith("{"c))
-                Dim options As New JsonSerializerOptions With {.PropertyNameCaseInsensitive = True}
-                Dim detected = JsonSerializer.Deserialize(Of UserModelItem)(line, options)
+                Dim detected = JsonSerializer.Deserialize(Of UserModelItem)(line, New JsonSerializerOptions With {.PropertyNameCaseInsensitive = True})
                 detected.Id = model.Id
                 detected.DisplayName = model.DisplayName
                 detected.RelativePath = model.RelativePath
@@ -403,15 +391,10 @@ Namespace videoenhancer
                 "路径：" & model.RelativePath
             If Not ShowLakeConfirm(Me, question, "删除用户模型", defaultYes:=False) Then Return
 
-            Dim exePath = PluginConfig.ResolvePluginAssemblyPath()
-            If String.IsNullOrWhiteSpace(exePath) OrElse Not File.Exists(exePath) Then
-                _lblImportStatus.Text = "<font color=#EB5D5D>删除失败：找不到 videoenhancer.3fui.dll</font>"
-                Return
-            End If
             _modelImportBusy = True
             _lblImportStatus.Text = "<font color=#479CFF>正在删除用户模型…</font>"
             Try
-                Dim errorText = Await Task.Run(Function() RunUserModelDelete(exePath, model.Id))
+                Dim errorText = Await Task.Run(Function() RunUserModelDelete(model.Id))
                 If errorText.Length > 0 Then
                     _lblImportStatus.Text = "<font color=#EB5D5D>删除失败：" & EscapeHtml(errorText) & "</font>"
                     ShowStatus("用户模型删除失败：" & errorText, True)
@@ -429,28 +412,22 @@ Namespace videoenhancer
             End Try
         End Sub
 
-        Private Shared Function RunUserModelDelete(exePath As String, id As String) As String
+        Private Shared Function RunUserModelDelete(id As String) As String
+            Return RunUserModelMutation(New BackendRequest(BackendAction.DeleteUserModel) With {.ModelId = id})
+        End Function
+
+        Private Shared Function RunUserModelMutation(request As BackendRequest) As String
             Try
-                Dim psi As New ProcessStartInfo With {
-                    .FileName = exePath, .UseShellExecute = False, .RedirectStandardOutput = True,
-                    .RedirectStandardError = True, .CreateNoWindow = True,
-                    .StandardOutputEncoding = Encoding.UTF8, .StandardErrorEncoding = Encoding.UTF8
-                }
-                PortableRuntime.ConfigureProcess(psi)
-                psi.ArgumentList.Add("--delete-user-model")
-                psi.ArgumentList.Add(id)
-                Using child = VideoEnhancer.BackendOperation.Start(psi)
-                    If child Is Nothing Then Return "无法启动用户模型删除进程"
-                    Dim stdout = child.StandardOutput.ReadToEnd()
-                    Dim stderr = child.StandardError.ReadToEnd()
-                    If Not child.WaitForExit(30000) Then
-                        Try
-                            child.Kill(entireProcessTree:=True)
-                        Catch
-                        End Try
-                        Return "用户模型删除进程超时"
+                Using job = BackendServiceJob.Start(request)
+                    Dim stdout = job.Output.ReadToEndAsync()
+                    Dim stderr = job.Error.ReadToEndAsync()
+                    If Not job.Wait(30000) Then
+                        job.Cancel()
+                        Return "用户模型操作超时"
                     End If
-                    If child.ExitCode <> 0 Then Return LastNonEmptyLine(If(String.IsNullOrWhiteSpace(stderr), stdout, stderr))
+                    Dim output = stdout.GetAwaiter().GetResult()
+                    Dim errorText = stderr.GetAwaiter().GetResult()
+                    If job.ResultCode <> 0 Then Return LastNonEmptyLine(If(String.IsNullOrWhiteSpace(errorText), output, errorText))
                 End Using
                 Return ""
             Catch ex As Exception
@@ -685,30 +662,10 @@ Namespace videoenhancer
         Private Function UpdateUserModelCapabilities(id As String, architecture As String, purpose As String,
                                                      scale As Integer, inputMultiple As Integer,
                                                      backends As String()) As String
-            Dim exePath = PluginConfig.ResolvePluginAssemblyPath()
-            If String.IsNullOrWhiteSpace(exePath) OrElse Not File.Exists(exePath) Then Return "找不到 videoenhancer.3fui.dll"
-            Try
-                Dim psi As New ProcessStartInfo With {
-                    .FileName = exePath, .UseShellExecute = False, .RedirectStandardOutput = True,
-                    .RedirectStandardError = True, .CreateNoWindow = True,
-                    .StandardOutputEncoding = Encoding.UTF8, .StandardErrorEncoding = Encoding.UTF8
-                }
-                PortableRuntime.ConfigureProcess(psi)
-                Dim arguments = New String() {"--json", "--update-user-model", id, "--user-architecture", architecture,
-                    "--user-purpose", purpose, "--user-scale", scale.ToString(), "--user-input-multiple",
-                    inputMultiple.ToString(), "--user-backends", String.Join(",", backends)}
-                For Each argument In arguments : psi.ArgumentList.Add(argument) : Next
-                Using child = VideoEnhancer.BackendOperation.Start(psi)
-                    If child Is Nothing Then Return "无法启动能力清单更新进程"
-                    Dim stdout = child.StandardOutput.ReadToEnd()
-                    Dim stderr = child.StandardError.ReadToEnd()
-                    child.WaitForExit(30000)
-                    If child.ExitCode <> 0 Then Return LastNonEmptyLine(If(String.IsNullOrWhiteSpace(stderr), stdout, stderr))
-                End Using
-                Return ""
-            Catch ex As Exception
-                Return ex.Message
-            End Try
+            Return RunUserModelMutation(New BackendRequest(BackendAction.UpdateUserModel) With {
+                .ModelId = id,
+                .Capabilities = New UserModelCapabilities(architecture, purpose, scale, inputMultiple, backends)
+            })
         End Function
 
         Private Sub OnPickImportFile(sender As Object, e As EventArgs)
@@ -756,32 +713,15 @@ Namespace videoenhancer
                 _lblImportStatus.Text = "<font color=#E0A45C>请先选择要导入的模型、文件夹或压缩包</font>"
                 Return
             End If
-            If Not File.Exists(_config.RuntimeAssemblyPath) Then
-                ShowStatus("请先指定 videoenhancer.3fui.dll", True)
-                Return
-            End If
             _modelImportBusy = True
             _btnImportModel.Text = "正在预检并导入…"
             _lblImportStatus.Text = "<font color=#479CFF>正在安全读取模型元数据并验证能力…</font>"
             Try
-                Dim psi As New ProcessStartInfo With {
-                    .FileName = _config.RuntimeAssemblyPath,
-                    .UseShellExecute = False,
-                    .RedirectStandardOutput = True,
-                    .RedirectStandardError = True,
-                    .CreateNoWindow = True,
-                    .StandardOutputEncoding = Encoding.UTF8,
-                    .StandardErrorEncoding = Encoding.UTF8
-                }
-                PortableRuntime.ConfigureProcess(psi)
-                psi.ArgumentList.Add("--json")
-                psi.ArgumentList.Add("--import-model")
-                psi.ArgumentList.Add(_importSourcePath)
-                Using child = VideoEnhancer.BackendOperation.Start(psi)
-                    If child Is Nothing Then Throw New InvalidOperationException("无法启动模型导入进程")
-                    Dim stdoutTask As Task(Of String) = child.StandardOutput.ReadToEndAsync()
-                    Dim stderrTask As Task(Of String) = child.StandardError.ReadToEndAsync()
-                    Await child.WaitForExitAsync()
+                Dim request = New BackendRequest(BackendAction.ImportModels) With {.Path = _importSourcePath}
+                Using job = BackendServiceJob.Start(request)
+                    Dim stdoutTask = job.Output.ReadToEndAsync()
+                    Dim stderrTask = job.Error.ReadToEndAsync()
+                    Await job.WaitAsync()
                     Dim stdout = Await stdoutTask
                     Dim stderr = Await stderrTask
                     Dim jsonLine = stdout.Replace(Convert.ToChar(13).ToString(), "").

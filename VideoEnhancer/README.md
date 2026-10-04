@@ -2,7 +2,7 @@
 
 面向 FFmpegFreeUI API Extended Edition 的视频 AI 增强插件，前端和后端合并发布为 `videoenhancer.3fui.dll`。
 
-需要 Ext API 2.5、LakeUI 5.110 或更新的 5.x，以及 .NET 10 Desktop Runtime。插件不引用 FFmpegFreeUI 主程序集，不提供旧宿主兼容入口。
+需要 Ext API 2.5、LakeUI 5.112 或更新的 5.x，以及 .NET 10 Desktop Runtime。插件不引用 FFmpegFreeUI 主程序集，不提供旧宿主兼容入口。
 
 ## 安装
 
@@ -21,11 +21,12 @@ $env:FFMPEGFREEUI_HOME = "相对或绝对宿主目录"
 dotnet build VideoEnhancer.slnx -c Release
 ./release/Build-Zip.ps1
 dotnet run --project tests/VideoEnhancer.Tests.csproj -c Release
+python -B tests/FrameBackendTests.py
 ```
 
 可将 `VIDEOENHANCER_TEST_HOST` 设为 Ext 宿主编译输出目录，额外验证真实宿主命令生成及插件组合。测试只读加载宿主程序集，不修改宿主。
 
-媒体回归需要 FFmpeg 与 FFprobe 位于 PATH，可分别设置 `VIDEOENHANCER_TEST_FFMPEG`、`VIDEOENHANCER_TEST_FFPROBE`。
+媒体回归需要 FFmpeg 与 FFprobe 位于 PATH，可分别设置 `VIDEOENHANCER_TEST_FFMPEG`、`VIDEOENHANCER_TEST_FFPROBE`。视频帧模块测试只需 Python 和 NumPy，不依赖 GPU。
 
 ## 入口与预设
 
@@ -58,7 +59,9 @@ dotnet run --project tests/VideoEnhancer.Tests.csproj -c Release
 
 ## 目录和依赖
 
-`Frontend` 为 VB / LakeUI 界面，`Backend` 为 C# 服务与处理链，构建后合并为一个 DLL。Python、FFmpeg、RTX SDK 和 aria2-next 仍为各自的运行组件。
+`Frontend` 为 VB / LakeUI 界面，`Backend` 为 C# 服务与处理链，构建后合并为一个 DLL。界面通过类型化服务调用管理操作，不解析插件命令行输入。RVE / Python、FFmpeg、RTX 和 aria2-next 保留各自的外部进程协议。
+
+自有代码许可建议、RVE 的 AGPL 边界、RTX 专有组件和原生预览库的来源缺口见 [依赖许可说明](DEPENDENCIES-LICENSES.md)。第三方材料随 ZIP 提供；整个发行包不能统一视为 MIT。
 
 默认数据目录为 DLL 同目录下的 `videoenhancer`。可用 `VIDEOENHANCER_ROOT` 指定数据目录（支持环境变量展开、相对 DLL 目录的路径），用 `VIDEOENHANCER_FFMPEG` 指定 FFmpeg。项目引用和构建脚本采用相对路径、NuGet 或环境变量，不依赖开发机其他仓库目录。
 

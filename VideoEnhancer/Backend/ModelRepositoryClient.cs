@@ -25,8 +25,7 @@ internal sealed class ModelRepositoryClient
 
     private static void KeepLatestVersionedArchive(
         List<RemoteModel> models,
-        string versionedPathPattern,
-        params string[] legacyPaths)
+        string versionedPathPattern)
     {
         var options = RegexOptions.IgnoreCase | RegexOptions.CultureInvariant;
         var latest = models
@@ -41,9 +40,8 @@ internal sealed class ModelRepositoryClient
         if (latest is null) return;
 
         models.RemoveAll(model =>
-            legacyPaths.Contains(model.Path, StringComparer.OrdinalIgnoreCase)
-            || (Regex.IsMatch(model.Path, versionedPathPattern, options)
-                && !model.Path.Equals(latest.Path, StringComparison.OrdinalIgnoreCase)));
+            Regex.IsMatch(model.Path, versionedPathPattern, options)
+            && !model.Path.Equals(latest.Path, StringComparison.OrdinalIgnoreCase));
     }
 
     internal List<RemoteModel> FetchRemoteModels()
@@ -54,7 +52,7 @@ internal sealed class ModelRepositoryClient
         client.DefaultRequestHeaders.Accept.ParseAdd("application/json");
         var result = new List<RemoteModel>();
         var allowedRoots = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
-            { "Backend", "BasicVSR++", "Bin", "FlashVSR", "Frame-Interpolation", "ONNX", "Param-Bin", "RIFE", "PTH" };
+            { "Backend", "BasicVSR++", "Bin", "FlashVSR", "Frame-Interpolation", "ONNX", "Param-Bin", "PTH" };
         var fetchedEntries = 0;
         for (var pageNumber = 1; ; pageNumber++)
         {
@@ -73,6 +71,8 @@ internal sealed class ModelRepositoryClient
                 var slash = path.IndexOf('/');
                 var root = slash < 0 ? path : path[..slash];
                 if (!allowedRoots.Contains(root)) continue;
+                if (root.Equals("Backend", StringComparison.OrdinalIgnoreCase)
+                    && !Regex.IsMatch(path, @"^Backend/python_\d{8}\.7z$", RegexOptions.IgnoreCase)) continue;
                 result.Add(new RemoteModel(
                     file.GetProperty("Name").GetString() ?? System.IO.Path.GetFileName(path),
                     path,
@@ -84,7 +84,7 @@ internal sealed class ModelRepositoryClient
                 && total.TryGetInt32(out var parsedTotal)
                     ? parsedTotal
                     : -1;
-            // ModelScope 默认只返回 100 条。根据总数翻页；旧接口缺少总数时，
+            // ModelScope 根据总数翻页；响应缺少总数时，
             // 以实际返回数小于请求页大小作为结束条件。
             if (returnedEntries == 0
                 || (totalCount >= 0 && fetchedEntries >= totalCount)
@@ -93,22 +93,9 @@ internal sealed class ModelRepositoryClient
                 break;
             }
         }
-        // 版本化运行包在仓库中保留历史文件用于旧客户端和回滚，但当前下载页只展示最新项。
-        // 模型权重继续使用稳定路径；更新同一权重时覆盖原路径，不产生带日期的重复条目。
-        KeepLatestVersionedArchive(
-            result,
-            @"^Backend/python_(?<version>\d{8})\.7z$",
-            "Backend/python.7z");
-        KeepLatestVersionedArchive(
-            result,
-            @"^Bin/rtx-video/RTXVideoRuntime_(?<version>\d{8})\.7z$");
-
-        // 新版补帧包已迁移到 Frame-Interpolation；旧 RIFE/RIFE.7z 与其内容重复，
-        // 但远端文件仍保留给旧客户端使用，因此只从当前下载列表隐藏旧路径。
-        result.RemoveAll(model =>
-            model.Path.Equals("Backend/channel.json", StringComparison.OrdinalIgnoreCase)
-            || model.Path.StartsWith("Backend/patches/", StringComparison.OrdinalIgnoreCase));
-        result.RemoveAll(model => model.Path.Equals("RIFE/RIFE.7z", StringComparison.OrdinalIgnoreCase));
+        // 同类运行包只展示最新版本；模型权重使用稳定路径。
+        KeepLatestVersionedArchive(result, @"^Backend/python_(?<version>\d{8})\.7z$");
+        KeepLatestVersionedArchive(result, @"^Bin/rtx-video/RTXVideoRuntime_(?<version>\d{8})\.7z$");
 
         return result.OrderBy(m => m.Path, StringComparer.OrdinalIgnoreCase).ToList();
     }

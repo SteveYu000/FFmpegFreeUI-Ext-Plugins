@@ -7,7 +7,7 @@ Imports LakeUI
 
 Namespace videoenhancer
 
-    ''' <summary>兼容旧 ContentAlignment 调用点的 LakeUI 文本标签。</summary>
+    ''' <summary>将 ContentAlignment 映射为 LakeUI 标签的对齐方式。</summary>
     Friend Class LakeTextLabel
         Inherits HtmlColorLabel
 

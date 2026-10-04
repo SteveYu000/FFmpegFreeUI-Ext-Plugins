@@ -1,7 +1,6 @@
 using System.Diagnostics;
 using System.Globalization;
 using System.IO.Compression;
-using System.IO.MemoryMappedFiles;
 using System.IO.Pipes;
 using System.Net;
 using System.Net.Http;
@@ -40,7 +39,7 @@ public static partial class BackendServices
     private const string EmbeddedInterpolationInspectorResource = "VideoEnhancer.Embedded.inspect_interpolation_models.py";
     private const string EmbeddedUpscaleInspectorResource = "VideoEnhancer.Embedded.inspect_upscale_models.py";
     private const string EmbeddedRifeTensorRTPrepareResource = "VideoEnhancer.Embedded.prepare_rife_tensorrt.py";
-    private const string EmbeddedImageBackendResource = "VideoEnhancer.Embedded.rve-image-backend.py";
+    private const string EmbeddedFrameBackendResource = "VideoEnhancer.Embedded.rve-frame-backend.py";
     private const string EmbeddedSegmentedBackendResource = "VideoEnhancer.Embedded.rve-segmented-backend.py";
     private const int InterpolationCapabilityCacheVersion = 1;
     private const string DefaultModelScopeDataset = "AerithDream/VideoEnhancer-Models";
@@ -63,7 +62,7 @@ public static partial class BackendServices
 
     private static string PythonExe => Path.Combine(CoreRoot, "python", "python", "python.exe");
     private static string BackendScript => Path.Combine(CoreRoot, "python", "backend", "rve-backend.py");
-    private static string ImageBackendScript => Path.Combine(CoreRoot, "python", "backend", "rve-image-backend.py");
+    private static string FrameBackendScript => Path.Combine(CoreRoot, "python", "backend", "rve-frame-backend.py");
     private static string SegmentedBackendScript => Path.Combine(CoreRoot, "python", "backend", "rve-segmented-backend.py");
     private static string TensorRTValidatorScript => Path.Combine(CoreRoot, "python", "backend", "validate_tensorrt_engines.py");
     private static string TensorRTConverterScript => Path.Combine(CoreRoot, "python", "backend", "convert_tensorrt.py");
@@ -79,7 +78,6 @@ public static partial class BackendServices
     private static string ModelsDir => Path.Combine(CoreRoot, "models");
     private static string FrameInterpolationDir => Path.Combine(ModelsDir, "Frame-Interpolation");
     private static string UserInterpolationDir => Path.Combine(ModelsDir, "User", "Interpolation");
-    private static string LegacyRifeDir => Path.Combine(ModelsDir, "RIFE");
     private static string TensorRTCacheDir => Path.Combine(ModelsDir, "TensorRT-Cache");
     private static string SceneDetectModel => FindNcnnModelFolder("EfficientNet-SceneDetect")
         ?? Path.Combine(ModelsDir, "EfficientNet-SceneDetect");
@@ -118,7 +116,7 @@ public static partial class BackendServices
         }
         catch
         {
-            // 设置文件无效或目录异常时继续按宿主目录、PATH 与旧版目录解析。
+            // 设置文件无效或目录异常时继续按宿主目录、PATH 与插件工具目录解析。
             try { candidates.Add(Path.Combine(Path.GetFullPath(Path.Combine(CoreRoot, "..", "..")), fileName)); }
             catch { }
         }
@@ -129,8 +127,8 @@ public static partial class BackendServices
             var directory = rawDirectory.Trim().Trim('"');
             if (directory.Length > 0) candidates.Add(Path.Combine(directory, fileName));
         }
-        var legacyFallback = Path.Combine(CoreRoot, "bin", "ffmpeg", fileName);
-        candidates.Add(legacyFallback);
+        var pluginFallback = Path.Combine(CoreRoot, "bin", "ffmpeg", fileName);
+        candidates.Add(pluginFallback);
         foreach (var candidate in candidates)
         {
             try
@@ -143,13 +141,13 @@ public static partial class BackendServices
                 // PATH 可能包含无效目录；跳过该项并继续查找其余 3FUI 环境。
             }
         }
-        return legacyFallback;
+        return pluginFallback;
     }
     private static string InterpolationCapabilityCachePath =>
         Path.Combine(PortablePaths.CacheRoot,
             $"interpolation-capabilities-v{InterpolationCapabilityCacheVersion}.json");
 
-    // ── Windows Job Object：CLI 进程被 3fui 停止/退出时，整棵后端进程树（python + ffmpeg）一并终止 ──
+    // ── 模型转换子进程随当前 DLL 服务调用取消 ──
 
     [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
     private static extern IntPtr CreateJobObject(IntPtr lpJobAttributes, string? lpName);
@@ -292,7 +290,6 @@ public static partial class BackendServices
         }
     }
 
-    /// <summary>由便携安装器调用：迁移旧布局并清除可明确识别的旧版残留。</summary>
     private static string DefaultBackendChannel => ModelScopeResolveRoot + "Backend/channel.json";
     private static ModelRepositoryClient CreateModelRepository() => new(ModelScopeDataset, ModelScopeToken, ToolVersion);
 
@@ -561,13 +558,12 @@ public static partial class BackendServices
             InstallEmbeddedBackendScript(EmbeddedInterpolationInspectorResource, InterpolationInspectorScript);
             InstallEmbeddedBackendScript(EmbeddedUpscaleInspectorResource, UpscaleInspectorScript);
             InstallEmbeddedBackendScript(EmbeddedRifeTensorRTPrepareResource, RifeTensorRTPrepareScript);
-            InstallEmbeddedBackendScript(EmbeddedImageBackendResource, ImageBackendScript);
+            InstallEmbeddedBackendScript(EmbeddedFrameBackendResource, FrameBackendScript);
             InstallEmbeddedBackendScript(EmbeddedSegmentedBackendResource, SegmentedBackendScript);
             EnsureGmfssModelTypeCompatibility();
             EnsureGimmModelCompatibility();
             EnsurePytorchUpscaleCompatibility();
             EnsureOnnxModelCompatibility();
-            EnsureImagePrecisionCompatibility();
         }
         catch (Exception ex)
         {
@@ -743,23 +739,6 @@ public static partial class BackendServices
             "FP32 兼容模式必须关闭 autocast");
     }
 
-    /// <summary>让独立图片后端沿用超分半精度开关，而不是固定使用 auto。</summary>
-    private static void EnsureImagePrecisionCompatibility()
-    {
-        if (!File.Exists(ImageBackendScript)) return;
-        var bytes = File.ReadAllBytes(ImageBackendScript);
-        var hasUtf8Bom = bytes.AsSpan().StartsWith(Encoding.UTF8.Preamble);
-        var text = Encoding.UTF8.GetString(bytes, hasUtf8Bom ? Encoding.UTF8.Preamble.Length : 0,
-            bytes.Length - (hasUtf8Bom ? Encoding.UTF8.Preamble.Length : 0));
-        const string marker = "VIDEOENHANCER_UPSCALE_PRECISION";
-        if (text.Contains(marker, StringComparison.Ordinal)) return;
-        const string oldValue = "precision=\"auto\",";
-        if (!text.Contains(oldValue, StringComparison.Ordinal)) return;
-        var replacement = "precision=os.environ.get(\"VIDEOENHANCER_UPSCALE_PRECISION\", \"auto\"),";
-        File.WriteAllText(ImageBackendScript, text.Replace(oldValue, replacement, StringComparison.Ordinal),
-            new UTF8Encoding(hasUtf8Bom));
-    }
-
     /// <summary>修补当前 RVE 2.4 ONNX 加载器的倍率解析与动态输入尺寸兼容性。</summary>
     private static void EnsureOnnxModelCompatibility()
     {
@@ -769,20 +748,6 @@ public static partial class BackendServices
         var hasUtf8Bom = bytes.AsSpan().StartsWith(Encoding.UTF8.Preamble);
         var text = Encoding.UTF8.GetString(bytes, hasUtf8Bom ? Encoding.UTF8.Preamble.Length : 0,
             bytes.Length - (hasUtf8Bom ? Encoding.UTF8.Preamble.Length : 0));
-        const string legacyAutoTile =
-            "        if self.tilesize == 0:\r\n" +
-            "            self.tilesize = max(0, int(os.environ.get(\"VIDEOENHANCER_ONNX_TILE_SIZE\", \"0\")))\r\n";
-        const string legacyAutoTileLf =
-            "        if self.tilesize == 0:\n" +
-            "            self.tilesize = max(0, int(os.environ.get(\"VIDEOENHANCER_ONNX_TILE_SIZE\", \"0\")))\n";
-        if (text.Contains(legacyAutoTile, StringComparison.Ordinal)
-            || text.Contains(legacyAutoTileLf, StringComparison.Ordinal))
-        {
-            text = text.Replace(legacyAutoTile, string.Empty, StringComparison.Ordinal)
-                .Replace(legacyAutoTileLf, string.Empty, StringComparison.Ordinal);
-            File.WriteAllText(loader, text, new UTF8Encoding(hasUtf8Bom));
-            return;
-        }
         const string oldValue = "    name = os.path.basename(modelPath).lower()";
         const string newValue = "    name = os.path.splitext(os.path.basename(modelPath))[0].lower()";
         if (!text.Contains(newValue, StringComparison.Ordinal)
@@ -894,7 +859,7 @@ public static partial class BackendServices
             "        self.tile = [self.tilesize, self.tilesize]";
         const string newInit =
             "        self.tilesize = tilesize\n" +
-            "        # CLI 的本地能力清单为已知模型声明真实的输入尺寸倍数。\n" +
+            "        # 插件的本地能力清单为已知模型声明真实的输入尺寸倍数。\n" +
             "        self.input_multiple = max(1, int(os.environ.get(\"VIDEOENHANCER_UPSCALE_INPUT_MULTIPLE\", \"1\")))\n" +
             "        self.tile = [self.tilesize, self.tilesize]";
         const string oldModulo =
@@ -1250,7 +1215,6 @@ public static partial class BackendServices
             candidates.Add(Path.Combine(FrameInterpolationDir, raw));
             candidates.Add(Path.Combine(ModelsDir, raw));
             candidates.Add(Path.Combine(UserInterpolationDir, raw));
-            candidates.Add(Path.Combine(LegacyRifeDir, raw));
         }
 
         foreach (var candidate in candidates.Distinct(StringComparer.OrdinalIgnoreCase))
@@ -1337,10 +1301,10 @@ public static partial class BackendServices
             : fileName;
     }
 
-    /// <summary>发现补帧模型，并兼容读取旧 models\RIFE 目录。</summary>
+    /// <summary>发现 Frame-Interpolation 和用户导入的补帧模型。</summary>
     private static List<string> DiscoverInterpModels(string backend)
     {
-        var roots = new[] { FrameInterpolationDir, UserInterpolationDir, LegacyRifeDir }
+        var roots = new[] { FrameInterpolationDir, UserInterpolationDir }
             .Where(Directory.Exists)
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .ToList();
@@ -1365,21 +1329,10 @@ public static partial class BackendServices
             .Where(IsNcnnModelFolder)
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .ToList();
-        var preferredNames = ncnnFolders
-            .Where(path => IsPathUnder(path, FrameInterpolationDir))
-            .Select(Path.GetFileName)
-            .Where(name => !string.IsNullOrWhiteSpace(name))
-            .ToHashSet(StringComparer.OrdinalIgnoreCase);
-        // 新目录和旧 models\RIFE 可能同时存在同一套 NCNN 模型。优先新目录，
-        // 只有新目录没有对应模型名时才显示旧兼容目录，避免 UI 出现重复项。
-        return ncnnFolders
-            .Where(path => IsPathUnder(path, FrameInterpolationDir)
-                || !preferredNames.Contains(Path.GetFileName(path)))
-            .OrderBy(p => p, StringComparer.CurrentCultureIgnoreCase)
-            .ToList();
+        return ncnnFolders.OrderBy(p => p, StringComparer.CurrentCultureIgnoreCase).ToList();
     }
 
-    /// <summary>补帧模型显示为相对架构路径；旧 RIFE 目录仍沿用原来的短名称。</summary>
+    /// <summary>补帧模型显示为相对架构路径。</summary>
     private static string InterpModelDisplayName(string path)
     {
         string relative;
@@ -1390,10 +1343,6 @@ public static partial class BackendServices
         else if (IsPathUnder(path, UserInterpolationDir))
         {
             relative = Path.GetRelativePath(ModelsDir, path);
-        }
-        else if (IsPathUnder(path, LegacyRifeDir))
-        {
-            relative = Path.GetRelativePath(LegacyRifeDir, path);
         }
         else
         {
@@ -1451,7 +1400,7 @@ public static partial class BackendServices
         }
         catch
         {
-            // 缓存损坏或被旧进程同时替换时直接重新检查，不影响模型列表。
+            // 缓存损坏或被其他操作同时替换时直接重新检查，不影响模型列表。
         }
         return cache;
     }
@@ -1751,89 +1700,6 @@ public static partial class BackendServices
         return 0;
     }
 
-    /// <summary>读取共享内存暂停/停止字节；返回 null 表示共享内存尚未创建。</summary>
-    private static byte? ReadShmByte(string shmBase)
-    {
-        if (string.IsNullOrWhiteSpace(shmBase))
-        {
-            return null;
-        }
-        foreach (var name in new[] { "/" + shmBase, shmBase })
-        {
-            try
-            {
-                using var mmf = MemoryMappedFile.OpenExisting(name, MemoryMappedFileRights.ReadWrite);
-                using var acc = mmf.CreateViewAccessor(0, 1);
-                acc.Read(0, out byte b);
-                return b;
-            }
-            catch
-            {
-                // 尝试下一个候选名
-            }
-        }
-        return null;
-    }
-
-    /// <summary>
-    /// 等待 -stop-shm 字节变为 1（插件点击“停止”时写入）。
-    /// 启动时创建并持有共享内存（初始化为 0），插件只需按名打开写入 1。
-    /// </summary>
-    private sealed class StopWatcher : IDisposable
-    {
-        private readonly string _shmBase;
-        private readonly MemoryMappedFile? _owned;
-        private bool _stopRequested;
-
-        public StopWatcher(string shmBase)
-        {
-            _shmBase = shmBase;
-            _owned = CreateMapping(shmBase);
-        }
-
-        /// <summary>创建（若已存在则打开）停止共享内存并清零，句柄保持到进程结束。</summary>
-        private static MemoryMappedFile? CreateMapping(string shmBase)
-        {
-            foreach (var name in new[] { shmBase, "/" + shmBase })
-            {
-                try
-                {
-                    var mmf = MemoryMappedFile.CreateOrOpen(name, 1, MemoryMappedFileAccess.ReadWrite);
-                    using (var acc = mmf.CreateViewAccessor(0, 1))
-                    {
-                        acc.Read(0, out byte current);
-                        if (current != 0)
-                        {
-                            acc.Write(0, (byte)0);
-                        }
-                    }
-                    return mmf;
-                }
-                catch
-                {
-                    // 尝试下一个候选名
-                }
-            }
-            return null;
-        }
-
-        public bool IsStopRequested()
-        {
-            if (_stopRequested)
-            {
-                return true;
-            }
-            var b = ReadShmByte(_shmBase);
-            if (b == 1)
-            {
-                _stopRequested = true;
-            }
-            return _stopRequested;
-        }
-
-        public void Dispose() => _owned?.Dispose();
-    }
-
     private sealed class PreparedSegment
     {
         public long Start { get; set; }
@@ -1925,30 +1791,19 @@ public static partial class BackendServices
 
     /// <summary>
     /// 把 PTH 源模型解析为当前 GPU、TensorRT 版本和输入尺寸对应的 Engine。
-    /// 已有 Engine 会先验证；不兼容时若能找到同名 PTH，则自动重建本机缓存。
+    /// 选择 Engine 时验证当前设备和输入尺寸；选择 PTH 时构建本机缓存。
     /// </summary>
     private static string EnsureTensorRtEngine(
-        string modelPath, int inputWidth, int inputHeight, StopWatcher? stopWatcher, int tileSize = 0, int outputScale = 0,
+        string modelPath, int inputWidth, int inputHeight, int tileSize = 0, int outputScale = 0,
         string requestedPrecision = "auto")
     {
         var sourcePath = modelPath;
         if (IsTensorRTEngineFile(modelPath))
         {
-            // 预置或用户选择的 Engine 不再作为任务入口：始终回到同名 PTH，
-            // 按当前设备/尺寸/配置生成 models\TensorRT-Cache 下的专用 Engine。
-            var baseName = Path.GetFileNameWithoutExtension(modelPath);
-            var cacheMarker = baseName.IndexOf("__gpu-", StringComparison.OrdinalIgnoreCase);
-            if (cacheMarker > 0) baseName = baseName[..cacheMarker];
-            baseName = Regex.Replace(baseName, @"-x[1-8](-tensorrt)?$", "", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
-            sourcePath = DiscoverUpscalePthModels().FirstOrDefault(path =>
-                ModelBaseName(path).Equals(baseName, StringComparison.OrdinalIgnoreCase)) ?? "";
-            if (sourcePath.Length == 0)
-            {
-                Console.Error.WriteLine("[错误] TensorRT 任务需要 PTH 源模型；预置 Engine 不再直接使用，且未找到对应 PTH：" + baseName);
-                Console.Error.WriteLine("[处理建议] 下载对应 PTH 模型后重试，程序会按当前设备自动编译并缓存。");
-                return "";
-            }
-            Console.WriteLine("[TensorRT] 已忽略预置 Engine，将使用对应 PTH 构建本机 Engine：" + sourcePath);
+            DownloadCancellation.Check();
+            return File.Exists(modelPath) && ValidateTensorRTEngine(modelPath, printSuccess: true,
+                inputWidth: inputWidth, inputHeight: inputHeight, tileSize: tileSize)
+                ? Path.GetFullPath(modelPath) : "";
         }
 
         if (!IsPthModelFile(sourcePath) || !File.Exists(sourcePath))
@@ -1980,11 +1835,7 @@ public static partial class BackendServices
             Console.WriteLine("[TensorRT] 缓存键：" + Path.GetFileName(cachePath));
             while (!hasMutex)
             {
-                if (stopWatcher?.IsStopRequested() == true)
-                {
-                    Console.WriteLine("[TensorRT] 已取消等待 Engine 构建。");
-                    return "";
-                }
+                DownloadCancellation.Check();
                 try { hasMutex = buildMutex.WaitOne(250); }
                 catch (AbandonedMutexException) { hasMutex = true; }
             }
@@ -2009,7 +1860,7 @@ public static partial class BackendServices
                 "，分块=" + tileSize);
             EmitTensorRtProgress("超分 Engine", 0, "准备构建");
             var builtPath = RunTensorRtConverter(
-                sourcePath, inputWidth, inputHeight, outputScale, tileSize, stopWatcher, enginePrecision);
+                sourcePath, inputWidth, inputHeight, outputScale, tileSize, enginePrecision);
             if (builtPath.Length == 0) return "";
 
             var partialPath = Path.Combine(TensorRTCacheDir,
@@ -2131,7 +1982,7 @@ public static partial class BackendServices
 
     /// <summary>调用开发包自带转换器，并实时转发构建日志与停止请求。</summary>
     private static string RunTensorRtConverter(
-        string sourcePath, int inputWidth, int inputHeight, int outputScale, int tileSize, StopWatcher? stopWatcher,
+        string sourcePath, int inputWidth, int inputHeight, int outputScale, int tileSize,
         string precision)
     {
         var buildDir = Path.Combine(TensorRTCacheDir, ".build-" + Guid.NewGuid().ToString("N"));
@@ -2174,8 +2025,6 @@ public static partial class BackendServices
 
         using var process = new Process { StartInfo = start };
         var job = CreateKillOnCloseJob();
-        var cancelled = false;
-        ConsoleCancelEventHandler cancelHandler = (_, e) => { e.Cancel = true; cancelled = true; };
         process.OutputDataReceived += (_, e) =>
         {
             if (string.IsNullOrWhiteSpace(e.Data)) return;
@@ -2189,7 +2038,6 @@ public static partial class BackendServices
         {
             if (!string.IsNullOrWhiteSpace(e.Data)) Console.Error.WriteLine("[TensorRT 构建] " + e.Data);
         };
-        Console.CancelKeyPress += cancelHandler;
         try
         {
             if (!process.Start())
@@ -2203,14 +2051,15 @@ public static partial class BackendServices
             process.BeginErrorReadLine();
             while (!process.WaitForExit(250))
             {
-                if (!cancelled && stopWatcher?.IsStopRequested() != true) continue;
+                if (!DownloadCancellation.Token.IsCancellationRequested) continue;
                 try { process.Kill(entireProcessTree: true); } catch { }
                 process.WaitForExit();
                 Console.WriteLine("[TensorRT] 自动构建已取消。");
                 EmitTensorRtProgress("超分 Engine", 0, "构建已取消");
-                return "";
+                DownloadCancellation.Check();
             }
             process.WaitForExit();
+            DownloadCancellation.Check();
             if (process.ExitCode != 0)
             {
                 Console.Error.WriteLine("[错误] TensorRT 自动构建失败，退出码：" + process.ExitCode);
@@ -2227,6 +2076,7 @@ public static partial class BackendServices
             }
             return engine;
         }
+        catch (OperationCanceledException) { throw; }
         catch (Exception ex)
         {
             Console.Error.WriteLine("[错误] TensorRT 自动构建异常：" + ex.Message);
@@ -2235,7 +2085,6 @@ public static partial class BackendServices
         }
         finally
         {
-            Console.CancelKeyPress -= cancelHandler;
             if (job != IntPtr.Zero) CloseHandle(job);
             if (!Directory.EnumerateFiles(buildDir, "*.engine", SearchOption.AllDirectories).Any())
             {
@@ -2399,7 +2248,7 @@ public static partial class BackendServices
             }
 
             // 启动环境检查只验证基础组件，避免逐个加载大尺寸 TensorRT Engine。
-            // Engine 兼容性仍由 --validate-engines、后端列表和实际推理路径按需检查。
+            // Engine 适用性由类型化检查服务、后端列表和实际推理路径按需检查。
         }
 
         Console.WriteLine("[环境检查] " + (ok ? "全部通过。" : "存在缺失项，请检查上方 [缺失] 标记。"));
@@ -2887,16 +2736,7 @@ public static partial class BackendServices
     }
 
     private static bool IsInInterpolationDirectory(string path) =>
-        IsPathUnder(path, FrameInterpolationDir) || IsPathUnder(path, UserInterpolationDir) || IsInLegacyRifeDirectory(path);
-
-    private static bool IsInLegacyRifeDirectory(string path)
-    {
-        var rifeRoot = Path.GetFullPath(LegacyRifeDir)
-            .TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)
-            + Path.DirectorySeparatorChar;
-        var fullPath = Path.GetFullPath(path);
-        return fullPath.StartsWith(rifeRoot, StringComparison.OrdinalIgnoreCase);
-    }
+        IsPathUnder(path, FrameInterpolationDir) || IsPathUnder(path, UserInterpolationDir);
 
     private static bool IsInBasicVsrPlusPlusDirectory(string path)
     {
