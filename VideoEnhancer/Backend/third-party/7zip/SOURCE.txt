@@ -1,0 +1,8 @@
+7-Zip 26.03 独立 x64 组件，未修改上游二进制。
+项目及完整源码：https://github.com/ip7z/7zip/tree/26.03
+下载来源：https://github.com/ip7z/7zip/releases/tag/26.03
+二进制：7z2603-extra.7z 内 x64/7za.exe
+SHA256：EDBEE35370E14030E4C785CF88200F42DC651C1EB4217C1E3963C38A12F099B0
+随包提供上游 License.txt 和完整 7z2603-src.tar.xz 对应源码。
+源码 SHA256：9CBDE5099C6DEB73691B0579063DA5827522CCBBCBA3F0020FD04E8C8C16C0D4
+组件在插件 bin/7zip 中运行，不调用 7-Zip 系统安装程序。

@@ -1,0 +1,37 @@
+VideoEnhancer 第三方组件声明
+===========================
+
+发行包包含以下第三方组件。VideoEnhancer 项目源码采用 MIT 许可证，
+第三方组件按各自许可证分发。
+
+aria2-next 2.8.3
+----------------
+
+用途：作为独立命令行下载程序安装到 bin/aria2-next/aria2-next.exe。
+项目：https://github.com/AnInsomniacy/aria2-next
+许可证：GNU General Public License version 2 or later（GPL-2.0-or-later）。
+完整许可证：licenses/aria2-next/COPYING
+作者与贡献者声明：licenses/aria2-next/AUTHORS
+精确版本、二进制校验值和对应源码：licenses/aria2-next/SOURCE.txt
+静态依赖许可证：licenses/aria2-next/DEPENDENCY-LICENSES.txt
+
+ZIP 发行包把 aria2-next 放在 videoenhancer/bin/aria2-next，插件 DLL 通过独立进程调用。
+同版完整源码归档包含在 ZIP 的 licenses/aria2-next 目录中，
+包含 third_party 依赖源码和上游构建配置。
+
+SharpCompress 0.50.3
+--------------------
+
+用途：在 videoenhancer.3fui.dll 内提供托管压缩包读取、解压和 7z 创建能力。
+项目：https://github.com/adamhathcock/sharpcompress
+许可证：MIT License。
+完整许可证：licenses/SharpCompress/LICENSE.txt
+
+7-Zip Extra 26.03
+----------------
+
+用途：bin/7zip/7za.exe 原生 7z 解压，支持压缩包允许的多线程解码。
+插件 DLL 携带该独立工具、许可证与源码，首次解压时按需释放至便携目录。
+项目：https://github.com/ip7z/7zip
+许可证：GNU LGPL 2.1 or later，部分代码使用 BSD 许可证。
+完整声明与对应源码：licenses/7zip/License.txt、SOURCE.txt、7z2603-src.tar.xz。

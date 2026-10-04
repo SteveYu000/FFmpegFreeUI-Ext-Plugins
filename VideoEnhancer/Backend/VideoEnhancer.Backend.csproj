@@ -1,0 +1,31 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0-windows10.0.17763.0</TargetFramework>
+    <OutputType>Library</OutputType>
+    <AssemblyName>VideoEnhancer.Backend</AssemblyName>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Version>0.1.0</Version>
+    <NuGetAudit>false</NuGetAudit>
+    <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
+    <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
+    <SevenZipCacheDirectory>$(MSBuildProjectDirectory)\obj\third-party\7zip\26.03</SevenZipCacheDirectory>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="SharpCompress" Version="[0.50.3]" />
+    <PackageReference Include="FFmpegFreeUI.Ext.PluginSdk" Version="[2.5.0]" PrivateAssets="all" ExcludeAssets="runtime" />
+  </ItemGroup>
+  <ItemGroup>
+    <EmbeddedResource Include="embedded-tools\*.py" LogicalName="VideoEnhancer.Embedded.%(Filename)%(Extension)" />
+    <EmbeddedResource Include="model-capabilities.json;ncnn-model-signatures.json;THIRD-PARTY-NOTICES.txt" LogicalName="VideoEnhancer.Embedded.%(Filename)%(Extension)" />
+    <EmbeddedResource Include="..\LICENSE" LogicalName="VideoEnhancer.Embedded.LICENSE.txt" />
+    <EmbeddedResource Include="third-party\SharpCompress\LICENSE.txt" LogicalName="VideoEnhancer.Embedded.SharpCompress.LICENSE.txt" />
+    <EmbeddedResource Include="$(SevenZipCacheDirectory)\extra\x64\7za.exe" LogicalName="VideoEnhancer.Embedded.SevenZip.7za.exe" />
+    <EmbeddedResource Include="$(SevenZipCacheDirectory)\extra\License.txt" LogicalName="VideoEnhancer.Embedded.SevenZip.License.txt" />
+    <EmbeddedResource Include="third-party\7zip\SOURCE.txt" LogicalName="VideoEnhancer.Embedded.SevenZip.SOURCE.txt" />
+    <EmbeddedResource Include="$(SevenZipCacheDirectory)\7z2603-src.tar.xz" LogicalName="VideoEnhancer.Embedded.SevenZip.7z2603-src.tar.xz" />
+  </ItemGroup>
+  <Target Name="AcquireSevenZip" BeforeTargets="PrepareForBuild" Condition="'$(DesignTimeBuild)' != 'true'">
+    <Exec Command="pwsh -NoProfile -ExecutionPolicy Bypass -File &quot;$(MSBuildProjectDirectory)\..\release\acquire-7zip.ps1&quot; -CacheDirectory &quot;$(SevenZipCacheDirectory)&quot;" />
+  </Target>
+</Project>

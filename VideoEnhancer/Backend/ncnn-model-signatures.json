@@ -1,0 +1,67 @@
+[
+  {
+    "sha256": "7c5aec3347d1614048e3f3afa853ffb4d2a84304e5f18c27cf900ae467f05934",
+    "architecture": "Compact",
+    "scale": 2
+  },
+  {
+    "sha256": "9a658fc348c823b5105ecc4ff12caab0595714fc95674afeccfaaa9fb5f47cf1",
+    "architecture": "SPAN",
+    "scale": 2
+  },
+  {
+    "sha256": "420f3424aaf1df0286ac9ba2fef7c79fc40074f409ecd677bd6751f591f3637e",
+    "architecture": "Real-CUGAN",
+    "scale": 2
+  },
+  {
+    "sha256": "25a3b4a414bb7a78272c63861c71592be0be7e5784f1ccba94af4a3bdef64249",
+    "architecture": "Compact",
+    "scale": 1
+  },
+  {
+    "sha256": "d81c725848821ab9fc1626e7632c3d42aac47d035924cfe920e0be7105ba617a",
+    "architecture": "DnCNN",
+    "scale": 1
+  },
+  {
+    "sha256": "cd12335d68438013311f704416a19e4911d0eabdff36fb0db110d6d2f4f5750c",
+    "architecture": "SPAN",
+    "scale": 2
+  },
+  {
+    "sha256": "0369a012e5acbb52309f51990654d020ac22b84a4c21b663bbc292bc0aab2ca2",
+    "architecture": "SPAN",
+    "scale": 4
+  },
+  {
+    "sha256": "1393f7c0e885f9d15a0668329a13f695ebd0ea45791f46d28145d7934824d224",
+    "architecture": "Compact",
+    "scale": 2
+  },
+  {
+    "sha256": "584a43e429188c159ef8e42191ef5a5fd1d2e3b17398e5cee6089726dec879c7",
+    "architecture": "Compact",
+    "scale": 3
+  },
+  {
+    "sha256": "850a248e7c14c27e5bd8cf7265113a9441036a7db63963bb8aa5169d788a435e",
+    "architecture": "Compact",
+    "scale": 4
+  },
+  {
+    "sha256": "8529d0bca9a7f864b307c279958cc2d221bf42379ccd7257f33fb7f44613e07b",
+    "architecture": "Compact",
+    "scale": 4
+  },
+  {
+    "sha256": "2b8fb6e0ae4d2d85704ca08c119a2f5ea40add4f2ecd512eb7f4cd44b6127ed4",
+    "architecture": "ESRGAN",
+    "scale": 4
+  },
+  {
+    "sha256": "66da0db6342450b9c9c5dd1a05d20245bec4dca7878b8b57ca7bcfc5be1807c9",
+    "architecture": "Waifu2x",
+    "scale": 2
+  }
+]

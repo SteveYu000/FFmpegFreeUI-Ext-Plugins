@@ -1,0 +1,13 @@
+<Project>
+  <Target Name="MergeVideoEnhancerPlugin" AfterTargets="Build" Condition="'$(IsCrossTargetingBuild)' != 'true'">
+    <PropertyGroup><MergedPluginPath>$(MSBuildProjectDirectory)\..\dist\videoenhancer.3fui.dll</MergedPluginPath></PropertyGroup>
+    <ItemGroup>
+      <_MergeInput Include="$(TargetPath)" />
+      <_MergeInput Include="$(TargetDir)VideoEnhancer.Backend.dll;$(TargetDir)SharpCompress.dll" />
+      <_MergeLibrary Include="@(ReferencePath->'%(RootDir)%(Directory)')" />
+    </ItemGroup>
+    <MakeDir Directories="$(MSBuildProjectDirectory)\..\dist" />
+    <ILRepack InputAssemblies="@(_MergeInput)" LibraryPath="@(_MergeLibrary)" OutputFile="$(MergedPluginPath)" TargetKind="Dll" Internalize="false" DebugInfo="false" Parallel="true" />
+    <Message Importance="high" Text="单 DLL 插件：$(MergedPluginPath)" />
+  </Target>
+</Project>

@@ -1,0 +1,29 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0-windows10.0.17763.0</TargetFramework>
+    <OutputType>Library</OutputType>
+    <AssemblyName>videoenhancer.3fui</AssemblyName>
+    <RootNamespace />
+    <Version>0.1.0</Version>
+    <UseWindowsForms>true</UseWindowsForms>
+    <UseWPF>true</UseWPF>
+    <OptionStrict>On</OptionStrict>
+    <OptionExplicit>On</OptionExplicit>
+    <OptionInfer>On</OptionInfer>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <DisableImplicitNamespaceImports>true</DisableImplicitNamespaceImports>
+    <NoWarn>$(NoWarn);WFO1000</NoWarn>
+    <NuGetAudit>false</NuGetAudit>
+    <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
+    <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
+    <ILRepackTargetsFile>$(MSBuildProjectDirectory)\ILRepack.targets</ILRepackTargetsFile>
+  </PropertyGroup>
+  <ItemGroup>
+    <!-- 宿主提供 SDK 和 LakeUI；插件只合并自身前后端与私有托管依赖。 -->
+    <PackageReference Include="FFmpegFreeUI.Ext.PluginSdk" Version="[2.5.0]" PrivateAssets="all" ExcludeAssets="runtime" />
+    <PackageReference Include="LakeUI" Version="[5.110.0]" PrivateAssets="all" ExcludeAssets="runtime" />
+    <PackageReference Include="ILRepack.Lib.MSBuild.Task" Version="[2.0.48]" PrivateAssets="all" />
+    <ProjectReference Include="..\Backend\VideoEnhancer.Backend.csproj" />
+    <EmbeddedResource Include="..\README.md" LogicalName="VideoEnhancer.ExtGuide" />
+  </ItemGroup>
+</Project>

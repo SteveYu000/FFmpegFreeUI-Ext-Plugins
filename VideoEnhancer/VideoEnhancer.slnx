@@ -1,0 +1,4 @@
+<Solution>
+  <Project Path="Backend/VideoEnhancer.Backend.csproj" />
+  <Project Path="Frontend/VideoEnhancerPlugin.vbproj" />
+</Solution>
