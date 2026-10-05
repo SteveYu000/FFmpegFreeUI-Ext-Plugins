@@ -16,9 +16,13 @@ MIT 部分保留原授权；发行的组合仍须满足 AGPL 条款。源码版�
 
 ## 对应源码与再分发
 
-ZIP 的 `videoenhancer/licenses/VideoEnhancer` 内提供本次构建使用的完整插件源码 ZIP、逐文件 SHA-256 清单和构建说明。源码包含前后端、Python 模块、项目与锁定文件、构建和安装脚本、测试及许可材料；构建缓存、开发机目录和二进制输出不属于该源码快照。源码清单也内嵌在插件 DLL 中，打包时核对源码与 DLL，禁止将新源码配给旧 DLL。
+正式发布生成两个独立 ZIP：`VideoEnhancer-<版本>-win-x64.zip` 安装包和 `VideoEnhancer-<版本>-source.zip` 对应源码包，各附 `.sha256` 校验文件。安装包保留许可证、原始声明，以及 `videoenhancer/licenses/VideoEnhancer/SOURCE.txt` 中的源码包名称、同一 Release 下载地址与 SHA-256；安装元数据记录相同信息。源码包的根目录提供本次构建使用的完整插件源码、`SOURCE-SNAPSHOT.json` 逐文件清单和构建说明，`source-manifest.json` 记录配套安装包名称及 DLL 哈希。
 
-第三方版本源码和 vcpkg 构建配方位于 `videoenhancer/licenses/sources`，下载地址和校验值见 `third-party-sources.lock.json`。RVE 参考源码用于说明集成与补丁的来源，不能充当未锁定的按需运行环境的版本证明。第三方原生构建的证据与限制见 FFF.Native 的 `SOURCE.txt` 和 `BUILDING.md`。
+插件源码包含前后端、运行用 Python 模块、项目与锁定文件、构建和安装脚本、测试及许可材料；构建缓存、开发机目录和二进制输出不属于该源码快照。源码清单也内嵌在插件 DLL 中，打包时核对源码与 DLL，禁止将新源码配给旧 DLL。
+
+第三方版本源码和 vcpkg 构建配方位于独立源码包的 `third-party-sources`，其中 `aria2-next` 与 `7zip` 子目录提供各自的完整源码，其余归档直接放在该目录下；下载地址和校验值见源码包的 `release/third-party-sources.lock.json` 及各组件来源说明。RVE 参考源码用于说明集成与补丁的来源，不能充当未锁定的按需运行环境的版本证明。第三方原生构建的证据与限制见 FFF.Native 的 `SOURCE.txt` 和 `BUILDING.md`。
+
+网络发布和镜像时，应在同一 Release 免费提供两个包及校验文件，并保持源码下载地址有效。AGPL 第 6(d) 条允许对应源码单独下载，接收者无需同时下载源码；只保留仓库主页或不匹配的最新源码不符合本项目的发布流程。
 
 再分发本插件 DLL 时，应同时保留 AGPL 正文、版权和许可声明，并按 AGPL 提供与二进制对应的源码及构建、安装材料。修改集成或补丁时应保留原声明并标注修改。若将修改版用于通过网络与用户交互的服务，还应履行 AGPL 第 13 条对应源码义务。
 

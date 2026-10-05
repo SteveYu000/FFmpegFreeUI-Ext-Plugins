@@ -24,7 +24,6 @@
     <EmbeddedResource Include="$(SevenZipCacheDirectory)\extra\x64\7za.exe" LogicalName="VideoEnhancer.Embedded.SevenZip.7za.exe" />
     <EmbeddedResource Include="$(SevenZipCacheDirectory)\extra\License.txt" LogicalName="VideoEnhancer.Embedded.SevenZip.License.txt" />
     <EmbeddedResource Include="third-party\7zip\SOURCE.txt" LogicalName="VideoEnhancer.Embedded.SevenZip.SOURCE.txt" />
-    <EmbeddedResource Include="$(SevenZipCacheDirectory)\7z2603-src.tar.xz" LogicalName="VideoEnhancer.Embedded.SevenZip.7z2603-src.tar.xz" />
   </ItemGroup>
   <Target Name="AcquireSevenZip" BeforeTargets="PrepareForBuild" Condition="'$(DesignTimeBuild)' != 'true'">
     <Exec Command="pwsh -NoProfile -ExecutionPolicy Bypass -File &quot;$(MSBuildProjectDirectory)\..\release\acquire-7zip.ps1&quot; -CacheDirectory &quot;$(SevenZipCacheDirectory)&quot;" />

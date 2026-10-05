@@ -4,7 +4,7 @@
 
 ## 插件与 RVE 集成
 
-`Backend/BackendServices.cs` 中包含 RVE 源码适配及补丁；`Backend/embedded-tools/*.py` 直接导入或启动 RVE。两部分明确标为 AGPL-3.0-only。其余独立前后端源码、脚本、测试与文档保留 MIT。合并后的 DLL 按 AGPL 分发，并随 ZIP 附上完整插件对应源码、逐文件 SHA-256 清单、许可和构建材料。
+`Backend/BackendServices.cs` 中包含 RVE 源码适配及补丁；`Backend/embedded-tools/*.py` 直接导入或启动 RVE。两部分明确标为 AGPL-3.0-only。其余独立前后端源码、脚本、测试与文档保留 MIT。合并后的 DLL 按 AGPL 分发，安装 ZIP 保留许可与源码获取说明；独立源码 ZIP 提供完整插件对应源码、逐文件 SHA-256 清单、许可和构建材料。两包在同一 Release 免费发布。
 
 RVE 原始许可与参考源码固定于提交 `8541c46ca14e6f84fc86c5b9d3b75373e25732e5`，见 [上游源码](https://github.com/TNTwise/REAL-Video-Enhancer/tree/8541c46ca14e6f84fc86c5b9d3b75373e25732e5)。归档包含上游各架构目录自己的许可，不能将权重或所有架构都统一标为 AGPL。参考归档不是按需 Python 包的精确版本证明。
 
@@ -24,10 +24,10 @@ RVE 原始许可与参考源码固定于提交 `8541c46ca14e6f84fc86c5b9d3b75373
 
 ## 随包独立工具
 
-| 组件 | 版本 | 许可 | ZIP 中的材料 |
+| 组件 | 版本 | 许可 | 安装包与源码包材料 |
 | --- | --- | --- | --- |
-| aria2-next | 2.8.3 | GPL-2.0-or-later | COPYING、AUTHORS、依赖声明、SOURCE.txt、同版完整源码 |
-| 7-Zip Extra x64 7za.exe | 26.03 | LGPL-2.1-or-later，部分 BSD | License.txt、SOURCE.txt、同版完整源码；这些材料及程序也内嵌于 DLL |
+| aria2-next | 2.8.3 | GPL-2.0-or-later | 安装包保留 COPYING、AUTHORS、依赖声明、SOURCE.txt；同版完整源码在源码包的 `third-party-sources/aria2-next` |
+| 7-Zip Extra x64 7za.exe | 26.03 | LGPL-2.1-or-later，部分 BSD | 安装包保留 License.txt、SOURCE.txt，程序与声明也内嵌于 DLL；同版完整源码在源码包的 `third-party-sources/7zip` |
 
 7za 负责 ZIP、7z、TAR、GZ、XZ、ZST 的安装及模型导入解压，压缩 TAR 会继续解包；不支持 RAR。二者通过独立进程执行。原始版权、精确二进制和源码校验信息见 `licenses/aria2-next` 与 `licenses/7zip`；这些许可证不被插件许可取代。
 
@@ -51,9 +51,9 @@ FFF_Project 标签提交为 `72d3406738413262d2a99b8fc2a678dfdbf31364`，实际�
 
 本软件部分功能基于 FreeType Team 的工作，按 FTL 使用 FreeType；项目网址为 https://freetype.org/。版权、免责声明和条款随原始 LICENSE.TXT 与 FTL.TXT 保留。FFF_Project 原许可证版权行含占位文本，原样保留，未擅自补写。
 
-完整版本源码、vcpkg 端口补丁和构建脚本归档随 ZIP 的 `licenses/sources` 提供。SHA-256、SHA-512 与下载地址固定在 `third-party-sources.lock.json`。libass、Brotli、bzip2、FriBidi、HarfBuzz、libpng、zlib 的源码归档 SHA-512 与固定端口一致；FreeType 使用其官方 GitHub 镜像的同版标签源码，归档哈希与 GitLab 的打包格式不同。
+完整版本源码、vcpkg 端口补丁和构建脚本归档在独立源码包的 `third-party-sources` 提供。SHA-256、SHA-512 与下载地址固定在 `third-party-sources.lock.json`。libass、Brotli、bzip2、FriBidi、HarfBuzz、libpng、zlib 的源码归档 SHA-512 与固定端口一致；FreeType 使用其官方 GitHub 镜像的同版标签源码，归档哈希与 GitLab 的打包格式不同。
 
-FriBidi 的 LGPL 正文、作者声明、1.0.16 完整源码及端口补丁已附上；用户可构建并替换接口兼容的 DLL。构建与替换步骤见 `licenses/FFF.Native/BUILDING.md`。上游未提供该官方二进制的完整编译日志或编译器精确版本；现有材料不声称已复现逐字节相同的二进制。
+安装包保留 FriBidi 的 LGPL 正文和作者声明；1.0.16 完整源码及端口补丁在独立源码包中提供；用户可构建并替换接口兼容的 DLL。构建与替换步骤见 `licenses/FFF.Native/BUILDING.md`。上游未提供该官方二进制的完整编译日志或编译器精确版本；现有材料不声称已复现逐字节相同的二进制。
 
 FFF.Native 的 MIT 不覆盖配套库和另行提供的 FFmpeg Shared 构建。本插件 ZIP 不包含 avcodec、avformat 等 FFmpeg DLL；实际 Shared 构建应依其配置核对许可。[FFmpeg 官方许可说明](https://ffmpeg.org/legal.html)
 

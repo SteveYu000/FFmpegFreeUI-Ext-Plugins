@@ -601,7 +601,7 @@ public static partial class BackendServices
             var newline = text.Contains("\r\n", StringComparison.Ordinal) ? "\r\n" : "\n";
             text = marker + "0.1.0，2026-10-05。" + newline
                 + "# 本插件的修改按 AGPL-3.0-only 授权；保留原始版权与许可声明。" + newline
-                + "# 对应修改源码随插件 ZIP 的 licenses/VideoEnhancer 提供。" + newline + text;
+                + "# 对应修改源码在同版本 source.zip 中，下载地址见插件 licenses/VideoEnhancer/SOURCE.txt。" + newline + text;
         }
         File.WriteAllText(path, text, new UTF8Encoding(hasUtf8Bom));
     }

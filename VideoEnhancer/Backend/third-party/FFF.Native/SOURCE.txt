@@ -21,11 +21,12 @@ DLL 导出确认的版本与此 baseline 一致：
 libass 0.17.4、Brotli 1.2.0、bzip2 1.0.8、FreeType 2.14.3、
 FriBidi 1.0.16、HarfBuzz 14.2.0、libpng 1.6.58、zlib 1.3.2。
 
-相应完整源码及 vcpkg 配方归档位于 ../sources；
+相应完整源码及 vcpkg 配方归档位于同版本独立源码包的 third-party-sources；
+源码包下载地址和哈希见 licenses/VideoEnhancer/SOURCE.txt，两包在同一 Release 提供；
 下载地址、大小、SHA-256 / SHA-512 见 ../third-party-sources.lock.json。
 这些版本证据及源码不能代替上游未公开的完整编译日志、编译器精确版本。
 不声称已复现逐字节一致的官方二进制。构建与替换步骤见 BUILDING.md。
 
 FFF.Native 的 MIT 不覆盖其他库。各库原始许可与版权声明位于 licenses 下各自目录。
-FriBidi 的 LGPL 正文、作者声明与源码随包提供；许可允许的修改、替换及调试不被限制。
+安装包保留 FriBidi 的 LGPL 正文和作者声明，同版本源码由独立源码包提供；许可允许的修改、替换及调试不被限制。
 初始 ZIP 不提供 FFmpeg Shared 动态库；用户所用的 FFmpeg 构建按其实际配置授权。

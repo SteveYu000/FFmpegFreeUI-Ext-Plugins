@@ -16,12 +16,12 @@ internal static class NativeSevenZipExtractor
 
     internal static bool EnsureAvailable()
     {
-        // 单 DLL 也携带固定版本的独立工具及许可源码；数据目录重定向后无需再次联网。
+        // 单 DLL 携带固定版工具及许可声明；对应源码由同版本独立源码包提供。
         var assembly = typeof(NativeSevenZipExtractor).Assembly;
         foreach (var (name, relative) in new[]
         {
             ("7za.exe", "bin/7zip/7za.exe"), ("License.txt", "licenses/7zip/License.txt"),
-            ("SOURCE.txt", "licenses/7zip/SOURCE.txt"), ("7z2603-src.tar.xz", "licenses/7zip/7z2603-src.tar.xz")
+            ("SOURCE.txt", "licenses/7zip/SOURCE.txt")
         })
         {
             DownloadCancellation.Check();

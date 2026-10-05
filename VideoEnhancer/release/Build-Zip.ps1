@@ -63,13 +63,22 @@ $nativeCache = Join-Path $projectRoot 'Frontend/obj/third-party/fff-native/2026.
 $nativeLock = Get-Content -LiteralPath (Join-Path $PSScriptRoot 'fff-native.lock.json') -Raw -Encoding UTF8 | ConvertFrom-Json
 [xml]$project = Get-Content -LiteralPath (Join-Path $projectRoot 'Frontend/VideoEnhancerPlugin.vbproj') -Raw -Encoding UTF8
 $version = [string]$project.Project.PropertyGroup.Version
+$packageName = "VideoEnhancer-$version-win-x64.zip"
+$sourcePackageName = "VideoEnhancer-$version-source.zip"
+$releaseTag = [Uri]::EscapeDataString("VideoEnhancer/v$version")
+$releaseRoot = 'https://github.com/SteveYu000/FFmpegFreeUI-Ext-Plugins/releases'
+$sourceUrl = "$releaseRoot/download/$releaseTag/$sourcePackageName"
 $stage = Join-Path $outputRoot ('.zip-stage-' + [Guid]::NewGuid().ToString('N'))
-[IO.Directory]::CreateDirectory($stage) | Out-Null
+$installationStage = Join-Path $stage 'installation'
+$sourceMaterials = Join-Path $stage 'source-materials'
+[IO.Directory]::CreateDirectory($installationStage) | Out-Null
+[IO.Directory]::CreateDirectory($sourceMaterials) | Out-Null
 try {
-    Copy-Item -LiteralPath $pluginPath -Destination $stage
-    Copy-Item -LiteralPath (Join-Path $projectRoot 'VideoEnhancer-安装说明.txt') -Destination $stage
-    $data = Join-Path $stage 'videoenhancer'
-    # 只将锁定清单中的预览 DLL 随 ZIP 分发，官方下载包留在构建缓存。
+    Copy-Item -LiteralPath $pluginPath -Destination $installationStage
+    Copy-Item -LiteralPath (Join-Path $projectRoot 'VideoEnhancer-安装说明.txt') -Destination $installationStage
+    $binarySha256 = (Get-FileHash -LiteralPath (Join-Path $installationStage 'videoenhancer.ext.3fui.dll') -Algorithm SHA256).Hash.ToLowerInvariant()
+    $data = Join-Path $installationStage 'videoenhancer'
+    # 安装包只携带运行文件与声明；源码材料在独立暂存目录中组装。
     $nativeSource = Join-Path $nativeCache 'native'
     $nativeDestination = Join-Path $data 'bin/fff-native-11'
     [IO.Directory]::CreateDirectory($nativeDestination) | Out-Null
@@ -86,55 +95,66 @@ try {
         [IO.Directory]::CreateDirectory($destination) | Out-Null
         Get-ChildItem -LiteralPath $component.FullName -File | Copy-Item -Destination $destination
     }
-    Copy-Item -LiteralPath (Join-Path $ariaCache 'aria2-next-v2.8.3-source.tar.gz') -Destination (Join-Path $licenses 'aria2-next')
-    $thirdPartySources = Join-Path $licenses 'sources'
-    [IO.Directory]::CreateDirectory($thirdPartySources) | Out-Null
-    foreach ($artifact in $licenseSourceLock.artifacts) { Copy-Item -LiteralPath (Join-Path $licenseSourceCache $artifact.file) -Destination $thirdPartySources }
     Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'third-party-sources.lock.json') -Destination $licenses
+    Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'fff-native.lock.json') -Destination (Join-Path $licenses 'FFF.Native')
+    Copy-Item -LiteralPath (Join-Path $sevenCache 'extra/License.txt') -Destination (Join-Path $licenses '7zip')
     $ownLicenseDirectory = Join-Path $licenses 'VideoEnhancer'
     [IO.Directory]::CreateDirectory($ownLicenseDirectory) | Out-Null
     Get-ChildItem -LiteralPath (Join-Path $projectRoot 'LICENSES') -File | Copy-Item -Destination $ownLicenseDirectory
     $snapshotJson = $sourceSnapshot | ConvertTo-Json -Depth 6
-    [IO.File]::WriteAllText((Join-Path $ownLicenseDirectory 'SOURCE-SNAPSHOT.json'), $snapshotJson, [Text.UTF8Encoding]::new($false))
-    $sourceArchivePath = Join-Path $ownLicenseDirectory "VideoEnhancer-$version-source.zip"
-    $sourceList = Join-Path $stage 'source-files.txt'
-    try {
-        [IO.File]::WriteAllLines($sourceList, [string[]]$sourceSnapshot.files.path, [Text.UTF8Encoding]::new($false))
-        Add-Zip $sourceArchivePath $projectRoot @("@$sourceList")
-        Add-Zip $sourceArchivePath $ownLicenseDirectory @('SOURCE-SNAPSHOT.json')
-    } finally { if (Test-Path -LiteralPath $sourceList) { Remove-Item -LiteralPath $sourceList } }
-    $latestSnapshot = & (Join-Path $PSScriptRoot 'Source-Snapshot.ps1')
-    if ($latestSnapshot.sha256 -ne $sourceSnapshot.sha256) { throw '打包过程中源码发生变化，请重新构建' }
-    $sourceArchiveSha256 = (Get-FileHash -LiteralPath $sourceArchivePath -Algorithm SHA256).Hash.ToLowerInvariant()
-    $sourceNotice = "VideoEnhancer $version 对应源码" + [Environment]::NewLine +
+    foreach ($destination in @($ownLicenseDirectory, $sourceMaterials)) {
+        [IO.File]::WriteAllText((Join-Path $destination 'SOURCE-SNAPSHOT.json'), $snapshotJson, [Text.UTF8Encoding]::new($false))
+    }
+    $thirdPartySources = Join-Path $sourceMaterials 'third-party-sources'
+    [IO.Directory]::CreateDirectory($thirdPartySources) | Out-Null
+    foreach ($artifact in $licenseSourceLock.artifacts) { Copy-Item -LiteralPath (Join-Path $licenseSourceCache $artifact.file) -Destination $thirdPartySources }
+    foreach ($component in @('aria2-next', '7zip')) { [IO.Directory]::CreateDirectory((Join-Path $thirdPartySources $component)) | Out-Null }
+    Copy-Item -LiteralPath (Join-Path $ariaCache 'aria2-next-v2.8.3-source.tar.gz') -Destination (Join-Path $thirdPartySources 'aria2-next')
+    Copy-Item -LiteralPath (Join-Path $sevenCache '7z2603-src.tar.xz') -Destination (Join-Path $thirdPartySources '7zip')
+    $sourceManifest = [ordered]@{ schemaVersion = 1; id = 'videoenhancer'; version = $version; license = 'AGPL-3.0-only'; installationArchive = $packageName; binarySha256 = $binarySha256; sourceSnapshot = $sourceSnapshot.sha256 }
+    [IO.File]::WriteAllText((Join-Path $sourceMaterials 'source-manifest.json'), ($sourceManifest | ConvertTo-Json), [Text.UTF8Encoding]::new($false))
+    $sourceGuide = "VideoEnhancer $version 对应源码" + [Environment]::NewLine +
+        "配套安装包：$packageName" + [Environment]::NewLine +
         "源码清单 SHA-256：$($sourceSnapshot.sha256)" + [Environment]::NewLine +
-        "插件 DLL SHA-256：$((Get-FileHash -LiteralPath $pluginPath -Algorithm SHA256).Hash.ToLowerInvariant())" + [Environment]::NewLine +
-        "源码归档 SHA-256：$sourceArchiveSha256" + [Environment]::NewLine +
-        "解压源码后，按 README.md 使用 .NET 10 SDK 与 PowerShell 7 执行 ./release/Build-Zip.ps1。" + [Environment]::NewLine +
-        "构建时校验下载依赖；许可范围见 LICENSING.md，版权与条款随源码保留。" + [Environment]::NewLine
+        "插件 DLL SHA-256：$binarySha256" + [Environment]::NewLine +
+        "插件源码在本包根目录，第三方版本源码与构建配方在 third-party-sources。" + [Environment]::NewLine +
+        "许可原文保留在 LICENSES 与 Backend/third-party；版本及校验值见 release 中的锁定清单。" + [Environment]::NewLine +
+        "解压后按 README.md 使用 .NET 10 SDK 与 PowerShell 7 执行 ./release/Build-Zip.ps1 或 ./Install.ps1。" + [Environment]::NewLine +
+        "本包与安装包必须在同一 Release 免费提供；发布与镜像时同时保留两包及各自的 .sha256 校验文件。" + [Environment]::NewLine
+    [IO.File]::WriteAllText((Join-Path $sourceMaterials 'SOURCE.txt'), $sourceGuide, [Text.UTF8Encoding]::new($false))
+    $temporarySourcePackage = Join-Path $stage $sourcePackageName
+    $sourceList = Join-Path $stage 'source-files.txt'
+    [IO.File]::WriteAllLines($sourceList, [string[]]$sourceSnapshot.files.path, [Text.UTF8Encoding]::new($false))
+    Add-Zip $temporarySourcePackage $projectRoot @("@$sourceList")
+    Add-Zip $temporarySourcePackage $sourceMaterials @('.')
+    $sourceArchiveSha256 = (Get-FileHash -LiteralPath $temporarySourcePackage -Algorithm SHA256).Hash.ToLowerInvariant()
+    $sourceNotice = "VideoEnhancer $version 对应源码下载" + [Environment]::NewLine +
+        "源码包：$sourcePackageName（与安装包在同一 Release 单独提供，使用插件无需解压源码包）" + [Environment]::NewLine +
+        "下载地址：$sourceUrl" + [Environment]::NewLine +
+        "源码包 SHA-256：$sourceArchiveSha256" + [Environment]::NewLine +
+        "源码清单 SHA-256：$($sourceSnapshot.sha256)" + [Environment]::NewLine +
+        "插件 DLL SHA-256：$binarySha256" + [Environment]::NewLine +
+        "源码包包含完整插件源码、构建与安装脚本、许可原文和所分发第三方组件的对应源码。" + [Environment]::NewLine +
+        "发布与镜像时应同时提供两包，并保持上述源码下载地址免费、有效。" + [Environment]::NewLine
     [IO.File]::WriteAllText((Join-Path $ownLicenseDirectory 'SOURCE.txt'), $sourceNotice, [Text.UTF8Encoding]::new($false))
-    Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'fff-native.lock.json') -Destination (Join-Path $licenses 'FFF.Native')
-    $sevenCache = Join-Path $projectRoot 'Backend/obj/third-party/7zip/26.03'
-    Copy-Item -LiteralPath (Join-Path $sevenCache 'extra/License.txt') -Destination (Join-Path $licenses '7zip')
-    Copy-Item -LiteralPath (Join-Path $sevenCache '7z2603-src.tar.xz') -Destination (Join-Path $licenses '7zip')
-    Copy-Item -LiteralPath (Join-Path $projectRoot 'Backend/third-party/7zip/SOURCE.txt') -Destination (Join-Path $licenses '7zip')
     Copy-Item -LiteralPath (Join-Path $projectRoot 'Backend/THIRD-PARTY-NOTICES.txt') -Destination $data
     Copy-Item -LiteralPath (Join-Path $projectRoot 'LICENSE') -Destination (Join-Path $data 'LICENSE.txt')
-    Copy-Item -LiteralPath (Join-Path $projectRoot 'README.md') -Destination (Join-Path $data 'README.md')
-    Copy-Item -LiteralPath (Join-Path $projectRoot 'DEPENDENCIES-LICENSES.md') -Destination $data
-    Copy-Item -LiteralPath (Join-Path $projectRoot 'LICENSING.md') -Destination $data
-    $manifest = [ordered]@{ id = 'videoenhancer'; version = $version; extApi = '2.5.0'; lakeUi = '5.112.0'; entry = 'videoenhancer.ext.3fui.dll'; runtime = 'videoenhancer'; distribution = 'zip'; license = 'AGPL-3.0-only'; sourceSnapshot = $sourceSnapshot.sha256; sourceArchive = "videoenhancer/licenses/VideoEnhancer/VideoEnhancer-$version-source.zip"; sourceSha256 = $sourceArchiveSha256 }
-    [IO.File]::WriteAllText((Join-Path $stage 'videoenhancer.manifest.json'), ($manifest | ConvertTo-Json), [Text.UTF8Encoding]::new($false))
-    $package = Join-Path $outputRoot "VideoEnhancer-$version-win-x64.zip"
-    $temporaryPackage = Join-Path $outputRoot ('.package-' + [Guid]::NewGuid().ToString('N') + '.zip')
-    try {
-        Add-Zip $temporaryPackage $stage @('.')
-        [IO.File]::Move($temporaryPackage, $package, $true)
-    } finally { if (Test-Path -LiteralPath $temporaryPackage) { Remove-Item -LiteralPath $temporaryPackage } }
-    $hash = (Get-FileHash -LiteralPath $package -Algorithm SHA256).Hash.ToLowerInvariant()
-    [IO.File]::WriteAllText($package + '.sha256', "$hash  $([IO.Path]::GetFileName($package))`n", [Text.UTF8Encoding]::new($false))
-    Write-Output $package
-    Write-Output "SHA-256: $hash"
+    foreach ($name in @('README.md', 'DEPENDENCIES-LICENSES.md', 'LICENSING.md')) { Copy-Item -LiteralPath (Join-Path $projectRoot $name) -Destination $data }
+    $manifest = [ordered]@{ id = 'videoenhancer'; version = $version; extApi = '2.5.0'; lakeUi = '5.112.0'; entry = 'videoenhancer.ext.3fui.dll'; runtime = 'videoenhancer'; distribution = 'zip'; license = 'AGPL-3.0-only'; sourceSnapshot = $sourceSnapshot.sha256; sourceArchive = $sourcePackageName; sourceUrl = $sourceUrl; sourceSha256 = $sourceArchiveSha256 }
+    [IO.File]::WriteAllText((Join-Path $installationStage 'videoenhancer.manifest.json'), ($manifest | ConvertTo-Json), [Text.UTF8Encoding]::new($false))
+    $temporaryPackage = Join-Path $stage $packageName
+    Add-Zip $temporaryPackage $installationStage @('.')
+    $latestSnapshot = & (Join-Path $PSScriptRoot 'Source-Snapshot.ps1')
+    if ($latestSnapshot.sha256 -ne $sourceSnapshot.sha256) { throw '打包过程中源码发生变化，请重新构建' }
+    # 两个包均生成成功且快照仍一致，才替换最终发布文件。
+    foreach ($temporary in @($temporarySourcePackage, $temporaryPackage)) {
+        $package = Join-Path $outputRoot ([IO.Path]::GetFileName($temporary))
+        $hash = (Get-FileHash -LiteralPath $temporary -Algorithm SHA256).Hash.ToLowerInvariant()
+        [IO.File]::Move($temporary, $package, $true)
+        [IO.File]::WriteAllText($package + '.sha256', "$hash  $([IO.Path]::GetFileName($package))`n", [Text.UTF8Encoding]::new($false))
+        Write-Output $package
+        Write-Output "SHA-256: $hash"
+    }
 } finally {
     # 仅删除本次创建的 ZIP 暂存目录，先验证绝对路径与输出根目录的关系。
     $resolvedStage = [IO.Path]::GetFullPath($stage)

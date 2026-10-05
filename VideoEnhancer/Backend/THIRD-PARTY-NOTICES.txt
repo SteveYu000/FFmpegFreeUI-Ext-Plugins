@@ -5,13 +5,16 @@ VideoEnhancer 第三方组件声明
 licenses/VideoEnhancer/AGPL-3.0-only.txt。独立自有源码保留 MIT，
 原版权和许可见 LICENSE.txt、licenses/VideoEnhancer/MIT.txt。
 适用范围见 LICENSING.md；不能将整个 ZIP 或 AI 环境统一标为 MIT。
-完整插件对应源码、构建脚本和校验清单位于 licenses/VideoEnhancer。
+对应源码以同版本 VideoEnhancer-<版本>-source.zip 在同一 Release 单独提供，
+名称、下载地址和哈希见 licenses/VideoEnhancer/SOURCE.txt。源码包根目录保留
+完整插件源码、构建安装脚本和校验清单，third-party-sources 保留第三方源码。
 
 RVE 集成
 --------
 https://github.com/TNTwise/REAL-Video-Enhancer
 BackendServices.cs 的 RVE 适配与 embedded-tools Python 模块采用 AGPL-3.0-only。
-原始许可、来源和参考源码见 licenses/RVE；架构与模型各自授权。
+原始许可与来源见 licenses/RVE，参考源码在独立源码包的 third-party-sources；
+架构与模型各自授权。
 参考提交 8541c46ca14e6f84fc86c5b9d3b75373e25732e5 不代表所有按需运行包。
 
 aria2-next 2.8.3
@@ -19,15 +22,17 @@ aria2-next 2.8.3
 独立进程下载工具，安装至 bin/aria2-next/aria2-next.exe。
 https://github.com/AnInsomniacy/aria2-next
 GPL-2.0-or-later；原始 COPYING、AUTHORS、依赖声明、SOURCE.txt 及
-同版完整源码（包含 third_party 依赖和构建配置）见 licenses/aria2-next。
+同版完整源码（包含 third_party 依赖和构建配置）在独立源码包的
+third-party-sources/aria2-next；源码获取位置见 licenses/VideoEnhancer/SOURCE.txt。
 
 7-Zip Extra 26.03
 ----------------
 独立进程的 x64 7za.exe 用于全部支持格式的解压，随 ZIP 安装至 bin/7zip。
 单 DLL 首次使用也可释放同版工具；不支持 RAR。
 https://github.com/ip7z/7zip
-LGPL-2.1-or-later，部分 BSD。程序、License.txt、SOURCE.txt 与完整源码
-内嵌于 DLL，原始声明及 7z2603-src.tar.xz 也随 ZIP 位于 licenses/7zip。
+LGPL-2.1-or-later，部分 BSD。程序、License.txt、SOURCE.txt 内嵌于 DLL；
+安装包 licenses/7zip 保留原始声明。同版 7z2603-src.tar.xz 在独立源码包的
+third-party-sources/7zip 提供，下载位置见 licenses/VideoEnhancer/SOURCE.txt。
 
 原生预览库
 ----------
@@ -47,7 +52,7 @@ zlib 1.3.2：Zlib，licenses/zlib/LICENSE。
 
 本软件部分功能基于 FreeType Team 的工作，FreeType 项目：https://freetype.org/。
 原始版权及免责声明在随包 FTL.TXT 中保留。
-八个库的完整源码和固定 vcpkg baseline 构建配方见 licenses/sources，
+八个库的完整源码和固定 vcpkg baseline 构建配方见独立源码包的 third-party-sources，
 哈希与官方地址见 licenses/third-party-sources.lock.json。
 所有原生库均为可替换的独立 DLL；不限制 LGPL 许可授予的修改与调试权利。
 上游未提供官方 DLL 的完整编译日志，不声称已复现逐字节相同的二进制。

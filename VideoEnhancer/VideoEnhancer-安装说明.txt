@@ -67,5 +67,10 @@ LakeUI 5.112 或更新的 5.x；.NET 10 Desktop Runtime（x64）。
 七、许可与源码
 发行的插件 DLL 采用 AGPL-3.0-only；独立 MIT 源码和第三方组件的授权分别保留。
 完整范围见 videoenhancer/LICENSING.md；第三方详情见 DEPENDENCIES-LICENSES.md。
-本次插件构建对应源码在 videoenhancer/licenses/VideoEnhancer 内，
-第三方源码、原始许可与构建配方在 videoenhancer/licenses 内。
+安装包只需 VideoEnhancer-<版本>-win-x64.zip；使用插件无需下载或安装源码包。
+同一 Release 免费提供 VideoEnhancer-<版本>-source.zip 对应源码包，
+其中根目录为完整插件源码，third-party-sources 为第三方版本源码和构建配方。
+安装包内的原始许可保留在 videoenhancer/licenses；源码包名称、下载地址和 SHA-256
+见 videoenhancer/licenses/VideoEnhancer/SOURCE.txt 和 videoenhancer.manifest.json。
+源码包的 SOURCE-SNAPSHOT.json、source-manifest.json 可核对与插件 DLL 的对应关系。
+发布和镜像时应同时保留两包及各自的 .sha256 校验文件，并保持源码免费可下载。

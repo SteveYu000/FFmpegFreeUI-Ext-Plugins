@@ -22,7 +22,8 @@ internal static partial class Program
         Check(Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(executable))) == "EDBEE35370E14030E4C785CF88200F42DC651C1EB4217C1E3963C38A12F099B0",
             "释放的解压器与锁定的官方 7za 字节一致");
         Check(File.Exists(Path.Combine(runtime, "licenses", "7zip", "License.txt")) &&
-            File.Exists(Path.Combine(runtime, "licenses", "7zip", "7z2603-src.tar.xz")), "7za 许可与对应源码一起释放");
+            File.Exists(Path.Combine(runtime, "licenses", "7zip", "SOURCE.txt")), "7za 许可与源码获取说明一起释放");
+        Check(!File.Exists(Path.Combine(runtime, "licenses", "7zip", "7z2603-src.tar.xz")), "运行目录不释放第三方源码归档");
         Check(assembly.GetType("VideoEnhancer.ManagedArchiveExtractor") is null, "合并 DLL 没有托管解压和托管打包辅助类");
 
         string source = Path.Combine(_root, "archive-source");

@@ -2,7 +2,7 @@
 
 面向 FFmpegFreeUI API Extended Edition 的视频 AI 增强插件，前端和后端合并发布为 `videoenhancer.ext.3fui.dll`。
 
-发行的插件 DLL 采用 AGPL-3.0-only，独立自有源码保留 MIT；[许可范围](LICENSING.md) 明确列出例外及第三方边界。完整对应源码和许可材料随 ZIP 提供。
+发行的插件 DLL 采用 AGPL-3.0-only，独立自有源码保留 MIT；[许可范围](LICENSING.md) 明确列出例外及第三方边界。安装包保留许可声明；完整对应源码以独立源码 ZIP 在同一 Release 提供。
 
 需要 Ext API 2.5、LakeUI 5.112 或更新的 5.x，以及 .NET 10 Desktop Runtime。插件不引用 FFmpegFreeUI 主程序集，不提供旧宿主兼容入口。
 
@@ -37,7 +37,9 @@
 
 ## 安装
 
-关闭宿主，将 `VideoEnhancer-0.1.0-win-x64.zip` 解压到宿主的 `Plugin` 目录。若存在旧的 `Plugin/videoenhancer.3fui.dll`，关闭宿主后删除该文件。ZIP 根目录附有 [中文安装说明](VideoEnhancer-安装说明.txt)，包含目录布局、首次使用、升级和常见问题。ZIP 包含插件 DLL、FFF.Native 预览库及配套 DLL、aria2-next、7za、许可及对应源码；Python / RVE、RTX 运行组件和模型在“视频超分 → 模型下载”中按需安装。
+关闭宿主，将 `VideoEnhancer-0.1.0-win-x64.zip` 解压到宿主的 `Plugin` 目录。若存在旧的 `Plugin/videoenhancer.3fui.dll`，关闭宿主后删除该文件。ZIP 根目录附有 [中文安装说明](VideoEnhancer-安装说明.txt)，包含目录布局、首次使用、升级和常见问题。安装 ZIP 包含插件 DLL、FFF.Native 预览库及配套 DLL、aria2-next、7za、许可及源码获取说明；Python / RVE、RTX 运行组件和模型在“视频超分 → 模型下载”中按需安装。
+
+同一 Release 另行提供 `VideoEnhancer-0.1.0-source.zip`，包含本次构建的完整插件源码、第三方版本源码与构建配方，使用插件时无需安装源码包。两包各附 `.sha256` 文件；安装包的 `videoenhancer/licenses/VideoEnhancer/SOURCE.txt` 和发行元数据记录源码包下载地址与哈希，源码包的 `source-manifest.json` 记录配套 DLL 哈希。发布及镜像时应同时免费提供两包。
 
 从源码安装：
 
@@ -65,8 +67,8 @@ python -B tests/FrameBackendTests.py
 
 `Frontend` 为 VB / LakeUI 界面，`Backend` 为 C# 服务与处理链，自有托管代码构建后合并为一个 DLL。预览原生库由 `release/acquire-fff-native.ps1` 按 `release/fff-native.lock.json` 下载和校验，缓存到 `Frontend/obj/third-party/fff-native/2026.8.18/native`；源码仓库不保存 DLL。固定的官方 FFF.Player 2026.8.18 下载包仅用于读取其中的 API 11 原生库。十个 DLL 随 ZIP 放入 `videoenhancer/bin/fff-native-11`，构建输出采用相同布局，预览直接加载这些文件。有效缓存可离线复用，最终用户无需额外下载预览库。全部安装和模型导入的解压统一使用固定版 7za（多线程），保留路径、链接和加密项检查以及取消和进度报告。支持 ZIP、7z、TAR、GZ、XZ、ZST，压缩 TAR 自动进行第二层解包；不支持 RAR。发行 ZIP、对应源码 ZIP 的打包与源码安装的解压也使用构建缓存中的 7za。界面通过类型化服务调用管理操作，不解析插件命令行输入。RVE / Python、FFmpeg、RTX 和 aria2-next 保留各自的外部进程协议。
 
-源码与发行 DLL 的许可范围见 [LICENSING.md](LICENSING.md)，完整正文位于 `LICENSES`。RVE 的 AGPL 集成、RTX 专有组件、FFF.Native 及配套库原始许可与版本源码见 [依赖许可说明](DEPENDENCIES-LICENSES.md)。构建会把源码清单内嵌到 DLL，打包时核验同一快照，并将对应插件源码和第三方源码归档放入 ZIP；旧 DLL 与新源码不匹配时拒绝打包。
+源码与发行 DLL 的许可范围见 [LICENSING.md](LICENSING.md)，完整正文位于 `LICENSES`。RVE 的 AGPL 集成、RTX 专有组件、FFF.Native 及配套库原始许可与版本源码见 [依赖许可说明](DEPENDENCIES-LICENSES.md)。构建会把源码清单内嵌到 DLL，打包时核验同一快照，并生成安装 ZIP 与独立源码 ZIP；旧 DLL 与新源码不匹配时拒绝打包。
 
 默认数据目录为 DLL 同目录下的 `videoenhancer`。可用 `VIDEOENHANCER_ROOT` 指定数据目录（支持环境变量展开、相对 DLL 目录的路径），用 `VIDEOENHANCER_FFMPEG` 指定 FFmpeg。`VIDEOENHANCER_ROOT` 只重定向数据目录，随 ZIP 安装的预览原生库仍从插件安装目录加载。项目引用和构建脚本采用相对路径、NuGet 或环境变量，不依赖开发机其他仓库目录。
 
-发行包只生成 ZIP 及 SHA-256 校验文件，不生成 EXE 安装包、自更新安装器或分发安装包页面。
+发行时生成 `VideoEnhancer-<版本>-win-x64.zip` 安装包和 `VideoEnhancer-<版本>-source.zip` 对应源码包，各附 SHA-256 校验文件；不生成 EXE 安装包、自更新安装器或分发安装包页面。
