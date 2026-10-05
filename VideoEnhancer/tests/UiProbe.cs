@@ -12,6 +12,7 @@ internal static partial class Program
     {
         string fixture = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", ".test-tools", "ui-probe-data"));
         Directory.CreateDirectory(fixture);
+        CreateInstalledModelFixtures(Path.Combine(fixture, "models"));
         AppDomain.CurrentDomain.UnhandledException += (_, e) => File.WriteAllText(Path.Combine(fixture, "ui-probe-error.txt"), e.ExceptionObject.ToString());
         Environment.SetEnvironmentVariable("VIDEOENHANCER_ROOT", fixture);
         Application.SetHighDpiMode(HighDpiMode.PerMonitorV2);
@@ -20,6 +21,7 @@ internal static partial class Program
         context.Resolving += (load, name) => AssemblyLoadContext.Default.Assemblies.FirstOrDefault(assembly => assembly.GetName().Name == name.Name) ??
             (File.Exists(Path.Combine(AppContext.BaseDirectory, name.Name + ".dll")) ? AssemblyLoadContext.Default.LoadFromAssemblyPath(Path.Combine(AppContext.BaseDirectory, name.Name + ".dll")) : null);
         var assembly = context.LoadFromAssemblyPath(Path.GetFullPath(Path.Combine(fixture, "..", "..", "dist", "videoenhancer.ext.3fui.dll")));
+        assembly.GetType("VideoEnhancer.BackendServices", true)!.GetMethod("ConfigureRuntime")!.Invoke(null, [fixture]);
         var configType = assembly.GetType("videoenhancer.PluginConfig", true)!;
         var panelType = assembly.GetType("videoenhancer.PluginPanel", true)!;
         object Config()
@@ -69,7 +71,8 @@ internal static partial class Program
         Button("使用教程", () => {
             parameters.Visible = false; tools.Visible = true; tools.BringToFront();
             var tabs = panelType.GetField("_tabs", BindingFlags.NonPublic | BindingFlags.Instance)!.GetValue(tools)!;
-            tabs.GetType().GetProperty("SelectedIndex")!.SetValue(tabs, 5);
+            tabs.GetType().GetProperty("SelectedIndex")!.SetValue(tabs,
+                (int)panelType.GetField("_tabIndexTutorial", BindingFlags.NonPublic | BindingFlags.Instance)!.GetValue(tools)!);
             var page = panelType.GetField("_pageTutorial", BindingFlags.NonPublic | BindingFlags.Instance)!.GetValue(tools)!;
             panelType.GetMethod("EnsureMarkdownPage", BindingFlags.NonPublic | BindingFlags.Instance)!.Invoke(tools, [page]);
         });

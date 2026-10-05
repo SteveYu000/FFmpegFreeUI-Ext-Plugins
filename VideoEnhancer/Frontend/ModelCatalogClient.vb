@@ -33,6 +33,13 @@ Namespace videoenhancer
                 Select(Function(group) group.First()).ToList()
         End Function
 
+        Friend Shared Function RunInstalledModelCatalog() As List(Of ModelCatalogItem)
+            Dim json = ReadResult(New BackendRequest(BackendAction.ListInstalledModelCatalog), 180000)
+            If String.IsNullOrWhiteSpace(json) Then Return New List(Of ModelCatalogItem)()
+            Return JsonSerializer.Deserialize(Of List(Of ModelCatalogItem))(json, New JsonSerializerOptions With {.PropertyNameCaseInsensitive = True}).
+                Where(Function(item) item IsNot Nothing AndAlso Not String.IsNullOrWhiteSpace(item.RelativePath)).ToList()
+        End Function
+
         Friend Shared Function RunUserModelList() As List(Of UserModelItem)
             Dim json = ReadResult(New BackendRequest(BackendAction.ListUserModels), 30000)
             If String.IsNullOrWhiteSpace(json) Then Return New List(Of UserModelItem)()

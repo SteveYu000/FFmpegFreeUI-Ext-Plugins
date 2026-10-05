@@ -393,15 +393,13 @@ Namespace videoenhancer
             Dim root As New ModernContextMenu()
             ConfigureModelMenu(root, reserveIconColumn:=False)
             Dim tooltipEntries As New Dictionary(Of ModernContextMenu.ModernMenuItem, String)()
-            For Each group In catalog.GroupBy(Function(item) If(String.IsNullOrWhiteSpace(item.ArchitectureGroup), If(String.IsNullOrWhiteSpace(item.Architecture), "其他模型", item.Architecture), item.ArchitectureGroup)).
+            For Each group In catalog.GroupBy(Function(item) ModelDescriptionProvider.ModelArchitectureGroup(item), StringComparer.OrdinalIgnoreCase).
                     OrderBy(Function(item) item.Key, StringComparer.CurrentCultureIgnoreCase)
                 Dim submenu As New ModernContextMenu()
                 ConfigureModelMenu(submenu, reserveIconColumn:=True)
                 For Each entry In group.OrderBy(Function(item) item.DisplayName, StringComparer.CurrentCultureIgnoreCase)
                     Dim selectedEntry = entry
-                    Dim suffix = If(entry.Scale > 0 AndAlso Not interpolation, "  · " & entry.Scale.ToString() & "x", "")
-                    If String.Equals(entry.Source, "user", StringComparison.OrdinalIgnoreCase) Then suffix &= "  [用户]"
-                    Dim child As New ModernContextMenu.ModernMenuItem(entry.DisplayName & suffix) With {
+                    Dim child As New ModernContextMenu.ModernMenuItem(ModelDescriptionProvider.ModelDisplayText(entry, interpolation)) With {
                         .Checked = String.Equals(entry.Id, If(interpolation, _config.InterpModel, _config.Model), StringComparison.OrdinalIgnoreCase),
                         .CloseOnClick = True
                     }

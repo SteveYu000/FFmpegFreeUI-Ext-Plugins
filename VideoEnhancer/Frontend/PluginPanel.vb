@@ -419,7 +419,7 @@ Namespace videoenhancer
         End Sub
 
         Private Function PluginPages() As ModernPanel()
-            Return New ModernPanel() {_pageUpscale, _pageHome, _pagePreview, _pageDownloader, _pageConverter, _pageImporter, _pageSegmented, _pageTutorial}
+            Return New ModernPanel() {_pageUpscale, _pageHome, _pagePreview, _pageModelManagement, _pageDownloader, _pageConverter, _pageImporter, _pageSegmented, _pageTutorial}
         End Function
 
         Public ReadOnly Property IsEnabled As Boolean
@@ -523,6 +523,7 @@ Namespace videoenhancer
             _tabs.AnimationDuration = 0
             BuildHomePage()
             BuildOfficialPreviewPage()
+            BuildModelManagementPage()
             BuildOfficialModelDownloadPage()
             BuildOfficialConverterPage()
             BuildOfficialImporterPage()
@@ -535,6 +536,7 @@ Namespace videoenhancer
             Next
             _tabs.Items.Add(New ModernTabListControl.ModernTabPage() With {.Text = "首页", .BoundControl = _pageHome})
             _tabs.Items.Add(New ModernTabListControl.ModernTabPage() With {.Text = "实时预览", .BoundControl = _pagePreview})
+            _tabs.Items.Add(New ModernTabListControl.ModernTabPage() With {.Text = "模型管理", .BoundControl = _pageModelManagement})
             _tabs.Items.Add(New ModernTabListControl.ModernTabPage() With {.Text = "模型下载", .BoundControl = _pageDownloader})
             _tabIndexDownloader = _tabs.Items.Count - 1
             _tabs.Items.Add(New ModernTabListControl.ModernTabPage() With {.Text = "模型转换", .BoundControl = _pageConverter})

@@ -14,7 +14,6 @@ Namespace videoenhancer
         Private _parameterContext As IExtPluginPageContext
         Private ReadOnly _pageHome As New SmoothScrollPanel()
         Private ReadOnly _homeTasks As New UltraDetailListView()
-        Private ReadOnly _homeModels As New UltraDetailListView()
         Private ReadOnly _homeSettings As New LakeTextLabel()
         Private ReadOnly _homeMessage As New LakeTextLabel()
         Private ReadOnly _btnZipUpdate As New ModernButton()
@@ -53,14 +52,13 @@ Namespace videoenhancer
             _pageHome.ScrollBarTrackColor = UiSurface
             _pageHome.ScrollBarThumbColor = UiScrollThumb
             _pageHome.ScrollBarThumbHoverColor = UiScrollThumbHover
-            Dim root As New ModernGridPanel With {.ColumnCount = 1, .RowCount = 7, .Padding = New Padding(12)}
+            Dim root As New ModernGridPanel With {.ColumnCount = 1, .RowCount = 6, .Padding = New Padding(12)}
             root.ColumnStyles.Add(New ColumnStyle(SizeType.Percent, 100))
             For Each rowHeight As Integer In New Integer() {36, 64, 28}
                 root.RowStyles.Add(New RowStyle(SizeType.Absolute, rowHeight))
             Next
-            root.RowStyles.Add(New RowStyle(SizeType.Percent, 50))
-            root.RowStyles.Add(New RowStyle(SizeType.Absolute, 76))
-            root.RowStyles.Add(New RowStyle(SizeType.Percent, 50))
+            root.RowStyles.Add(New RowStyle(SizeType.Percent, 100))
+            root.RowStyles.Add(New RowStyle(SizeType.Absolute, 64))
             root.RowStyles.Add(New RowStyle(SizeType.Absolute, 56))
             root.AddAt(CreateOfficialCaption("视频超分 · v" & PluginUpdater.CurrentVersion, UiText), 0, 0)
             _homeSettings.Dock = DockStyle.Fill
@@ -75,42 +73,29 @@ Namespace videoenhancer
             ConfigureDpiListColumns(_homeTasks, 180)
             AddHandler _homeTasks.ItemDoubleClick, AddressOf ShowHomeTaskDetails
             root.AddAt(_homeTasks, 0, 3)
-            Dim actions As New ModernGridPanel With {.ColumnCount = 4, .RowCount = 2, .Dock = DockStyle.Fill, .Margin = New Padding(0, 8, 0, 8)}
-            For index = 0 To 3
-                actions.ColumnStyles.Add(New ColumnStyle(SizeType.Percent, 25))
-            Next
-            actions.RowStyles.Add(New RowStyle(SizeType.Absolute, 24))
+            Dim actions As New ModernGridPanel With {.ColumnCount = 2, .RowCount = 1, .Dock = DockStyle.Fill, .Margin = New Padding(0, 8, 0, 8)}
+            actions.ColumnStyles.Add(New ColumnStyle(SizeType.Percent, 50))
+            actions.ColumnStyles.Add(New ColumnStyle(SizeType.Percent, 50))
             actions.RowStyles.Add(New RowStyle(SizeType.Percent, 100))
-            actions.AddAt(CreateOfficialCaption("已安装模型"), 0, 0)
-            actions.SetColumnSpan(actions.Controls(0), 4)
-            Dim refresh As New ModernButton With {.Text = "刷新模型"}
-            Dim remove As New ModernButton With {.Text = "移除所选模型"}
             _btnCheckUpdates.Text = "检查插件更新"
             _btnZipUpdate.Text = "下载 ZIP 更新"
-            Dim buttons = New ModernButton() {refresh, remove, _btnCheckUpdates, _btnZipUpdate}
+            Dim buttons = New ModernButton() {_btnCheckUpdates, _btnZipUpdate}
             For index = 0 To buttons.Length - 1
                 ConfigureSecondaryButton(buttons(index))
                 buttons(index).Dock = DockStyle.Fill
-                buttons(index).Margin = New Padding(0, 0, If(index = 3, 0, 8), 0)
-                actions.AddAt(buttons(index), index, 1)
+                buttons(index).Margin = New Padding(0, 0, If(index = 1, 0, 8), 0)
+                actions.AddAt(buttons(index), index, 0)
             Next
-            AddHandler refresh.Click, Sub() RefreshHomeModels()
-            AddHandler remove.Click, AddressOf RemoveHomeModel
             AddHandler _btnCheckUpdates.Click, AddressOf OnCheckUpdates
             AddHandler _btnZipUpdate.Click, AddressOf OnDownloadPluginUpdate
             root.AddAt(actions, 0, 4)
-            ConfigureHomeList(_homeModels)
-            _homeModels.Columns.AddRange(New UltraDetailListView.ListColumn() {
-                New UltraDetailListView.ListColumn("模型", 300), New UltraDetailListView.ListColumn("位置", 400)})
-            ConfigureDpiListColumns(_homeModels, 180)
-            root.AddAt(_homeModels, 0, 5)
             _homeMessage.Dock = DockStyle.Fill
             _homeMessage.Margin = Padding.Empty
             _homeMessage.ForeColor = UiTextSecondary
-            root.AddAt(_homeMessage, 0, 6)
+            root.AddAt(_homeMessage, 0, 5)
             _pageHome.Controls.Add(root)
             Dim arrange As Action = Sub()
-                Dim height = Math.Max(root.ScaleY(600), _pageHome.ClientSize.Height)
+                Dim height = Math.Max(root.ScaleY(480), _pageHome.ClientSize.Height)
                 root.SetBounds(0, If(_pageHome.VerticalScrollOffset > 0, root.Top, 0),
                     Math.Max(0, _pageHome.ClientSize.Width - root.ScaleX(12)), height)
             End Sub
@@ -121,7 +106,6 @@ Namespace videoenhancer
             AddHandler _pageHome.VisibleChanged, Sub()
                 If _pageHome.Visible Then
                     RefreshHomeInformation()
-                    RefreshHomeModels()
                 End If
             End Sub
             RefreshHomeInformation()
@@ -176,40 +160,6 @@ Namespace videoenhancer
                 dialog.Controls.Add(text)
                 dialog.ShowDialog(Me)
             End Using
-        End Sub
-
-        Private Sub RefreshHomeModels()
-            Dim root = Path.Combine(PluginConfig.ApplicationRoot, "models")
-            _homeModels.Items.Clear()
-            If Not Directory.Exists(root) Then Return
-            For Each modelPath In Directory.EnumerateFiles(root, "*", SearchOption.AllDirectories).
-                Where(Function(p) New String() {".param", ".pth", ".pkl", ".ckpt", ".pt", ".onnx", ".engine", ".safetensors"}.Contains(Path.GetExtension(p).ToLowerInvariant()))
-                Dim row As New UltraDetailListView.ListItem(New UltraDetailListView.ListSubItem() {
-                    New UltraDetailListView.ListSubItem(Path.GetFileNameWithoutExtension(modelPath)),
-                    New UltraDetailListView.ListSubItem(Path.GetRelativePath(root, modelPath))}) With {.Tag = modelPath}
-                _homeModels.Items.Add(row)
-            Next
-        End Sub
-
-        Private Sub RemoveHomeModel(sender As Object, e As EventArgs)
-            If _homeModels.SelectedItem Is Nothing Then Return
-            If EnhancementTaskRegistry.HasActiveTasks Then
-                ShowStatus("增强任务运行时不能移除模型。", True)
-                Return
-            End If
-            Dim modelPath = CStr(_homeModels.SelectedItem.Tag)
-            Dim modelRoot = Path.GetFullPath(Path.Combine(PluginConfig.ApplicationRoot, "models")) & Path.DirectorySeparatorChar
-            If Not Path.GetFullPath(modelPath).StartsWith(modelRoot, StringComparison.OrdinalIgnoreCase) Then Throw New InvalidOperationException("模型路径超出插件目录")
-            If MessageBox.Show(Me, "移除模型：" & Path.GetFileName(modelPath) & "？", "模型管理", MessageBoxButtons.YesNo, MessageBoxIcon.Question) <> DialogResult.Yes Then Return
-            Try
-                BackendServices.RemoveInstalledModel(modelPath)
-                _modelsLoaded = False
-                _interpModelsLoaded = False
-                RefreshHomeModels()
-                ShowStatus("已移除模型：" & Path.GetFileName(modelPath), False)
-            Catch ex As Exception
-                ShowStatus("移除模型失败：" & ex.Message, True)
-            End Try
         End Sub
 
         Private Function FindAncestorWindowChrome() As ThisIsYourWindow

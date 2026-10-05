@@ -125,6 +125,17 @@ Namespace videoenhancer
             Return description
         End Function
 
+        Friend Shared Function ModelArchitectureGroup(entry As ModelCatalogItem) As String
+            Return If(String.IsNullOrWhiteSpace(entry.ArchitectureGroup),
+                If(String.IsNullOrWhiteSpace(entry.Architecture), "其他模型", entry.Architecture), entry.ArchitectureGroup)
+        End Function
+
+        Friend Shared Function ModelDisplayText(entry As ModelCatalogItem, interpolation As Boolean) As String
+            Dim suffix = If(entry.Scale > 0 AndAlso Not interpolation, "  · " & entry.Scale.ToString() & "x", "")
+            If String.Equals(entry.Source, "user", StringComparison.OrdinalIgnoreCase) Then suffix &= "  [用户]"
+            Return entry.DisplayName & suffix
+        End Function
+
         Friend Shared Function ModelTooltipText(entry As ModelCatalogItem,
                                                   interpolation As Boolean) As String
             If entry Is Nothing Then Return ""

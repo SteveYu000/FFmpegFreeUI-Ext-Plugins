@@ -7,7 +7,7 @@ public enum BackendAction
     ListUserModels, InspectUpscaleModel, InspectInterpolationModel, ImportModels,
     UpdateUserModel, DeleteUserModel, PrepareInterpolationEngine, CheckEnvironment,
     ListBackends, ValidateEngines, ListDownloadModels, DownloadModel, DeleteDownloadModel,
-    CleanDownloadArchives, BackendStatus, UpdateBackend
+    CleanDownloadArchives, BackendStatus, UpdateBackend, ListInstalledModelCatalog
 }
 
 public sealed record UserModelCapabilities(string Architecture,string Purpose,int Scale,int InputMultiple,string[] Backends);

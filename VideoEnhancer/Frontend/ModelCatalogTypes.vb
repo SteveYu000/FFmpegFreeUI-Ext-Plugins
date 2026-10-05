@@ -6,6 +6,8 @@ Namespace videoenhancer
         Friend NotInheritable Class ModelCatalogItem
             Public Property Id As String = ""
             Public Property DisplayName As String = ""
+            Public Property RelativePath As String = ""
+            Public Property Task As String = ""
             Public Property ArchitectureGroup As String = ""
             Public Property InferenceScales As Integer() = Array.Empty(Of Integer)()
             Public Property Architecture As String = ""

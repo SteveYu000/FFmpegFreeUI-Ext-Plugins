@@ -17,11 +17,12 @@ internal static partial class Program
     [STAThread]
     static int Main(string[] args)
     {
-        if((args.Length>0&&args[0]=="--ui-probe")||Path.GetFileNameWithoutExtension(Environment.ProcessPath)=="VideoEnhancer.UiProbe")return RunUiProbe();
+        if((args.Length>0&&args[0]=="--ui-probe")||string.Equals(Path.GetFileNameWithoutExtension(Environment.ProcessPath),"VideoEnhancer.UiProbe",StringComparison.OrdinalIgnoreCase))return RunUiProbe();
         if(args.Length>0&&args[0]=="--port")return RtxSidecarFixture.Run(args).GetAwaiter().GetResult();
         if(args.Length>1&&Path.GetFileName(args[0])=="inspect_upscale_models.py"&&Environment.GetEnvironmentVariable("VIDEOENHANCER_TEST_SERVICE_CHILD") is {} marker)
         {
-            File.WriteAllText(marker,Environment.ProcessId.ToString());
+            File.WriteAllText(marker+".tmp",Environment.ProcessId.ToString());
+            File.Move(marker+".tmp",marker);
             Thread.Sleep(TimeSpan.FromSeconds(30));
             return 0;
         }
@@ -49,8 +50,10 @@ internal static partial class Program
             System.Console.WriteLine("运行：TestRvePreview");
             TestRvePreview();
             TestManagementServices();
+            TestInstalledModelCatalog();
             TestModelRemoval();
             TestSegmentFallback();
+            SynchronizationContext.SetSynchronizationContext(null);
             System.Console.WriteLine("运行：TestMediaPipelineAsync");
             TestMediaPipelineAsync().GetAwaiter().GetResult();
             System.Console.WriteLine($"PASS {_checks} 个断言：预设、界面组件、单 DLL、媒体链、错误处理与清理");
@@ -151,7 +154,7 @@ internal static partial class Program
         var tabs=typeof(videoenhancer.PluginPanel).GetField("_tabs",BindingFlags.NonPublic|BindingFlags.Instance)!.GetValue(toolPage)!;
         var items=(System.Collections.IEnumerable)tabs.GetType().GetProperty("Items")!.GetValue(tabs)!;
         var titles=items.Cast<object>().Select(item=>item.GetType().GetProperty("Text")!.GetValue(item)?.ToString()).ToArray();
-        Check(tabs.GetType().Name=="ModernTabListControl"&&titles[0]=="首页","工具使用竖排二级导航且首页在最上方");
+        Check(tabs.GetType().Name=="ModernTabListControl"&&titles.SequenceEqual(new[]{"首页","实时预览","模型管理","模型下载","模型转换","模型导入","使用教程"}),"模型管理位于实时预览下方，后续工具导航保持正确");
         Check(!titles.Any(title=>title is "超分工作台" or "图片超分" or "右键超分" or "分段超分"),"迁移或移除的旧页面不再出现在工具导航");
     }
     private static void TestMergedAssembly()

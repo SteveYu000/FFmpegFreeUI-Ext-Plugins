@@ -265,6 +265,7 @@ public static partial class BackendServices
                 BackendAction.ListInterpolationModels => ListInterpModels(true,request.Backend),
                 BackendAction.ListInterpolationCatalog => ListModelCatalog(true,request.Backend,true),
                 BackendAction.ListUserModels => ListUserModels(true),
+                BackendAction.ListInstalledModelCatalog => ListInstalledModelCatalog(),
                 BackendAction.InspectUpscaleModel => InspectUpscaleModel(request.Path),
                 BackendAction.InspectInterpolationModel => InspectInterpolationModel(request.Path),
                 BackendAction.ImportModels => ImportModels(request.Path,true),
@@ -2522,6 +2523,8 @@ public static partial class BackendServices
     {
         public string Id { get; init; } = "";
         public string DisplayName { get; init; } = "";
+        public string RelativePath { get; init; } = "";
+        public string Task { get; init; } = "";
         public string Architecture { get; init; } = "";
         public string ArchitectureGroup { get; init; } = "";
         public int[] InferenceScales { get; init; } = [];
@@ -2545,7 +2548,6 @@ public static partial class BackendServices
         var entries = new List<ModelListCatalogEntry>();
         foreach (var path in paths)
         {
-            var id = interpolation ? InterpModelDisplayName(path) : UpscaleModelDisplayName(path, backend);
             var user = userModels.FirstOrDefault(item =>
                 UserModelCatalog.NormalizeRelativePath(item.RelativePath, ModelsDir)
                     .Equals(UserModelCatalog.NormalizeRelativePath(path, ModelsDir), StringComparison.OrdinalIgnoreCase));
@@ -2555,27 +2557,8 @@ public static partial class BackendServices
             if (user is not null && !string.IsNullOrWhiteSpace(backend)
                 && !user.Backends.Contains(backend, StringComparer.OrdinalIgnoreCase))
                 continue;
-            ModelCapability? builtIn = null;
-            if (user is null && ModelCapabilityCatalog.TryGet(path, ModelsDir, out var capability)) builtIn = capability;
-            var inspected = !interpolation && builtIn is null ? InspectModelCached(path) : null;
-            var ncnnSignature = !interpolation ? NcnnModelSignatures.Get(path) : null;
-            var architecture = inspected?.Architecture ?? ncnnSignature?.Architecture ?? user?.Architecture ?? builtIn?.Architecture ?? InferArchitecture(id, interpolation);
-            var purpose = user?.Purpose ?? (interpolation ? "Interpolation" : "SR");
-            var scale = inspected?.Scale ?? user?.Scale ?? builtIn?.Scale ?? (int.TryParse(DetectScale(path), out var detected) ? detected : 0);
-            var backends = user?.Backends ?? builtIn?.Backends ?? inspected?.Backends ?? [backend];
-            if (!backends.Contains(backend, StringComparer.OrdinalIgnoreCase)) continue;
-            entries.Add(new ModelListCatalogEntry
-            {
-                Id = id,
-                DisplayName = ModelBaseName(path),
-                Architecture = architecture,
-                ArchitectureGroup = interpolation ? architecture : ModelArchitectureGroups.Get(architecture),
-                InferenceScales = builtIn?.InferenceScales ?? (backends.Contains("flashvsr") ? [2, 4] : []),
-                Purpose = purpose,
-                Scale = scale,
-                Source = user is not null ? "user" : builtIn is not null ? "builtin" : "discovered",
-                Backends = backends,
-            });
+            var entry = CreateModelCatalogEntry(path, backend, interpolation, user);
+            if (entry.Backends.Contains(backend, StringComparer.OrdinalIgnoreCase)) entries.Add(entry);
         }
         entries = entries.OrderBy(item => item.ArchitectureGroup, StringComparer.CurrentCultureIgnoreCase)
             .ThenBy(item => item.DisplayName, StringComparer.CurrentCultureIgnoreCase).ToList();
@@ -2588,6 +2571,38 @@ public static partial class BackendServices
             }
             return 0;
         }
+        return WriteModelCatalogJson(entries);
+    }
+
+    // AI 选择菜单和模型管理共用名称、架构、倍率解析，路径只用于定位实际模型。
+    private static ModelListCatalogEntry CreateModelCatalogEntry(string path, string backend, bool interpolation, UserModelRecord? user)
+    {
+        var id = interpolation ? InterpModelDisplayName(path) : UpscaleModelDisplayName(path, backend);
+        ModelCapability? builtIn = null;
+        if (user is null && ModelCapabilityCatalog.TryGet(path, ModelsDir, out var capability)) builtIn = capability;
+        var inspected = !interpolation && builtIn is null ? InspectModelCached(path) : null;
+        var ncnnSignature = !interpolation ? NcnnModelSignatures.Get(path) : null;
+        var architecture = inspected?.Architecture ?? ncnnSignature?.Architecture ?? user?.Architecture
+            ?? builtIn?.Architecture ?? InferArchitecture(id, interpolation);
+        var backends = user?.Backends ?? builtIn?.Backends ?? inspected?.Backends ?? [backend];
+        return new ModelListCatalogEntry
+        {
+            Id = id,
+            DisplayName = ModelBaseName(path),
+            RelativePath = UserModelCatalog.NormalizeRelativePath(path, ModelsDir),
+            Task = user?.Task ?? (interpolation ? "interpolation" : "upscale"),
+            Architecture = architecture,
+            ArchitectureGroup = interpolation ? architecture : ModelArchitectureGroups.Get(architecture),
+            InferenceScales = builtIn?.InferenceScales ?? (backends.Contains("flashvsr") ? [2, 4] : []),
+            Purpose = user?.Purpose ?? (interpolation ? "Interpolation" : "SR"),
+            Scale = inspected?.Scale ?? user?.Scale ?? builtIn?.Scale ?? (int.TryParse(DetectScale(path), out var scale) ? scale : 0),
+            Source = user is not null ? "user" : builtIn is not null ? "builtin" : "discovered",
+            Backends = backends,
+        };
+    }
+
+    private static int WriteModelCatalogJson(IEnumerable<ModelListCatalogEntry> entries)
+    {
         using var writer = new Utf8JsonWriter(Console.OpenStandardOutput());
         writer.WriteStartArray();
         foreach (var item in entries)
@@ -2595,6 +2610,8 @@ public static partial class BackendServices
             writer.WriteStartObject();
             writer.WriteString("id", item.Id);
             writer.WriteString("displayName", item.DisplayName);
+            writer.WriteString("relativePath", item.RelativePath);
+            writer.WriteString("task", item.Task);
             writer.WriteString("architecture", item.Architecture);
             writer.WriteString("purpose", item.Purpose);
             writer.WriteNumber("scale", item.Scale);

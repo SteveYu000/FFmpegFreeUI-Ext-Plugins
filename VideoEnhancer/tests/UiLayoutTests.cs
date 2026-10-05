@@ -26,8 +26,23 @@ internal static partial class Program
                 "分段页使用 LakeUI 滚动条，避免原生白色滚动条");
         }
         using var tools=new videoenhancer.PluginPanel(new(),previewOnly:true);
-        Check(type.GetField("_homeTasks",flags)!.GetValue(tools) is UltraDetailListView&&
-            type.GetField("_homeModels",flags)!.GetValue(tools) is UltraDetailListView,"首页使用一致的 LakeUI 任务与模型列表");
+        var modelPage=(ModernPanel)type.GetField("_pageModelManagement",flags)!.GetValue(tools)!;
+        var modelList=(UltraDetailListView)type.GetField("_installedModels",flags)!.GetValue(tools)!;
+        Check(type.GetField("_homeTasks",flags)!.GetValue(tools) is UltraDetailListView&&modelPage.Contains(modelList)&&
+            !((Control)type.GetField("_pageHome",flags)!.GetValue(tools)!).Contains(modelList),"模型列表移到独立管理页，首页保留任务列表");
+        foreach(float scale in new[]{1f,1.25f,1.5f,2f})
+        {
+            using var scaled=new videoenhancer.PluginPanel(new(),previewOnly:true);
+            scaled.Scale(new SizeF(scale,scale));
+            var page=(ModernPanel)type.GetField("_pageModelManagement",flags)!.GetValue(scaled)!;
+            page.Size=new Size((int)(520*scale),(int)(360*scale));
+            page.PerformLayout();
+            var grid=page.Controls[0];
+            for(int index=1;index<grid.Controls.Count;index++)
+                Check(grid.Controls[index].Top>=grid.Controls[index-1].Bottom,"模型管理在窄窗口和 DPI 缩放下无重叠："+scale+" / "+index);
+            Check(page.BackColor.A==0&&page.BackColor1.A==0&&page.BackgroundSource is not null,
+                "模型管理页保留宿主透明背景："+scale);
+        }
         var home=(ModernPanel)type.GetField("_pageHome",flags)!.GetValue(tools)!;
         home.Size=new Size(520,440);
         home.PerformLayout();
