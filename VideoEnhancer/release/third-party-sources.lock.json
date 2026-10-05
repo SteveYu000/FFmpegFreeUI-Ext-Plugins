@@ -1,0 +1,118 @@
+{
+  "schemaVersion": 1,
+  "nativeBinaryVersion": "2026.8.18",
+  "vcpkgBaseline": "e03dc9b29710050cd1018bc5674688108658d327",
+  "rveReferenceCommit": "8541c46ca14e6f84fc86c5b9d3b75373e25732e5",
+  "artifacts": [
+    {
+      "component": "FFF_Project",
+      "version": "2026.8.18",
+      "license": "MIT",
+      "file": "FFF_Project-72d3406-source.tar.gz",
+      "url": "https://github.com/Lake1059/FFF_Project/archive/72d3406738413262d2a99b8fc2a678dfdbf31364.tar.gz",
+      "size": 1271908,
+      "sha256": "a94b4b0f08f55057db2a798289417e62759f4f037b2a6947d4ad19cd63b6b790",
+      "sha512": "0ee263612725f342efcc808b116769680d07ea264b1998db53fb95eb7c48d9d31e392d7852679fde514a9c5c7a156a37b7c6db8b044c4845115d868dcb1fd877"
+    },
+    {
+      "component": "vcpkg",
+      "version": "e03dc9b",
+      "license": "MIT",
+      "file": "vcpkg-e03dc9b-source.tar.gz",
+      "url": "https://github.com/microsoft/vcpkg/archive/e03dc9b29710050cd1018bc5674688108658d327.tar.gz",
+      "size": 5250368,
+      "sha256": "079a72dd0e560030dc579a754a187086a537d061e84eb74710882d852add26ae",
+      "sha512": "4578050977d5cf04eefe9adeb79a70f64e81337a1c911f25760be9953f9c11b01de741e1d0404ce12b4e160eed36dff9c431382e01a1244649273592acb5d625"
+    },
+    {
+      "component": "libass",
+      "version": "0.17.4",
+      "license": "ISC",
+      "file": "libass-0.17.4-source.tar.gz",
+      "url": "https://github.com/libass/libass/archive/0.17.4.tar.gz",
+      "size": 341543,
+      "sha256": "c287d180d93dc9c9021872574b618ac49027e84cc90e1289318b1ee68bb42251",
+      "sha512": "08762623dd09e3034699ba9d11b70d1f6cc6b2e3b38aa897b07efef1364e76141df484e70ed27888cf3595b77d072cdb5e8abbbfa560e33ca21f87872e24df8d"
+    },
+    {
+      "component": "Brotli",
+      "version": "1.2.0",
+      "license": "MIT",
+      "file": "brotli-1.2.0-source.tar.gz",
+      "url": "https://github.com/google/brotli/archive/v1.2.0.tar.gz",
+      "size": 646315,
+      "sha256": "816c96e8e8f193b40151dad7e8ff37b1221d019dbcb9c35cd3fadbfe6477dfec",
+      "sha512": "f94542afd2ecd96cc41fd21a805a3da314281ae558c10650f3e6d9ca732b8425bba8fde312823f0a564c7de3993bdaab5b43378edab65ebb798cefb6fd702256"
+    },
+    {
+      "component": "bzip2",
+      "version": "1.0.8",
+      "license": "bzip2-1.0.6",
+      "file": "bzip2-1.0.8-source.tar.gz",
+      "url": "https://sourceware.org/pub/bzip2/bzip2-1.0.8.tar.gz",
+      "size": 810029,
+      "sha256": "ab5a03176ee106d3f0fa90e381da478ddae405918153cca248e682cd0c4a2269",
+      "sha512": "083f5e675d73f3233c7930ebe20425a533feedeaaa9d8cc86831312a6581cefbe6ed0d08d2fa89be81082f2a5abdabca8b3c080bf97218a1bd59dc118a30b9f3"
+    },
+    {
+      "component": "FreeType",
+      "version": "2.14.3",
+      "license": "FTL",
+      "file": "freetype-2.14.3-source.tar.gz",
+      "url": "https://github.com/freetype/freetype/archive/VER-2-14-3.tar.gz",
+      "size": 2515533,
+      "sha256": "dc49de6b01a266eef4876a4dd34d9842c475d3e28ff2eff63bd2fb760ab56261",
+      "sha512": "c3b6b0cc4b428c9c647ab2148386901dfd315273b68051940e8fea6010d46fdd2913467c3ef58be0d499b8e2ef5a0f1a4cc5e739756155587f4f7dff08ef9695"
+    },
+    {
+      "component": "FriBidi",
+      "version": "1.0.16",
+      "license": "LGPL-2.1-or-later",
+      "file": "fribidi-1.0.16-source.tar.gz",
+      "url": "https://github.com/fribidi/fribidi/archive/v1.0.16.tar.gz",
+      "size": 2144176,
+      "sha256": "5a1d187a33daa58fcee2ad77f0eb9d136dd6fa4096239199ba31e850d397e8a8",
+      "sha512": "13d7104f80e1b480d65a4c47fd694f5930222f3db843b8b6c1b6af58c43ee74b08635ce6166d005451498d060e549e4c666aa30c46d4df003d9ad63dba1d854a"
+    },
+    {
+      "component": "HarfBuzz",
+      "version": "14.2.0",
+      "license": "MIT-Modern-Variant",
+      "file": "harfbuzz-14.2.0-source.tar.gz",
+      "url": "https://github.com/harfbuzz/harfbuzz/archive/14.2.0.tar.gz",
+      "size": 37408544,
+      "sha256": "c652d5d94971031654ab3989891a490a895d3e3f2b71171c62692b28e94b1b93",
+      "sha512": "649521b69d5d7328245cabca8b769448f695b0b7e3bf16208ddb1635b29165dfd363a06b1b2831229f6ff722d0e8212fd82054e6b64992552a6a21af238c5cb3"
+    },
+    {
+      "component": "libpng",
+      "version": "1.6.58",
+      "license": "libpng-2.0",
+      "file": "libpng-1.6.58-source.tar.gz",
+      "url": "https://github.com/pnggroup/libpng/archive/v1.6.58.tar.gz",
+      "size": 1592190,
+      "sha256": "a9d4df463d36a6e5f9c29bd6f4967312d17e996c1854f3511f833924eb1993cf",
+      "sha512": "65f54d805e1f7c46a5fc335b984e4cbd4f934e0f02fbf6673c13800b49a4c11fbeb4098eebfb33079527a56c3d933e97631f91ab68dbb31442982784f9241ace"
+    },
+    {
+      "component": "zlib",
+      "version": "1.3.2",
+      "license": "Zlib",
+      "file": "zlib-1.3.2-source.tar.gz",
+      "url": "https://github.com/madler/zlib/archive/v1.3.2.tar.gz",
+      "size": 1566911,
+      "sha256": "b99a0b86c0ba9360ec7e78c4f1e43b1cbdf1e6936c8fa0f6835c0cd694a495a1",
+      "sha512": "16fea4df307a68cf0035858abe2fd550250618a97590e202037acd18a666f57afc10f8836cbbd472d54a0e76539d0e558cb26f059d53de52ff90634bbf4f47d4"
+    },
+    {
+      "component": "RVE",
+      "version": "8541c46c",
+      "license": "AGPL-3.0-only",
+      "file": "RVE-8541c46c-reference-source.tar.gz",
+      "url": "https://github.com/TNTwise/REAL-Video-Enhancer/archive/8541c46ca14e6f84fc86c5b9d3b75373e25732e5.tar.gz",
+      "size": 2041231,
+      "sha256": "807f78d701cf9b08b72aa9ce2585d7151d64afb29b42f40e8e756fd2d61861c9",
+      "sha512": "4e5031a4a495744ec82606ab77d2134c890beda17b4422bac41aa67617c003aaac976455c3161328124eb28e32c9d52e3438eb3ddcf76a4a49b550a9b03441d6"
+    }
+  ]
+}

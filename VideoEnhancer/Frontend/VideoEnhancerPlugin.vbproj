@@ -5,6 +5,8 @@
     <AssemblyName>videoenhancer.3fui</AssemblyName>
     <RootNamespace />
     <Version>0.1.0</Version>
+    <PackageLicenseExpression>AGPL-3.0-only</PackageLicenseExpression>
+    <VideoEnhancerSourceSnapshot>$(MSBuildProjectDirectory)\obj\source\source-snapshot.json</VideoEnhancerSourceSnapshot>
     <UseWindowsForms>true</UseWindowsForms>
     <UseWPF>true</UseWPF>
     <OptionStrict>On</OptionStrict>
@@ -17,6 +19,7 @@
     <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
     <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
     <ILRepackTargetsFile>$(MSBuildProjectDirectory)\ILRepack.targets</ILRepackTargetsFile>
+    <FffNativeCacheDirectory>$(MSBuildProjectDirectory)\obj\third-party\fff-native\2026.8.18</FffNativeCacheDirectory>
   </PropertyGroup>
   <ItemGroup>
     <!-- 宿主提供 SDK 和 LakeUI；插件只合并自身前后端与私有托管依赖。 -->
@@ -25,5 +28,19 @@
     <PackageReference Include="ILRepack.Lib.MSBuild.Task" Version="[2.0.48]" PrivateAssets="all" />
     <ProjectReference Include="..\Backend\VideoEnhancer.Backend.csproj" />
     <EmbeddedResource Include="..\README.md" LogicalName="VideoEnhancer.ExtGuide" />
+    <EmbeddedResource Include="$(VideoEnhancerSourceSnapshot)" LogicalName="VideoEnhancer.SourceSnapshot" />
   </ItemGroup>
+  <ItemGroup>
+    <!-- 显式声明锁定的原生文件，首次构建缓存为空时也能向项目引用传递复制。 -->
+    <_FffNativeFile Include="ass-9.dll;brotlicommon.dll;brotlidec.dll;bz2.dll;FFF.Native.dll;freetype.dll;fribidi-0.dll;harfbuzz.dll;libpng16.dll;z.dll" />
+    <None Include="@(_FffNativeFile->'$(FffNativeCacheDirectory)\native\%(Identity)')" CopyToOutputDirectory="IfDifferent" CopyToPublishDirectory="PreserveNewest">
+      <TargetPath>videoenhancer\bin\fff-native-11\%(Filename)%(Extension)</TargetPath>
+    </None>
+  </ItemGroup>
+  <Target Name="WriteVideoEnhancerSourceSnapshot" BeforeTargets="PrepareForBuild" Condition="'$(DesignTimeBuild)' != 'true'">
+    <Exec Command="pwsh -NoProfile -ExecutionPolicy Bypass -File &quot;$(MSBuildProjectDirectory)\..\release\Source-Snapshot.ps1&quot; -OutputFile &quot;$(VideoEnhancerSourceSnapshot)&quot;" StdOutEncoding="UTF-8" StdErrEncoding="UTF-8" />
+  </Target>
+  <Target Name="AcquireFffNative" BeforeTargets="PrepareForBuild" Condition="'$(DesignTimeBuild)' != 'true'">
+    <Exec Command="pwsh -NoProfile -ExecutionPolicy Bypass -File &quot;$(MSBuildProjectDirectory)\..\release\acquire-fff-native.ps1&quot; -CacheDirectory &quot;$(FffNativeCacheDirectory)&quot;" />
+  </Target>
 </Project>

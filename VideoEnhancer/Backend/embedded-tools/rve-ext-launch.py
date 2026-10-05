@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# RVE 集成模块，修改于 2026-10-05；许可与源码范围见 LICENSING.md。
 """由 Ext 插件提供的 RVE 启动包装器；参数仍直接传给真实 RVE 后端。"""
 from __future__ import annotations
 import argparse

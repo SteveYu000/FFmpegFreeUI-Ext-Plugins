@@ -6,6 +6,7 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <Version>0.1.0</Version>
+    <PackageLicenseExpression>AGPL-3.0-only</PackageLicenseExpression>
     <NuGetAudit>false</NuGetAudit>
     <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
     <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
@@ -19,6 +20,8 @@
     <EmbeddedResource Include="embedded-tools\*.py" LogicalName="VideoEnhancer.Embedded.%(Filename)%(Extension)" />
     <EmbeddedResource Include="model-capabilities.json;ncnn-model-signatures.json;THIRD-PARTY-NOTICES.txt" LogicalName="VideoEnhancer.Embedded.%(Filename)%(Extension)" />
     <EmbeddedResource Include="..\LICENSE" LogicalName="VideoEnhancer.Embedded.LICENSE.txt" />
+    <EmbeddedResource Include="..\LICENSES\AGPL-3.0-only.txt" LogicalName="VideoEnhancer.Embedded.AGPL-3.0-only.txt" />
+    <EmbeddedResource Include="..\LICENSING.md" LogicalName="VideoEnhancer.Embedded.LICENSING.md" />
     <EmbeddedResource Include="third-party\SharpCompress\LICENSE.txt" LogicalName="VideoEnhancer.Embedded.SharpCompress.LICENSE.txt" />
     <EmbeddedResource Include="$(SevenZipCacheDirectory)\extra\x64\7za.exe" LogicalName="VideoEnhancer.Embedded.SevenZip.7za.exe" />
     <EmbeddedResource Include="$(SevenZipCacheDirectory)\extra\License.txt" LogicalName="VideoEnhancer.Embedded.SevenZip.License.txt" />

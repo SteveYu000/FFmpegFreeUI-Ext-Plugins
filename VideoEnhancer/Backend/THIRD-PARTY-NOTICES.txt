@@ -1,66 +1,73 @@
 VideoEnhancer 第三方组件声明
 ===========================
 
-根目录保留继承项目的 MIT 声明。第三方代码、工具、运行组件和模型
-按各自许可证分发；RVE 集成与原生运行库的发布材料见下文及许可审查文档。
+发行的 videoenhancer.3fui.dll 采用 AGPL-3.0-only，许可全文见
+licenses/VideoEnhancer/AGPL-3.0-only.txt。独立自有源码保留 MIT，
+原版权和许可见 LICENSE.txt、licenses/VideoEnhancer/MIT.txt。
+适用范围见 LICENSING.md；不能将整个 ZIP 或 AI 环境统一标为 MIT。
+完整插件对应源码、构建脚本和校验清单位于 licenses/VideoEnhancer。
+
+RVE 集成
+--------
+https://github.com/TNTwise/REAL-Video-Enhancer
+BackendServices.cs 的 RVE 适配与 embedded-tools Python 模块采用 AGPL-3.0-only。
+原始许可、来源和参考源码见 licenses/RVE；架构与模型各自授权。
+参考提交 8541c46ca14e6f84fc86c5b9d3b75373e25732e5 不代表所有按需运行包。
 
 aria2-next 2.8.3
 ----------------
-
-用途：作为独立命令行下载程序安装到 bin/aria2-next/aria2-next.exe。
-项目：https://github.com/AnInsomniacy/aria2-next
-许可证：GNU General Public License version 2 or later（GPL-2.0-or-later）。
-完整许可证：licenses/aria2-next/COPYING
-作者与贡献者声明：licenses/aria2-next/AUTHORS
-精确版本、二进制校验值和对应源码：licenses/aria2-next/SOURCE.txt
-静态依赖许可证：licenses/aria2-next/DEPENDENCY-LICENSES.txt
-
-ZIP 发行包把 aria2-next 放在 videoenhancer/bin/aria2-next，插件 DLL 通过独立进程调用。
-同版完整源码归档包含在 ZIP 的 licenses/aria2-next 目录中，
-包含 third_party 依赖源码和上游构建配置。
-
-SharpCompress 0.50.3
---------------------
-
-用途：在 videoenhancer.3fui.dll 内提供托管压缩包读取、解压和 7z 创建能力。
-项目：https://github.com/adamhathcock/sharpcompress
-许可证：MIT License。
-完整许可证：licenses/SharpCompress/LICENSE.txt
+独立进程下载工具，安装至 bin/aria2-next/aria2-next.exe。
+https://github.com/AnInsomniacy/aria2-next
+GPL-2.0-or-later；原始 COPYING、AUTHORS、依赖声明、SOURCE.txt 及
+同版完整源码（包含 third_party 依赖和构建配置）见 licenses/aria2-next。
 
 7-Zip Extra 26.03
 ----------------
+独立进程的 x64 7za.exe 用于原生 7z 解压，首次使用时释放至 bin/7zip。
+https://github.com/ip7z/7zip
+LGPL-2.1-or-later，部分 BSD。程序、License.txt、SOURCE.txt 与完整源码
+内嵌于 DLL，原始声明及 7z2603-src.tar.xz 也随 ZIP 位于 licenses/7zip。
 
-用途：bin/7zip/7za.exe 原生 7z 解压，支持压缩包允许的多线程解码。
-插件 DLL 携带该独立工具、许可证与源码，首次解压时按需释放至便携目录。
-项目：https://github.com/ip7z/7zip
-许可证：GNU LGPL 2.1 or later，部分代码使用 BSD 许可证。
-完整声明与对应源码：licenses/7zip/License.txt、SOURCE.txt、7z2603-src.tar.xz。
+SharpCompress 0.50.3
+--------------------
+合并进入插件 DLL，用于托管压缩包处理。
+https://github.com/adamhathcock/sharpcompress
+MIT；原始许可及版权见 licenses/SharpCompress/LICENSE.txt。
 
-Ext SDK 与构建依赖
------------------
+原生预览库
+----------
+FFF.Native 来自 Lake1059/FFF_Project 官方 2026.8.18，API 11，MIT。
+原许可、二进制清单、来源与构建说明见 licenses/FFF.Native。
+上游版权行含占位文本，随包原样保留。
 
-FFmpegFreeUI.Ext.PluginSdk 2.5.0 采用 MIT，编译时引用，运行时由宿主提供。
-ILRepack.Lib.MSBuild.Task 2.0.48 采用 MIT，只用于构建。
-Vortice 3.8.3、Vortice.Mathematics 2.1.0、SharpGen.Runtime / COM 2.4.2-beta
-采用 MIT，作为 LakeUI 传递依赖由宿主提供，不随 ZIP 复制。
-LakeUI 按项目维护者的赞助者许可使用，本文件不将其开源许可用于本项目授权判断。
+随包配套库及许可：
+libass 0.17.4：ISC，licenses/libass/COPYING。
+Brotli 1.2.0：MIT，licenses/Brotli/LICENSE。
+bzip2 1.0.8：bzip2 许可，licenses/bzip2/LICENSE。
+FreeType 2.14.3：按 FTL 使用，licenses/FreeType/LICENSE.TXT、FTL.TXT、GPLv2.TXT。
+FriBidi 1.0.16：LGPL-2.1-or-later，licenses/FriBidi/COPYING、AUTHORS。
+HarfBuzz 14.2.0：MIT-Modern-Variant，licenses/HarfBuzz/COPYING。
+libpng 1.6.58：libpng-2.0，licenses/libpng/LICENSE。
+zlib 1.3.2：Zlib，licenses/zlib/LICENSE。
 
-RVE、RTX 与原生预览组件
-----------------------
+本软件部分功能基于 FreeType Team 的工作，FreeType 项目：https://freetype.org/。
+原始版权及免责声明在随包 FTL.TXT 中保留。
+八个库的完整源码和固定 vcpkg baseline 构建配方见 licenses/sources，
+哈希与官方地址见 licenses/third-party-sources.lock.json。
+所有原生库均为可替换的独立 DLL；不限制 LGPL 许可授予的修改与调试权利。
+上游未提供官方 DLL 的完整编译日志，不声称已复现逐字节相同的二进制。
 
-RVE 主项目采用 AGPLv3。导入 RVE 的 Python 包装器和 RVE 源文件补丁
-需要按实际代码来源履行上游义务，不能仅以独立进程执行就认定全部属于 MIT。
-https://github.com/TNTwise/REAL-Video-Enhancer/blob/v2-main/LICENSE
+宿主与构建依赖
+--------------
+Ext PluginSdk 2.5.0、Vortice 3.8.3、Vortice.Mathematics 2.1.0、
+SharpGen.Runtime / COM 2.4.2-beta 采用 MIT，由宿主提供，不随 ZIP 分发。
+ILRepack.Lib.MSBuild.Task 2.0.48 采用 MIT，仅用于构建。
+LakeUI 按维护者的赞助者许可使用，本文件不据其开源许可判断插件授权。
 
-RTX sidecar 的应用代码为 MIT，NVIDIA RTX Video SDK DLL 为专有组件，
-配套 FFmpeg 库依其实际构建适用 LGPL 或 GPL。
-https://github.com/Zennmn/RTXHDR-RTXVSR/blob/main/THIRD_PARTY.md
-https://ffmpeg.org/legal.html
-
-DLL 还内嵌 FFF.Native 及字幕、字体、压缩库。FFF.Native 来自 Lake1059/FFF_Project，
-本体采用 MIT，使用 API 11；上游 LICENSE.txt 和来源说明见 licenses/FFF.Native。
-https://github.com/Lake1059/FFF_Project
-FFF.Native 本体的 MIT 不覆盖另行提供的 FFmpeg Shared 构建及配套库。
-FriBidi 等配套库的对应构建源码与许可材料尚未补齐。
-具体文件校验值、许可边界和未核实事项见随包 DEPENDENCIES-LICENSES.md。
-本文件和根 MIT 许可证不构成对所有第三方二进制的统一授权。
+按需环境及模型
+--------------
+RTX sidecar 应用代码 MIT；NVIDIA RTX Video SDK DLL 为专有组件。
+FFmpeg 取决于实际构建适用 LGPL 或 GPL，nonfree 构建不能再分发。
+本 ZIP 不提供 FFmpeg Shared DLL；RVE/Python、RTX 环境与模型按需安装。
+实际归档版本、第三方代码及模型授权应分别核对。
+详见 DEPENDENCIES-LICENSES.md，原始条款不被本插件许可取代。

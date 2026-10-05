@@ -11,6 +11,9 @@ Namespace videoenhancer
         End Sub
 
         Friend Shared ReadOnly Property PluginRoot As String = ResolvePluginRoot()
+        ' 随 ZIP 提供的预览原生库固定从安装目录加载，数据目录可以单独重定向。
+        Friend Shared ReadOnly Property PreviewNativeRoot As String =
+            Path.Combine(PluginRoot, "videoenhancer", "bin", "fff-native-11")
         Friend Shared ReadOnly Property ApplicationRoot As String =
             ResolveApplicationRoot()
         Friend Shared ReadOnly Property CacheRoot As String =

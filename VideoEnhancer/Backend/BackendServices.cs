@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// RVE 集成及兼容补丁；修改于 2026-10-05。原始 MIT 声明与上游版权见 LICENSING.md。
 using System.Diagnostics;
 using System.Globalization;
 using System.IO.Compression;
@@ -590,6 +592,20 @@ public static partial class BackendServices
         resource.CopyTo(output);
     }
 
+    /// <summary>保留原文件声明，并为实际应用的 RVE 修改记录许可与修改日期。</summary>
+    private static void WritePatchedRveSource(string path, string text, bool hasUtf8Bom)
+    {
+        const string marker = "# VideoEnhancer 修改声明：";
+        if (!text.Contains(marker, StringComparison.Ordinal))
+        {
+            var newline = text.Contains("\r\n", StringComparison.Ordinal) ? "\r\n" : "\n";
+            text = marker + "0.1.0，2026-10-05。" + newline
+                + "# 本插件的修改按 AGPL-3.0-only 授权；保留原始版权与许可声明。" + newline
+                + "# 对应修改源码随插件 ZIP 的 licenses/VideoEnhancer 提供。" + newline + text;
+        }
+        File.WriteAllText(path, text, new UTF8Encoding(hasUtf8Bom));
+    }
+
     /// <summary>修补当前 RVE 2.4 GMFSS 加载器，使其按权重元数据区分 Base 与 Union。</summary>
     private static void EnsureGmfssModelTypeCompatibility()
     {
@@ -665,7 +681,7 @@ public static partial class BackendServices
             .Replace("        if model_type != \"base\":",
                 "        if self.model_type != \"base\":", StringComparison.Ordinal);
 
-        File.WriteAllText(modelLoader, normalized.Replace("\n", newline), new UTF8Encoding(hasUtf8Bom));
+        WritePatchedRveSource(modelLoader, normalized.Replace("\n", newline), hasUtf8Bom);
     }
 
     /// <summary>修补当前 RVE 2.4 GIMM 加载器，使其兼容带元数据的新权重字段名。</summary>
@@ -691,7 +707,7 @@ public static partial class BackendServices
             var normalized = text.Replace("\r\n", "\n");
             if (!normalized.Contains(oldValue, StringComparison.Ordinal)) return;
             normalized = normalized.Replace(oldValue, newValue, StringComparison.Ordinal);
-            File.WriteAllText(path, normalized.Replace("\n", newline), new UTF8Encoding(hasUtf8Bom));
+            WritePatchedRveSource(path, normalized.Replace("\n", newline), hasUtf8Bom);
         }
 
         PatchUtf8File(
@@ -837,7 +853,7 @@ public static partial class BackendServices
             bytes.Length - (hasUtf8Bom ? Encoding.UTF8.Preamble.Length : 0));
         if (!text.Equals(original, StringComparison.Ordinal))
         {
-            File.WriteAllText(loader, text, new UTF8Encoding(hasUtf8Bom));
+            WritePatchedRveSource(loader, text, hasUtf8Bom);
         }
     }
 
@@ -905,7 +921,7 @@ public static partial class BackendServices
         normalized = normalized.Replace(oldInit, newInit, StringComparison.Ordinal)
             .Replace(oldModulo, newModulo, StringComparison.Ordinal)
             .Replace(oldInference, newInference, StringComparison.Ordinal);
-        File.WriteAllText(loader, normalized.Replace("\n", newline), new UTF8Encoding(hasUtf8Bom));
+        WritePatchedRveSource(loader, normalized.Replace("\n", newline), hasUtf8Bom);
     }
 
     private static int DownloadWithAria(string url, string destination, bool printComplete = true)

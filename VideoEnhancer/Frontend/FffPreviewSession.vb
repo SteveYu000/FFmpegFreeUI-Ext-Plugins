@@ -250,7 +250,10 @@ Namespace videoenhancer
             End Sub
 
             Friend Shared Function Load() As NativeApiTable
-                Dim nativePath = EmbeddedFffNativePayload.EnsureExtracted()
+                Dim nativePath = Path.Combine(PortableRuntime.PreviewNativeRoot, "FFF.Native.dll")
+                If Not File.Exists(nativePath) Then
+                    Throw New FileNotFoundException("缺少预览原生库，请将插件 ZIP 完整解压到宿主的 Plugin 目录。", nativePath)
+                End If
                 Dim handle = System.Runtime.InteropServices.NativeLibrary.Load(nativePath)
                 Return New NativeApiTable(handle)
             End Function

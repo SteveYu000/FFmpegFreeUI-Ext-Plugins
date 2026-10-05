@@ -1,0 +1,63 @@
+{
+  "version": "2026.8.18",
+  "api": 11,
+  "sourceCommit": "72d3406738413262d2a99b8fc2a678dfdbf31364",
+  "archive": {
+    "name": "FFF.Player.exe",
+    "url": "https://github.com/Lake1059/FFF_Project/releases/download/2026.8.18/FFF.Player.exe",
+    "size": 36293155,
+    "sha256": "c6a3ef170d0f45e12da6b886eea89640ccfdebf44cdcb804657d17db74a4eee9"
+  },
+  "files": [
+    {
+      "name": "ass-9.dll",
+      "size": 245760,
+      "sha256": "331ff8e3b281b7f5186d2dfb559720259983a0261a931992e6ec638b44577ded"
+    },
+    {
+      "name": "brotlicommon.dll",
+      "size": 137728,
+      "sha256": "d7f1fd53eb4eafa6ea962dcc185a9aa0a60e53d9e94e730ca2914ad572c1017e"
+    },
+    {
+      "name": "brotlidec.dll",
+      "size": 52224,
+      "sha256": "f4cec9595b6d3b41272b4317c3793ac9584e2238af3553fe6c9d38954d690b39"
+    },
+    {
+      "name": "bz2.dll",
+      "size": 75776,
+      "sha256": "cb794407aa590244fd92ac4df526dab47676fc28a2024ea45bde9beb91b502fb"
+    },
+    {
+      "name": "FFF.Native.dll",
+      "size": 572928,
+      "sha256": "8c625701f499e3257e12c09a914c2216040dd0680c47fea7072b5676a8fa2e6e"
+    },
+    {
+      "name": "freetype.dll",
+      "size": 707072,
+      "sha256": "a6ea7c9718aae5632dc9a6a34942a01c6285147b5d64bae2c85dd1bfb1fcc297"
+    },
+    {
+      "name": "fribidi-0.dll",
+      "size": 120320,
+      "sha256": "b74b3e2d699fbce95bfaf247b6f276d0d4e15ae3e91d719795fe8a472c7dd2ee"
+    },
+    {
+      "name": "harfbuzz.dll",
+      "size": 1222144,
+      "sha256": "77e5d84ad35fe652a1cf63fa693d69393b556a9885b3575bff47e16406d57f29"
+    },
+    {
+      "name": "libpng16.dll",
+      "size": 197632,
+      "sha256": "3293f8100a96c39c9502787eee45e4f6a2e2f696ece0d77d79d10ab4b9cc0f19"
+    },
+    {
+      "name": "z.dll",
+      "size": 91648,
+      "sha256": "01a4321ae97d8143b1b4e42cb6c6830e349f9434166e2304efcf9ca14f4ba64a"
+    }
+  ]
+}

@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# RVE 集成模块，修改于 2026-10-05；许可与源码范围见 LICENSING.md。
 """Frame-segmented single-frame super-resolution backend."""
 
 from __future__ import annotations

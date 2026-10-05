@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# RVE 集成模块，修改于 2026-10-05；许可与源码范围见 LICENSING.md。
 """分段视频使用的单帧超分模块；不提供图片批处理或命令行入口。"""
 
 from __future__ import annotations

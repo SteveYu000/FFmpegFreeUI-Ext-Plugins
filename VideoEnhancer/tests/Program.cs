@@ -40,6 +40,9 @@ internal static partial class Program
             SynchronizationContext.SetSynchronizationContext(null);
             System.Console.WriteLine("运行：TestMergedAssembly");
             TestMergedAssembly();
+            System.Console.WriteLine("运行：TestNativePreview");
+            TestNativePreview();
+            TestRveLicenseNotices();
             System.Console.WriteLine("运行：TestRvePreview");
             TestRvePreview();
             TestManagementServices();

@@ -1,0 +1,66 @@
+VideoEnhancer Ext 0.1.0 安装说明
+==============================
+
+一、适用环境
+Windows x64；FFmpegFreeUI API Extended Edition，Ext API 2.5 或更新版本；
+LakeUI 5.112 或更新的 5.x；.NET 10 Desktop Runtime（x64）。
+上述宿主运行组件由宿主提供。请先确认宿主本身能够正常启动和处理视频。
+
+二、安装 ZIP
+1. 完全关闭 FFmpegFreeUI 宿主。
+2. 将本 ZIP 的全部内容直接解压到宿主程序目录下的 Plugin 文件夹。
+   不要再套一层 VideoEnhancer-0.1.0-win-x64 文件夹，不要只复制插件 DLL。
+3. 正确的相对布局如下：
+
+   宿主目录/
+     Plugin/
+       videoenhancer.3fui.dll
+       videoenhancer.manifest.json
+       VideoEnhancer-安装说明.txt
+       videoenhancer/
+         bin/fff-native-11/FFF.Native.dll（及同目录的九个配套 DLL）
+         bin/aria2-next/aria2-next.exe
+         licenses/
+         README.md
+         LICENSING.md
+         DEPENDENCIES-LICENSES.md
+         THIRD-PARTY-NOTICES.txt
+
+4. 重启宿主。参数面板的“画面帧”下方应出现“视频参数 | AI增强”；
+   主导航的参数面板下方应出现“视频超分”。
+
+三、首次使用
+在“视频超分 → 模型下载”中按需要安装 Python/RVE、RTX 运行组件和模型。
+这些大体积组件不包含在初始 ZIP 中，首次安装需要联网和足够的磁盘空间。
+超分、补帧、HDR、分段的开关位于“视频参数 | AI增强”，参数可以保存进宿主预设。
+普通开关全部关闭且没有有效分段方案时，由宿主按原参数处理。
+最终编码、音频、字幕和容器设置仍使用宿主参数面板。
+实时预览还需要可用的 FFmpeg Shared 动态库；初始 ZIP 不提供 avcodec 等 FFmpeg DLL。
+
+四、升级
+先关闭宿主，再将新版 ZIP 完整解压到同一个 Plugin 目录，覆盖本插件同名文件。
+保留 videoenhancer 下现有的模型和配置，不要先删除整个数据目录。
+不要覆盖其他插件的文件，不要用单独一个新 DLL 替代完整升级包。
+
+五、常见问题
+看不到入口：检查 DLL 是否直接位于 Plugin，以及宿主 API、LakeUI 和运行时版本。
+提示缺少 FFF.Native.dll：检查 Plugin/videoenhancer/bin/fff-native-11，重新完整解压 ZIP。
+无法启动 AI 后端：在模型下载页检查所选后端及对应模型是否已经安装。
+找不到 FFmpeg：先检查宿主 FFmpeg 配置；必要时设置 VIDEOENHANCER_FFMPEG。
+目录不可写：将宿主放在可写目录，或通过 VIDEOENHANCER_ROOT 指定可写的数据目录。
+环境变量应在启动宿主前设置。VIDEOENHANCER_ROOT 的相对路径以插件 DLL 目录为基准，
+它只重定向数据目录；预览 DLL 仍从安装位置的 videoenhancer/bin/fff-native-11 加载。
+失败信息可在本插件首页任务详情和宿主任务日志中查看。
+
+六、从源码安装
+需要 .NET 10 SDK 与 PowerShell 7，在插件源码目录执行：
+  ./Install.ps1 -HostDirectory ../FFmpegFreeUI
+或先设置 FFMPEGFREEUI_HOME，再执行 ./Install.ps1。
+相对宿主路径以插件源码目录为基准。构建时下载并校验原生依赖及对应源码，
+有效缓存可离线复用。此方式同样通过 ZIP 安装，保留模型、配置和其他插件。
+
+七、许可与源码
+发行的插件 DLL 采用 AGPL-3.0-only；独立 MIT 源码和第三方组件的授权分别保留。
+完整范围见 videoenhancer/LICENSING.md；第三方详情见 DEPENDENCIES-LICENSES.md。
+本次插件构建对应源码在 videoenhancer/licenses/VideoEnhancer 内，
+第三方源码、原始许可与构建配方在 videoenhancer/licenses 内。

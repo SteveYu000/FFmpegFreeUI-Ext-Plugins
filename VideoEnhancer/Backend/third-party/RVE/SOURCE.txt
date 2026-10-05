@@ -1,0 +1,18 @@
+REAL Video Enhancer 集成来源
+==========================
+
+上游：https://github.com/TNTwise/REAL-Video-Enhancer
+参考提交：8541c46ca14e6f84fc86c5b9d3b75373e25732e5
+主项目许可：GNU Affero General Public License version 3。
+原始正文：LICENSE；本插件的集成文件明确采用 AGPL-3.0-only。
+参考源码：../sources/RVE-8541c46c-reference-source.tar.gz
+下载、大小与校验值：../third-party-sources.lock.json。
+
+集成与修改源码：完整插件源码归档中的 Backend/BackendServices.cs、
+Backend/embedded-tools/*.py；发行 DLL 按 AGPL 分发。
+C# 服务针对 GMFSS、GIMM、ONNX 和 PyTorch 的加载与输入尺寸进行适配；
+Python 模块提供运行生命周期、帧管线、分段、模型检查与 TensorRT 准备。
+实际被改写的 RVE 文件保留其原声明，并加入修改者、版本、日期及源码说明。
+
+参考源码归档保留了各架构目录的独立许可，不授予模型权重额外使用权。
+它不是按需下载的 Python/RVE 运行包的版本证明；该包必须按实际内容核对版本与条款。

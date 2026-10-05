@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# RVE 集成模块，修改于 2026-10-05；许可与源码范围见 LICENSING.md。
 """在同一 rve-backend 进程内执行先超分、再补帧的帧级管线。"""
 
 import os
