@@ -13,7 +13,26 @@ if (-not $SkipBuild) {
 }
 # 从 DLL 读取构建时的源码身份，拒绝发布与它不对应的新源码。
 $sourceSnapshot = & (Join-Path $PSScriptRoot 'Source-Snapshot.ps1')
-$pluginPath = Join-Path $projectRoot 'dist/videoenhancer.3fui.dll'
+$pluginPath = Join-Path $projectRoot 'dist/videoenhancer.ext.3fui.dll'
+# 与宿主一样统计顶层 Entry，包括内部类型；元数据校验不要求加载宿主依赖。
+$pluginStream = [IO.File]::OpenRead($pluginPath)
+$pluginPe = [Reflection.PortableExecutable.PEReader]::new($pluginStream)
+try {
+    $metadata = [Reflection.Metadata.PEReaderExtensions]::GetMetadataReader($pluginPe)
+    $assemblyName = $metadata.GetString($metadata.GetAssemblyDefinition().Name)
+    if ($assemblyName -cne 'videoenhancer.ext.3fui') { throw "插件程序集名称不正确：$assemblyName" }
+    $entries = @(
+        foreach ($handle in $metadata.TypeDefinitions) {
+            $definition = $metadata.GetTypeDefinition($handle)
+            if ($metadata.GetString($definition.Name) -ceq 'Entry' -and $definition.GetDeclaringType().IsNil) {
+                $metadata.GetString($definition.Namespace) + '.Entry'
+            }
+        }
+    )
+    if ($entries.Count -ne 1 -or $entries[0] -cne 'videoenhancer.Entry') {
+        throw "插件必须仅有 videoenhancer.Entry 一个顶层入口；实际为：$($entries -join '、')"
+    }
+} finally { $pluginPe.Dispose(); $pluginStream.Dispose() }
 $assembly = [Reflection.Assembly]::Load([IO.File]::ReadAllBytes($pluginPath))
 $resource = $assembly.GetManifestResourceStream('VideoEnhancer.SourceSnapshot')
 if (-not $resource) { throw '插件缺少对应源码清单，请重新构建后打包' }
@@ -91,7 +110,7 @@ try {
     Copy-Item -LiteralPath (Join-Path $projectRoot 'README.md') -Destination (Join-Path $data 'README.md')
     Copy-Item -LiteralPath (Join-Path $projectRoot 'DEPENDENCIES-LICENSES.md') -Destination $data
     Copy-Item -LiteralPath (Join-Path $projectRoot 'LICENSING.md') -Destination $data
-    $manifest = [ordered]@{ id = 'videoenhancer'; version = $version; extApi = '2.5.0'; lakeUi = '5.112.0'; entry = 'videoenhancer.3fui.dll'; runtime = 'videoenhancer'; distribution = 'zip'; license = 'AGPL-3.0-only'; sourceSnapshot = $sourceSnapshot.sha256; sourceArchive = "videoenhancer/licenses/VideoEnhancer/VideoEnhancer-$version-source.zip"; sourceSha256 = $sourceArchiveSha256 }
+    $manifest = [ordered]@{ id = 'videoenhancer'; version = $version; extApi = '2.5.0'; lakeUi = '5.112.0'; entry = 'videoenhancer.ext.3fui.dll'; runtime = 'videoenhancer'; distribution = 'zip'; license = 'AGPL-3.0-only'; sourceSnapshot = $sourceSnapshot.sha256; sourceArchive = "videoenhancer/licenses/VideoEnhancer/VideoEnhancer-$version-source.zip"; sourceSha256 = $sourceArchiveSha256 }
     [IO.File]::WriteAllText((Join-Path $stage 'videoenhancer.manifest.json'), ($manifest | ConvertTo-Json), [Text.UTF8Encoding]::new($false))
     $package = Join-Path $outputRoot "VideoEnhancer-$version-win-x64.zip"
     if (Test-Path -LiteralPath $package) { Remove-Item -LiteralPath $package }

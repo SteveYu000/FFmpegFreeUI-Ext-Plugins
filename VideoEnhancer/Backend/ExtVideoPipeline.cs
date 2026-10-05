@@ -10,7 +10,7 @@ using FFmpegFreeUI.Ext.PluginSdk;
 namespace VideoEnhancer;
 
 // 生命周期状态以 TaskId 隔离；命令预览只构造计划，不启动后端或创建临时文件。
-public sealed class ExtVideoPipeline : IDisposable
+public sealed partial class ExtVideoPipeline : IDisposable
 {
     public const string PluginId="videoenhancer";
     private readonly IExtFFmpegFreeUIHost _host;
@@ -29,11 +29,11 @@ public sealed class ExtVideoPipeline : IDisposable
         Register(ExtFFmpegFreeUIPipelineStages.TaskAfterComplete,(context,_)=>{EnhancementTaskRegistry.SetStatus(context.TaskId,"收尾中");return ValueTask.CompletedTask;});
         Register(ExtFFmpegFreeUIPipelineStages.TaskAfterFailed,(context,_)=>{EnhancementTaskRegistry.SetStatus(context.TaskId,"失败");return ValueTask.CompletedTask;});
         Register(ExtFFmpegFreeUIPipelineStages.TaskAfterFinish,FinishAsync);
-        _registrations.Add(host.Commands.RegisterParameterProvider(new("enhanced-video-inputs",AddInputs)));
-        _registrations.Add(host.Commands.RegisterStepProvider(new("ai-video-steps",AddSteps)));
-        _registrations.Add(host.PresetOverview.RegisterRowProvider(new("ai-parameters",AddOverview)));
+        _registrations.Add(host.Commands.RegisterParameterProvider(new("enhanced-video-inputs",context=>GuardCommand(context,AddInputs))));
+        _registrations.Add(host.Commands.RegisterStepProvider(new("ai-video-steps",context=>GuardCommand(context,AddSteps))));
+        _registrations.Add(host.PresetOverview.RegisterRowProvider(new("ai-parameters",GuardOverview)));
     }
-    private void Register(string stage,ExtPluginPipelineCallback callback)=>_registrations.Add(_host.Pipeline.Register(new("ai-"+stage,stage,callback)));
+    private void Register(string stage,ExtPluginPipelineCallback callback)=>_registrations.Add(_host.Pipeline.Register(new("ai-"+stage,stage,(context,token)=>GuardPipeline(context,token,callback))));
     private static EnhancementSettings Settings(string preset,string input,bool preview=false)=>EnhancementSettings.FromJson(EnhancementSettings.FromPreset(preset,PluginId)).ForInput(input,preview);
     private static string? Property(ExtPluginPipelineContext context,string key)=>context.Properties.TryGetValue(key,out var value)?value:null;
     private static bool IsProbe(string phase)=>phase.Replace(" ","").Equals("FFprobe获取时长",StringComparison.OrdinalIgnoreCase);
@@ -41,6 +41,10 @@ public sealed class ExtVideoPipeline : IDisposable
     private EnhancementPlan PreviewPlan(string preset,string input)
     {
         var settings=Settings(preset,input,true);
+        return PreviewPlan(settings,preset,input);
+    }
+    private EnhancementPlan PreviewPlan(EnhancementSettings settings,string preset,string input)
+    {
         string work=Path.Combine(PortablePaths.WorkRoot,"preview");
         return BackendServices.BuildEnhancementPlan(settings,preset,input,work,"VE-preview-pause",_ffmpeg(),_ffprobe(),null,false);
     }
@@ -52,6 +56,7 @@ public sealed class ExtVideoPipeline : IDisposable
 
     private async ValueTask PrepareAsync(ExtPluginPipelineContext context,CancellationToken token)
     {
+        _parameterFailures.TryRemove(context.TaskId,out _);
         var settings=Settings(context.PresetJson,context.InputPath,context.IsPreview);
         if(!settings.IsEnabled)return;
         if(string.IsNullOrWhiteSpace(context.TaskId))throw new InvalidOperationException("AI 增强任务缺少宿主任务 ID");
@@ -110,6 +115,7 @@ public sealed class ExtVideoPipeline : IDisposable
         if(IsProbe(context.PhaseName)||!Settings(context.PresetJson,context.InputPath,context.IsPreview).IsEnabled)return ValueTask.CompletedTask;
         if(_tasks.TryGetValue(context.TaskId,out var scope)&&!Path.GetFullPath(context.InputPath).Equals(Path.GetFullPath(scope.Plan.Input),StringComparison.OrdinalIgnoreCase))
             throw new InvalidOperationException("其他插件在 AI 方案准备后更换了任务输入，不能将旧视频和新文件的音频混流");
+        if(context.IsPreview)ResolvePlan(context.TaskId,context.PresetJson,context.InputPath);
         context.PresetJson=NativeVideoBinder.MarkPreset(context.PresetJson);
         return ValueTask.CompletedTask;
     }
@@ -142,6 +148,8 @@ public sealed class ExtVideoPipeline : IDisposable
 
     private async ValueTask BeforeProcessAsync(ExtPluginPipelineContext context,CancellationToken token)
     {
+        if(_parameterFailures.TryGetValue(context.TaskId,out var parameterError))
+            throw new InvalidOperationException("AI 参数无效，任务未执行："+parameterError);
         if(!_tasks.TryGetValue(context.TaskId,out var task))
         {
             if(!IsProbe(context)&&Settings(context.PresetJson,context.InputPath).IsEnabled)
@@ -206,6 +214,7 @@ public sealed class ExtVideoPipeline : IDisposable
 
     private async ValueTask FinishAsync(ExtPluginPipelineContext context,CancellationToken _)
     {
+        _parameterFailures.TryRemove(context.TaskId,out var ignoredError);
         if(context.TaskStatus==ExtPluginTaskStatus.Canceled)EnhancementTaskRegistry.SetStatus(context.TaskId,"已停止");
         else if(context.TaskStatus==ExtPluginTaskStatus.Succeeded)EnhancementTaskRegistry.SetStatus(context.TaskId,"已完成");
         if(_tasks.TryRemove(context.TaskId,out var task))
@@ -244,6 +253,11 @@ public sealed class ExtVideoPipeline : IDisposable
     // 官方队列事件用于界面状态、RVE 遥测和暂停。不会接管宿主队列或改写全局 FFmpeg 路径。
     public void OnQueueEvent(string name,string json)
     {
+        try { OnQueueEventCore(name,json); }
+        catch(Exception ex) { ReportParameterError("","","",json,ex); }
+    }
+    private void OnQueueEventCore(string name,string json)
+    {
         using var doc=JsonDocument.Parse(json);
         if(!doc.RootElement.TryGetProperty("task",out var item))return;
         string id=GetString(item,"id");
@@ -274,8 +288,12 @@ public sealed class ExtVideoPipeline : IDisposable
     private static string GetString(JsonElement item,string key)=>item.TryGetProperty(key,out var value)&&value.ValueKind!=JsonValueKind.Null?value.ToString():"";
     public void TrackQueuedTask(string id,string input,string output,string preset)
     {
-        var settings=Settings(preset,input);
-        if(settings.IsEnabled)EnhancementTaskRegistry.Update(id,input,output,"排队中","等待宿主启动",settings.ToJson());
+        try
+        {
+            var settings=Settings(preset,input);
+            if(settings.IsEnabled)EnhancementTaskRegistry.Update(id,input,output,"排队中","等待宿主启动",settings.ToJson());
+        }
+        catch(Exception ex) { ReportParameterError(id,input,output,preset,ex); }
     }
     public void Dispose()
     {

@@ -141,7 +141,19 @@ Namespace videoenhancer
         End Function
 
         Public Shared Function FromStateJson(json As String) As PluginConfig
-            Return JsonSerializer.Deserialize(Of PluginConfig)(If(String.IsNullOrWhiteSpace(json), "{}", json), New JsonSerializerOptions With {.PropertyNameCaseInsensitive = True})
+            Try
+                Dim settings = VideoEnhancer.EnhancementSettings.FromJson(json)
+                Dim options As New JsonSerializerOptions With {.PropertyNameCaseInsensitive = True}
+                Dim original = If(JsonSerializer.Deserialize(Of PluginConfig)(If(String.IsNullOrWhiteSpace(json), "{}", json), options), New PluginConfig())
+                ' 使用后端补全后的默认值，避免 null 字段进入界面；更新偏好属于界面设置，需要保留。
+                Dim normalized = JsonSerializer.Deserialize(Of PluginConfig)(settings.ToJson(), options)
+                normalized.AutoCheckUpdates = original.AutoCheckUpdates
+                Return normalized
+            Catch ex As Exception
+                ' 保留宿主中的原始预设，页面以默认值显示；任务准备仍校验原始 JSON 并拒绝无效任务。
+                VideoEnhancer.EnhancementTaskRegistry.CurrentParameterError = "预设中的 AI 参数无法读取：" & ex.Message
+                Return New PluginConfig()
+            End Try
         End Function
 
         Public Sub Save()

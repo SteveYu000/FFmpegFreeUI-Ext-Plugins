@@ -406,7 +406,7 @@ Namespace videoenhancer
         Protected Overrides Sub ScaleControl(factor As SizeF, specified As BoundsSpecified)
             MyBase.ScaleControl(factor, specified)
             ' LakeUI 只把已访问的页加入控件树，未访问页也必须参与本次缩放。
-            If _tabs Is Nothing OrElse _tabs.Items.Count = 0 Then Return
+            If _tabs Is Nothing Then Return
             Dim pageFactor = New SizeF(
                 If((specified And BoundsSpecified.Width) <> 0, factor.Width, 1.0F),
                 If((specified And BoundsSpecified.Height) <> 0, factor.Height, 1.0F))
@@ -773,13 +773,13 @@ Namespace videoenhancer
         ''' 注册同一个稳定背景源，减少嵌套层级之间的取景差异。滚动时仍需通过
         ''' 渲染事务同步位置变化和子表面的背景提交。
         ''' </summary>
-        Private Shared Sub BindScrollableGpuBackgroundSources(root As Control, source As Control)
+        Private Shared Sub BindScrollableGpuBackgroundSources(root As Control, source As Control, Optional replaceExisting As Boolean = False)
             If root Is Nothing OrElse source Is Nothing Then Return
 
             Dim provider = TryCast(root, D3D_IBackgroundSourceProvider)
             If provider IsNot Nothing Then
                 Dim currentSource As Control = Nothing
-                If Not provider.TryGetBackgroundSource(currentSource) OrElse currentSource Is Nothing Then
+                If replaceExisting OrElse Not provider.TryGetBackgroundSource(currentSource) OrElse currentSource Is Nothing Then
                     Dim sourceProperty = root.GetType().GetProperty(
                         "BackgroundSource", BindingFlags.Instance Or BindingFlags.Public)
                     If sourceProperty IsNot Nothing AndAlso sourceProperty.CanWrite AndAlso
@@ -790,7 +790,7 @@ Namespace videoenhancer
             End If
 
             For Each child As Control In root.Controls
-                BindScrollableGpuBackgroundSources(child, source)
+                BindScrollableGpuBackgroundSources(child, source, replaceExisting)
             Next
         End Sub
 

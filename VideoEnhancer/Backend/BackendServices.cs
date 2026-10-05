@@ -17,7 +17,7 @@ using Microsoft.Win32;
 namespace VideoEnhancer;
 
 /// <summary>
-/// videoenhancer.3fui.dll 的后端服务，由 DLL 内部调用模型管理、运行环境及预览操作。
+/// videoenhancer.ext.3fui.dll 的后端服务，由 DLL 内部调用模型管理、运行环境及预览操作。
 /// 宿主视频任务使用 ExtVideoPipeline 处理链。
 /// </summary>
 public static partial class BackendServices
@@ -2806,7 +2806,7 @@ public static partial class BackendServices
     {
         Console.Error.WriteLine();
         Console.Error.WriteLine("[错误] " + message);
-        Console.Error.WriteLine("[提示] 使用 videoenhancer.3fui.dll -h 查看详细帮助。");
+        Console.Error.WriteLine("[提示] 详细信息请查看插件首页的任务详情和宿主任务日志。");
         return exitCode;
     }
 

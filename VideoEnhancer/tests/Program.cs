@@ -17,6 +17,7 @@ internal static partial class Program
     [STAThread]
     static int Main(string[] args)
     {
+        if((args.Length>0&&args[0]=="--ui-probe")||Path.GetFileNameWithoutExtension(Environment.ProcessPath)=="VideoEnhancer.UiProbe")return RunUiProbe();
         if(args.Length>0&&args[0]=="--port")return RtxSidecarFixture.Run(args).GetAwaiter().GetResult();
         if(args.Length>1&&Path.GetFileName(args[0])=="inspect_upscale_models.py"&&Environment.GetEnvironmentVariable("VIDEOENHANCER_TEST_SERVICE_CHILD") is {} marker)
         {
@@ -37,6 +38,8 @@ internal static partial class Program
             TestPreset();
             System.Console.WriteLine("运行：TestFrontend");
             TestFrontend();
+            TestUiLayouts();
+            TestParameterErrorsAsync().GetAwaiter().GetResult();
             SynchronizationContext.SetSynchronizationContext(null);
             System.Console.WriteLine("运行：TestMergedAssembly");
             TestMergedAssembly();
@@ -153,12 +156,14 @@ internal static partial class Program
     }
     private static void TestMergedAssembly()
     {
-        string merged=Path.GetFullPath(Path.Combine(AppContext.BaseDirectory,"..","..","..","..","dist","videoenhancer.3fui.dll"));
+        string merged=Path.GetFullPath(Path.Combine(AppContext.BaseDirectory,"..","..","..","..","dist","videoenhancer.ext.3fui.dll"));
         if(!File.Exists(merged))throw new FileNotFoundException("缺少合并后的 DLL",merged);
         var context=new AssemblyLoadContext("merged-plugin-test",true);
         context.Resolving+=(load,name)=>AssemblyLoadContext.Default.Assemblies.FirstOrDefault(assembly=>assembly.GetName().Name==name.Name);
         var assembly=context.LoadFromAssemblyPath(merged);
         Check(assembly.EntryPoint is null,"合并产物为 DLL，没有 CLI 入口");
+        TestMergedPluginLoading(assembly);
+        TestMergedArchives(assembly);
         Check(assembly.GetType("VideoEnhancer.BackendServices") is not null&&assembly.GetType("videoenhancer.Entry") is not null,"同一 DLL 同时包含前端和后端");
         Check(!assembly.GetReferencedAssemblies().Any(reference=>reference.Name is "VideoEnhancer.Backend" or "SharpCompress" or "FFmpegFreeUI"),"没有私有依赖 DLL 或宿主主程序集引用");
         Check(assembly.GetManifestResourceNames().Contains("VideoEnhancer.Embedded.rve-ext-launch.py"),"真实 RVE 启动资源包含在 DLL 中");

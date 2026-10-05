@@ -21,6 +21,9 @@ $fixture = Join-Path $projectRoot ('.test-tools/license-distribution-' + [Guid]:
 try {
     $manifest = [Text.Encoding]::UTF8.GetString((Read-EntryBytes $archive 'videoenhancer.manifest.json')) | ConvertFrom-Json
     Assert ($manifest.license -eq 'AGPL-3.0-only') '发行 DLL 的许可元数据正确'
+    Assert ($manifest.entry -eq 'videoenhancer.ext.3fui.dll') '元数据使用 Ext 插件二进制名称'
+    Assert ($null -ne $archive.GetEntry($manifest.entry)) 'ZIP 包含声明的插件 DLL'
+    Assert ($null -eq $archive.GetEntry('videoenhancer.3fui.dll')) 'ZIP 不包含更名前的插件 DLL'
     $guide = Read-EntryBytes $archive 'VideoEnhancer-安装说明.txt'
     Assert ((Hash $guide) -eq (Get-FileHash -LiteralPath (Join-Path $projectRoot 'VideoEnhancer-安装说明.txt')).Hash.ToLowerInvariant()) 'ZIP 根目录附带原文安装说明'
     Assert ([Text.Encoding]::UTF8.GetString($guide).Contains('Plugin/')) '安装说明包含实际 Plugin 布局'
@@ -43,7 +46,7 @@ try {
     $snapshot = [Text.Encoding]::UTF8.GetString((Read-EntryBytes $archive 'videoenhancer/licenses/VideoEnhancer/SOURCE-SNAPSHOT.json')) | ConvertFrom-Json
     Assert ($snapshot.sha256 -eq $manifest.sourceSnapshot) '清单与发行元数据一致'
     Assert (@($snapshot.files | Where-Object { $_.path -match '(^|/)(bin|obj|__pycache__)/|\.(dll|exe|user|suo|log)$' }).Count -eq 0) '插件源码不含构建缓存、二进制或开发机记录'
-    $assembly = [Reflection.Assembly]::Load((Read-EntryBytes $archive 'videoenhancer.3fui.dll'))
+    $assembly = [Reflection.Assembly]::Load((Read-EntryBytes $archive 'videoenhancer.ext.3fui.dll'))
     $resource = $assembly.GetManifestResourceStream('VideoEnhancer.SourceSnapshot')
     $reader = [IO.StreamReader]::new($resource, [Text.Encoding]::UTF8)
     try { $compiled = $reader.ReadToEnd() | ConvertFrom-Json } finally { $reader.Dispose() }
@@ -64,7 +67,7 @@ try {
     $fixtureSnapshot = & (Join-Path $fixture 'release/Source-Snapshot.ps1')
     Assert ($fixtureSnapshot.sha256 -eq $snapshot.sha256) '解压后的源码快照可以复核'
     [IO.Directory]::CreateDirectory((Join-Path $fixture 'dist')) | Out-Null
-    [IO.Compression.ZipFileExtensions]::ExtractToFile($archive.GetEntry('videoenhancer.3fui.dll'), (Join-Path $fixture 'dist/videoenhancer.3fui.dll'))
+    [IO.Compression.ZipFileExtensions]::ExtractToFile($archive.GetEntry('videoenhancer.ext.3fui.dll'), (Join-Path $fixture 'dist/videoenhancer.ext.3fui.dll'))
     # 只修改隔离夹具，验证新源码配旧 DLL 会被打包流程拒绝。
     [IO.File]::AppendAllText((Join-Path $fixture 'README.md'), [Environment]::NewLine + 'stale source fixture', [Text.UTF8Encoding]::new($false))
     $rejection = (& pwsh -NoProfile -File (Join-Path $fixture 'release/Build-Zip.ps1') -SkipBuild 2>&1 | Out-String)

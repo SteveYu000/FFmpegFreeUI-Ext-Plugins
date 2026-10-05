@@ -1,13 +1,15 @@
 <Project>
   <Target Name="MergeVideoEnhancerPlugin" AfterTargets="Build" Condition="'$(IsCrossTargetingBuild)' != 'true'">
-    <PropertyGroup><MergedPluginPath>$(MSBuildProjectDirectory)\..\dist\videoenhancer.3fui.dll</MergedPluginPath></PropertyGroup>
+    <PropertyGroup><MergedPluginPath>$(MSBuildProjectDirectory)\..\dist\videoenhancer.ext.3fui.dll</MergedPluginPath></PropertyGroup>
     <ItemGroup>
       <_MergeInput Include="$(TargetPath)" />
       <_MergeInput Include="$(TargetDir)VideoEnhancer.Backend.dll;$(TargetDir)SharpCompress.dll" />
       <_MergeLibrary Include="@(ReferencePath->'%(RootDir)%(Directory)')" />
     </ItemGroup>
     <MakeDir Directories="$(MSBuildProjectDirectory)\..\dist" />
-    <ILRepack InputAssemblies="@(_MergeInput)" LibraryPath="@(_MergeLibrary)" OutputFile="$(MergedPluginPath)" TargetKind="Dll" Internalize="false" DebugInfo="false" Parallel="true" />
+    <!-- 宿主按短名扫描所有顶层 Entry；将 SharpCompress 内部化并重命名，避免私有类型被识别为插件入口。 -->
+    <ILRepack InputAssemblies="@(_MergeInput)" LibraryPath="@(_MergeLibrary)" OutputFile="$(MergedPluginPath)" TargetKind="Dll" Internalize="true" InternalizeExclude="VideoEnhancer.Backend" RenameInternalized="true" DebugInfo="false" Parallel="true" />
+    <Delete Files="$(MSBuildProjectDirectory)\..\dist\videoenhancer.3fui.dll" />
     <Message Importance="high" Text="单 DLL 插件：$(MergedPluginPath)" />
   </Target>
 </Project>

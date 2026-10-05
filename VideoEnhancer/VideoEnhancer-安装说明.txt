@@ -8,13 +8,14 @@ LakeUI 5.112 或更新的 5.x；.NET 10 Desktop Runtime（x64）。
 
 二、安装 ZIP
 1. 完全关闭 FFmpegFreeUI 宿主。
-2. 将本 ZIP 的全部内容直接解压到宿主程序目录下的 Plugin 文件夹。
+2. 若 Plugin 中仍有旧的 videoenhancer.3fui.dll，先删除该文件。
+   将本 ZIP 的全部内容直接解压到宿主程序目录下的 Plugin 文件夹。
    不要再套一层 VideoEnhancer-0.1.0-win-x64 文件夹，不要只复制插件 DLL。
 3. 正确的相对布局如下：
 
    宿主目录/
      Plugin/
-       videoenhancer.3fui.dll
+       videoenhancer.ext.3fui.dll
        videoenhancer.manifest.json
        VideoEnhancer-安装说明.txt
        videoenhancer/
@@ -39,6 +40,7 @@ LakeUI 5.112 或更新的 5.x；.NET 10 Desktop Runtime（x64）。
 
 四、升级
 先关闭宿主，再将新版 ZIP 完整解压到同一个 Plugin 目录，覆盖本插件同名文件。
+升级到新文件名时，删除 Plugin/videoenhancer.3fui.dll，只保留 videoenhancer.ext.3fui.dll。
 保留 videoenhancer 下现有的模型和配置，不要先删除整个数据目录。
 不要覆盖其他插件的文件，不要用单独一个新 DLL 替代完整升级包。
 

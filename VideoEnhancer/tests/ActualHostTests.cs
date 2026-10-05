@@ -24,6 +24,7 @@ internal static partial class Program
         try
         {
             var core=AssemblyLoadContext.Default.LoadFromAssemblyPath(Path.Combine(directory,"FFmpegFreeUI.dll"));
+            TestActualHostPluginDiscovery(core);
             var hostAssembly=AssemblyLoadContext.Default.LoadFromAssemblyPath(Path.Combine(directory,"FFmpegFreeUI.Ext.PluginHost.dll"));
             const BindingFlags flags=BindingFlags.Public|BindingFlags.NonPublic|BindingFlags.Static;
             var hostType=hostAssembly.GetType("FFmpegFreeUI.Ext插件扩展宿主_v2",true)!;
@@ -113,6 +114,14 @@ internal static partial class Program
             Check(!first.Any(step=>(bool)step.GetType().GetProperty("是插件步骤")!.GetValue(step)!),"宿主时长探测前不执行 AI 步骤");
             var finish=NewContext();contextType.GetProperty("TaskStatus")!.SetValue(finish,"succeeded");
             await Stage(ExtFFmpegFreeUIPipelineStages.TaskAfterFinish,finish);
+            // 直接调用宿主 UI 的真实预览路径，验证未选模型不会被包装成宿主未处理异常。
+            var invalidData=data.DeepClone();
+            invalidData["插件扩展数据"]!["videoenhancer"]=new EnhancementSettings{UpscaleEnabled=true}.ToJson();
+            var invalidPreset=JsonSerializer.Deserialize(invalidData.ToJsonString(),presetType,jsonOptions)!;
+            var preview=((IEnumerable)build.Invoke(null,[invalidPreset,input,output,"2",""])!).Cast<object>().ToArray();
+            Check(preview.Length>0&&!preview.Any(step=>(bool)step.GetType().GetProperty("是插件步骤")!.GetValue(step)!),
+                "真实宿主预览遇到未选模型仍正常返回，不插入不完整的 AI 步骤");
+            Check(EnhancementTaskRegistry.CurrentParameterError.Contains("尚未选择超分模型"),"真实宿主预览的模型错误保留在插件诊断中");
         }
         finally{AssemblyLoadContext.Default.Resolving-=Resolve;}
     }

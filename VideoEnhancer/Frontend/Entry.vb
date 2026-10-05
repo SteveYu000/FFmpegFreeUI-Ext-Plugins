@@ -56,6 +56,15 @@ Namespace videoenhancer
         End Sub
 
         Private Shared Sub OnQueueEvent(name As String, json As String)
+            Try
+                OnQueueEventCore(name, json)
+            Catch ex As Exception
+                EnhancementTaskRegistry.CurrentParameterError = "队列参数无法读取：" & ex.Message
+                System.Diagnostics.Trace.WriteLine(ex.ToString())
+            End Try
+        End Sub
+
+        Private Shared Sub OnQueueEventCore(name As String, json As String)
             If _pipeline Is Nothing Then Return
             If name = "task.added" OrElse name = "task.reset" Then
                 Using doc = JsonDocument.Parse(json)

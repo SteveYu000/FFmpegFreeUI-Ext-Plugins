@@ -61,11 +61,11 @@ Namespace videoenhancer
         Private Shared Function ResolvePluginRoot() As String
             Dim location = GetType(PortableRuntime).Assembly.Location
             If String.IsNullOrWhiteSpace(location) Then
-                Throw New InvalidOperationException("无法确定 videoenhancer.3fui.dll 所在目录")
+                Throw New InvalidOperationException("无法确定 videoenhancer.ext.3fui.dll 所在目录")
             End If
             Dim directory = Path.GetDirectoryName(Path.GetFullPath(location))
             If String.IsNullOrWhiteSpace(directory) Then
-                Throw New InvalidOperationException("无法确定 videoenhancer.3fui.dll 所在目录")
+                Throw New InvalidOperationException("无法确定 videoenhancer.ext.3fui.dll 所在目录")
             End If
             Return directory.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)
         End Function

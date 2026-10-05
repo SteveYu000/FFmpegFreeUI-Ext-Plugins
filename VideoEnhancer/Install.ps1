@@ -26,4 +26,7 @@ $pluginDirectory = Join-Path $hostRoot 'Plugin'
 $version = [string]$project.Project.PropertyGroup.Version
 $package = Join-Path $projectRoot "dist/VideoEnhancer-$version-win-x64.zip"
 [IO.Compression.ZipFile]::ExtractToDirectory($package, $pluginDirectory, $true)
-Write-Output "已安装：$(Join-Path $pluginDirectory 'videoenhancer.3fui.dll')"
+# 新 DLL 解压成功后移除本插件更名前的文件，避免宿主同时扫描两个入口程序集。
+$previousPlugin = Join-Path $pluginDirectory 'videoenhancer.3fui.dll'
+if (Test-Path -LiteralPath $previousPlugin) { Remove-Item -LiteralPath $previousPlugin }
+Write-Output "已安装：$(Join-Path $pluginDirectory 'videoenhancer.ext.3fui.dll')"

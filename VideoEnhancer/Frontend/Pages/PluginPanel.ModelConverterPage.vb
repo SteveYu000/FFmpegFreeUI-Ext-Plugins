@@ -236,7 +236,7 @@ Namespace videoenhancer
             If Not File.Exists(pythonExe) OrElse
                (Not _convertIsInterpolation AndAlso Not File.Exists(converter)) OrElse
                (_convertIsInterpolation AndAlso Not File.Exists(rifePrepare)) Then
-                SetConverterStatus("找不到便携 Python 或所需的 TensorRT 构建脚本，请检查 videoenhancer.3fui.dll 同目录下的 python。", True)
+                SetConverterStatus($"找不到便携 Python 或所需的 TensorRT 构建脚本，请检查 {Path.Combine(coreRoot, "python")}。", True)
                 Return
             End If
 

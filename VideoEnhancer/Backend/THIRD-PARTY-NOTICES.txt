@@ -1,7 +1,7 @@
 VideoEnhancer 第三方组件声明
 ===========================
 
-发行的 videoenhancer.3fui.dll 采用 AGPL-3.0-only，许可全文见
+发行的 videoenhancer.ext.3fui.dll 采用 AGPL-3.0-only，许可全文见
 licenses/VideoEnhancer/AGPL-3.0-only.txt。独立自有源码保留 MIT，
 原版权和许可见 LICENSE.txt、licenses/VideoEnhancer/MIT.txt。
 适用范围见 LICENSING.md；不能将整个 ZIP 或 AI 环境统一标为 MIT。

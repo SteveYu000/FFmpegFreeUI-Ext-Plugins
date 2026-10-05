@@ -19,10 +19,10 @@ internal static partial class Program
         finally { NativeLibrary.Free(ass); }
         Check(!Directory.Exists(Path.Combine(_root, "runtime", "bin", "fff-native-11")), "预览加载不会向重定向的数据目录释放原生库");
 
-        string merged = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "dist", "videoenhancer.3fui.dll"));
+        string merged = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "dist", "videoenhancer.ext.3fui.dll"));
         string incompleteDirectory = Path.Combine(_root, "不完整 ZIP 安装");
         Directory.CreateDirectory(incompleteDirectory);
-        string entry = Path.Combine(incompleteDirectory, "videoenhancer.3fui.dll");
+        string entry = Path.Combine(incompleteDirectory, "videoenhancer.ext.3fui.dll");
         File.Copy(merged, entry);
         var unloading = TestIncompletePreviewInstallation(entry, incompleteDirectory);
         // 卸载是异步生效的；先回收隔离加载上下文，再删除测试临时 DLL。

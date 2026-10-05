@@ -1,6 +1,6 @@
 # VideoEnhancer 0.1.0 许可范围
 
-发行的 `videoenhancer.3fui.dll` 采用 **AGPL-3.0-only**。它包含 RVE 集成和源文件补丁；将这些代码与 MIT 部分编译、合并为一个 DLL 时，按 AGPL 第三版分发该组合。
+发行的 `videoenhancer.ext.3fui.dll` 采用 **AGPL-3.0-only**。它包含 RVE 集成和源文件补丁；将这些代码与 MIT 部分编译、合并为一个 DLL 时，按 AGPL 第三版分发该组合。
 
 根目录 `LICENSE` 和 `LICENSES/MIT.txt` 保留原 MIT 版权及许可原文，适用于下表中的独立源码。它们不表示整个 DLL、ZIP、AI 运行环境或模型均采用 MIT。AGPL 完整正文位于 `LICENSES/AGPL-3.0-only.txt`。
 

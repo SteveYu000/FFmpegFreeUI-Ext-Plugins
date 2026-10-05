@@ -1,6 +1,6 @@
 # VideoEnhancer Ext
 
-面向 FFmpegFreeUI API Extended Edition 的视频 AI 增强插件，前端和后端合并发布为 `videoenhancer.3fui.dll`。
+面向 FFmpegFreeUI API Extended Edition 的视频 AI 增强插件，前端和后端合并发布为 `videoenhancer.ext.3fui.dll`。
 
 发行的插件 DLL 采用 AGPL-3.0-only，独立自有源码保留 MIT；[许可范围](LICENSING.md) 明确列出例外及第三方边界。完整对应源码和许可材料随 ZIP 提供。
 
@@ -8,7 +8,7 @@
 
 ## 安装
 
-关闭宿主，将 `VideoEnhancer-0.1.0-win-x64.zip` 解压到宿主的 `Plugin` 目录。 ZIP 根目录附有 [中文安装说明](VideoEnhancer-安装说明.txt)，包含目录布局、首次使用、升级和常见问题。ZIP 包含插件 DLL、FFF.Native 预览库及配套 DLL、aria2-next、许可及对应源码；Python / RVE、RTX 运行组件和模型在“视频超分 → 模型下载”中按需安装。
+关闭宿主，将 `VideoEnhancer-0.1.0-win-x64.zip` 解压到宿主的 `Plugin` 目录。若存在旧的 `Plugin/videoenhancer.3fui.dll`，关闭宿主后删除该文件。ZIP 根目录附有 [中文安装说明](VideoEnhancer-安装说明.txt)，包含目录布局、首次使用、升级和常见问题。ZIP 包含插件 DLL、FFF.Native 预览库及配套 DLL、aria2-next、许可及对应源码；Python / RVE、RTX 运行组件和模型在“视频超分 → 模型下载”中按需安装。
 
 从源码安装：
 
@@ -28,7 +28,7 @@ python -B tests/FrameBackendTests.py
 ./tests/DistributionLicenseTests.ps1
 ```
 
-可将 `VIDEOENHANCER_TEST_HOST` 设为 Ext 宿主编译输出目录，额外验证真实宿主命令生成及插件组合。测试只读加载宿主程序集，不修改宿主。
+可将 `VIDEOENHANCER_TEST_HOST` 设为 Ext 宿主编译输出目录，额外验证真实宿主入口扫描、命令生成及插件组合。测试只读加载宿主程序集，不修改宿主。
 
 媒体回归需要 FFmpeg 与 FFprobe 位于 PATH，可分别设置 `VIDEOENHANCER_TEST_FFMPEG`、`VIDEOENHANCER_TEST_FFPROBE`。视频帧模块测试只需 Python 和 NumPy，不依赖 GPU。
 
