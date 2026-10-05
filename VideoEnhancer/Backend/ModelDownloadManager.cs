@@ -88,6 +88,8 @@ internal sealed class ModelDownloadManager
         var model = models.FirstOrDefault(m => m.Path.Equals(normalized, StringComparison.OrdinalIgnoreCase));
         if (model is null) return _fail("镜像中不存在该文件：" + normalized, 1);
 
+        if (Path.GetExtension(model.Path).Equals(".rar", StringComparison.OrdinalIgnoreCase))
+            return _fail("7za 不支持 RAR，请选择 ZIP 或 7z 压缩包", 1);
         var slash = model.Path.IndexOf('/');
         if (slash <= 0) return _fail("模型镜像路径无效：" + model.Path, 1);
         var category = model.Path[..slash];
@@ -311,7 +313,6 @@ internal sealed class ModelDownloadManager
         var extension = Path.GetExtension(path);
         return extension.Equals(".7z", StringComparison.OrdinalIgnoreCase)
             || extension.Equals(".zip", StringComparison.OrdinalIgnoreCase)
-            || extension.Equals(".rar", StringComparison.OrdinalIgnoreCase)
             || extension.Equals(".gz", StringComparison.OrdinalIgnoreCase)
             || extension.Equals(".xz", StringComparison.OrdinalIgnoreCase)
             || extension.Equals(".zst", StringComparison.OrdinalIgnoreCase)

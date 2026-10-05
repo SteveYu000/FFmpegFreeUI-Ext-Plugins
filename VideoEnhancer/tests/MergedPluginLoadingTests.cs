@@ -13,9 +13,9 @@ internal static partial class Program
         // 宿主同时扫描公开与内部的顶层 Entry，仅降低可见性无法消除冲突。
         var entries = assembly.GetTypes().Where(type => !type.IsNested && type.Name == "Entry").ToArray();
         Check(entries.Length == 1 && entries[0].FullName == "videoenhancer.Entry", "合并 DLL 只有一个顶层 Entry");
-        Check(assembly.GetType("SharpCompress.Common.Entry") is null &&
-            !assembly.GetExportedTypes().Any(type => type.Namespace?.StartsWith("SharpCompress", StringComparison.Ordinal) == true),
-            "私有 SharpCompress 类型已内部化并重命名");
+        Check(!assembly.GetTypes().Any(type => type.Namespace?.StartsWith("SharpCompress", StringComparison.Ordinal) == true) &&
+            !assembly.GetManifestResourceNames().Any(name => name.Contains("SharpCompress", StringComparison.Ordinal)),
+            "合并 DLL 已完全移除 SharpCompress 类型及资源");
         var entry = entries[0];
         Check(entry.IsPublic && typeof(IExtFFmpegFreeUIPlugin).IsAssignableFrom(entry), "插件入口公开并实现实际 Ext SDK 接口");
         var host = new TestHost();
@@ -42,30 +42,6 @@ internal static partial class Program
             var field = entry.GetField("_pipeline", BindingFlags.NonPublic | BindingFlags.Static)!;
             (field.GetValue(null) as IDisposable)?.Dispose();
             field.SetValue(null, null);
-        }
-    }
-
-    private static void TestMergedArchives(Assembly assembly)
-    {
-        string source = Path.Combine(_root, "merged-archive-source"), nested = Path.Combine(source, "模型 子目录");
-        Directory.CreateDirectory(nested);
-        byte[] content = Encoding.UTF8.GetBytes("合并后压缩包内容\n模型配置");
-        File.WriteAllBytes(Path.Combine(nested, "配置.txt"), content);
-        File.WriteAllBytes(Path.Combine(source, "empty.bin"), []);
-        var extractor = assembly.GetType("VideoEnhancer.ManagedArchiveExtractor", true)!;
-        const BindingFlags flags = BindingFlags.NonPublic | BindingFlags.Static;
-        string sevenZip = Path.Combine(_root, "merged-test.7z");
-        extractor.GetMethod("CreateSevenZip", flags)!.Invoke(null, [source, sevenZip]);
-        string zip = Path.Combine(_root, "merged-test.zip");
-        ZipFile.CreateFromDirectory(source, zip);
-        foreach (var archive in new[] { sevenZip, zip })
-        {
-            string output = Path.Combine(_root, "merged-extract" + Path.GetExtension(archive));
-            extractor.GetMethod("Extract", flags)!.Invoke(null, [archive, output, null]);
-            Check(File.ReadAllBytes(Path.Combine(output, "模型 子目录", "配置.txt")).SequenceEqual(content),
-                "私有类型重命名后仍能解压中文路径与内容：" + Path.GetExtension(archive));
-            Check(File.Exists(Path.Combine(output, "empty.bin")) && new FileInfo(Path.Combine(output, "empty.bin")).Length == 0,
-                "合并后的解压保留空文件：" + Path.GetExtension(archive));
         }
     }
 

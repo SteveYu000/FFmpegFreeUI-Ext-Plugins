@@ -512,7 +512,9 @@ Namespace videoenhancer
         Private Sub BuildTabs()
             _tabs.Dock = DockStyle.Fill
             _tabs.BackColor = Color.Transparent
-            _tabs.TabStripBackColor = UiCanvas
+            _tabs.TabStripBackColor = Color.Transparent
+            _tabs.ContentBackColor = Color.Transparent
+            _tabs.BackgroundSource = ModernPanel1
             _tabs.TabStripWidth = 156
             _tabs.TabItemHeight = 34
             _tabs.TabItemSpacing = 0

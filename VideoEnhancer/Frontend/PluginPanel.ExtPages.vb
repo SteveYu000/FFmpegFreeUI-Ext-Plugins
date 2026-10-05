@@ -212,6 +212,18 @@ Namespace videoenhancer
             End Try
         End Sub
 
+        Private Function FindAncestorWindowChrome() As ThisIsYourWindow
+            ' 参数页可能嵌在另一张 Form 中，沿父控件找到宿主已启用的 LakeUI 窗口背景。
+            Dim current As Control = Me
+            While current IsNot Nothing
+                Dim window = TryCast(current, Form)
+                Dim chrome As ThisIsYourWindow = Nothing
+                If window IsNot Nothing AndAlso ThisIsYourWindow.TryGetAttached(window, chrome) Then Return chrome
+                current = current.Parent
+            End While
+            Return Nothing
+        End Function
+
         Private Sub OpenSegmentedEditor()
             Using editor As New Form With {.Text = "分段超分", .AutoScaleMode = AutoScaleMode.None,
                 .StartPosition = FormStartPosition.CenterParent, .BackColor = UiCanvas, .Font = Font}
@@ -230,7 +242,17 @@ Namespace videoenhancer
                     _pageSegmented.Scale(New SizeF(target / _segmentRoot.LayoutScale.Width, target / _segmentRoot.LayoutScale.Height))
                     SyncSegmentedRootBounds()
                 End Sub
-                AddHandler editor.Load, Sub() applyDpi(editor.DeviceDpi)
+                Dim chrome = FindAncestorWindowChrome()
+                AddHandler editor.Load,
+                    Sub()
+                        applyDpi(editor.DeviceDpi)
+                        If chrome Is Nothing Then Return
+                        ' 与宿主抽帧窗口共用已启用的窗口背景和样式，不更改全局背景设置。
+                        chrome.Attach(editor)
+                        surface.BackColor = Color.Transparent
+                        surface.BackColor1 = Color.Transparent
+                        surface.BackgroundSource = editor
+                    End Sub
                 AddHandler editor.DpiChanged, Sub(sender, e) applyDpi(e.DeviceDpiNew)
                 BindScrollableGpuBackgroundSources(_pageSegmented, surface, True)
                 ActivateSegmentedPage()
@@ -239,12 +261,17 @@ Namespace videoenhancer
                 Finally
                     surface.Controls.Remove(_pageSegmented)
                     BindScrollableGpuBackgroundSources(_pageSegmented, ModernPanel1, True)
+                    If chrome IsNot Nothing Then chrome.Detach(editor)
                 End Try
             End Using
         End Sub
 
         Private Sub AddSegmentedEntry(root As DpiLayoutPanel)
-            Dim row As New ModernHorizontalPanel(108.0F, 56.0F, -1.0F)
+            Dim title = CreateTextLabel("分段超分", 12.0F, FontStyle.Regular, UiText)
+            title.Dock = DockStyle.Fill
+            title.Margin = Padding.Empty
+            Dim titleWidth = Math.Max(84, MeasureTextWidth96(title.Text, title.Font) + 4)
+            Dim row As New ModernHorizontalPanel(CSng(titleWidth), CSng(UiColumnGap), 40.0F, 14.0F, -1.0F, CSng(UiColumnGap), 160.0F)
             ConfigureDpiSwitch(_switchSegmentedMode)
             _switchSegmentedMode.Checked = _config.SegmentedEnabled
             AddHandler _switchSegmentedMode.CheckedChanged, Sub()
@@ -256,9 +283,13 @@ Namespace videoenhancer
             Dim open As New ModernButton With {.Text = "编辑分段方案"}
             ConfigureSecondaryButton(open)
             AddHandler open.Click, Sub() OpenSegmentedEditor()
-            row.AddColumn(CreateOfficialCaption("分段超分"), 0)
-            row.AddColumn(_switchSegmentedMode, 1)
-            row.AddColumn(open, 2)
+            _switchSegmentedMode.Anchor = AnchorStyles.None
+            _switchSegmentedMode.Margin = Padding.Empty
+            Dim description = CreateOfficialCaption("将文件添加到准备文件列表后编辑")
+            row.AddColumn(title, 0)
+            row.AddColumn(_switchSegmentedMode, 2)
+            row.AddColumn(description, 4)
+            row.AddColumn(open, 6)
             AddWorkbenchRow(root, row, 204, UiRowHeight)
         End Sub
     End Class

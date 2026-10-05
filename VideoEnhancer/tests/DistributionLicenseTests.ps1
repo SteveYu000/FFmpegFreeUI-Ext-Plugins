@@ -24,6 +24,8 @@ try {
     Assert ($manifest.entry -eq 'videoenhancer.ext.3fui.dll') '元数据使用 Ext 插件二进制名称'
     Assert ($null -ne $archive.GetEntry($manifest.entry)) 'ZIP 包含声明的插件 DLL'
     Assert ($null -eq $archive.GetEntry('videoenhancer.3fui.dll')) 'ZIP 不包含更名前的插件 DLL'
+    Assert (@($archive.Entries | Where-Object { $_.FullName -match 'SharpCompress' }).Count -eq 0) '发行 ZIP 没有 SharpCompress 二进制或许可残留'
+    Assert ((Hash (Read-EntryBytes $archive 'videoenhancer/bin/7zip/7za.exe')) -eq 'edbee35370e14030e4c785cf88200f42dc651c1eb4217c1e3963c38a12f099b0') 'ZIP 随附锁定版本的 7za'
     $guide = Read-EntryBytes $archive 'VideoEnhancer-安装说明.txt'
     Assert ((Hash $guide) -eq (Get-FileHash -LiteralPath (Join-Path $projectRoot 'VideoEnhancer-安装说明.txt')).Hash.ToLowerInvariant()) 'ZIP 根目录附带原文安装说明'
     Assert ([Text.Encoding]::UTF8.GetString($guide).Contains('Plugin/')) '安装说明包含实际 Plugin 布局'
@@ -51,6 +53,8 @@ try {
     $reader = [IO.StreamReader]::new($resource, [Text.Encoding]::UTF8)
     try { $compiled = $reader.ReadToEnd() | ConvertFrom-Json } finally { $reader.Dispose() }
     Assert ($compiled.sha256 -eq $snapshot.sha256) '插件 DLL 内嵌相同的对应源码身份'
+    Assert (@($assembly.GetReferencedAssemblies() | Where-Object { $_.Name -eq 'SharpCompress' }).Count -eq 0) '发行 DLL 不引用 SharpCompress'
+    Assert (@($assembly.GetManifestResourceNames() | Where-Object { $_ -match 'SharpCompress' }).Count -eq 0) '发行 DLL 没有 SharpCompress 资源'
     foreach ($resourceName in @('VideoEnhancer.Embedded.AGPL-3.0-only.txt', 'VideoEnhancer.Embedded.LICENSING.md')) {
         Assert ($assembly.GetManifestResourceNames().Contains($resourceName)) "DLL 包含许可材料：$resourceName"
     }

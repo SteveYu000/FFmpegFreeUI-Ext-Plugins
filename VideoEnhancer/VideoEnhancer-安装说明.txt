@@ -21,6 +21,7 @@ LakeUI 5.112 或更新的 5.x；.NET 10 Desktop Runtime（x64）。
        videoenhancer/
          bin/fff-native-11/FFF.Native.dll（及同目录的九个配套 DLL）
          bin/aria2-next/aria2-next.exe
+         bin/7zip/7za.exe
          licenses/
          README.md
          LICENSING.md
@@ -33,6 +34,8 @@ LakeUI 5.112 或更新的 5.x；.NET 10 Desktop Runtime（x64）。
 三、首次使用
 在“视频超分 → 模型下载”中按需要安装 Python/RVE、RTX 运行组件和模型。
 这些大体积组件不包含在初始 ZIP 中，首次安装需要联网和足够的磁盘空间。
+安装和模型导入的解压使用随 ZIP 提供的 7za。支持 ZIP、7z、TAR、GZ、XZ、ZST，
+压缩 TAR 会继续解包；不支持 RAR，请先转换为 ZIP 或 7z。
 超分、补帧、HDR、分段的开关位于“视频参数 | AI增强”，参数可以保存进宿主预设。
 普通开关全部关闭且没有有效分段方案时，由宿主按原参数处理。
 最终编码、音频、字幕和容器设置仍使用宿主参数面板。

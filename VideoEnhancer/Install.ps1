@@ -25,7 +25,9 @@ $pluginDirectory = Join-Path $hostRoot 'Plugin'
 [xml]$project = Get-Content -LiteralPath (Join-Path $projectRoot 'Frontend/VideoEnhancerPlugin.vbproj') -Raw -Encoding UTF8
 $version = [string]$project.Project.PropertyGroup.Version
 $package = Join-Path $projectRoot "dist/VideoEnhancer-$version-win-x64.zip"
-[IO.Compression.ZipFile]::ExtractToDirectory($package, $pluginDirectory, $true)
+$sevenZip = Join-Path $projectRoot 'Backend/obj/third-party/7zip/26.03/extra/x64/7za.exe'
+& $sevenZip x $package "-o$pluginDirectory" -y -aoa -mmt=on -sccUTF-8 -bd
+if ($LASTEXITCODE -ne 0) { throw "7za 安装解压失败（退出码 $LASTEXITCODE）" }
 # 新 DLL 解压成功后移除本插件更名前的文件，避免宿主同时扫描两个入口程序集。
 $previousPlugin = Join-Path $pluginDirectory 'videoenhancer.3fui.dll'
 if (Test-Path -LiteralPath $previousPlugin) { Remove-Item -LiteralPath $previousPlugin }

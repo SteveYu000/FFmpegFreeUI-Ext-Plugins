@@ -65,7 +65,7 @@ Namespace videoenhancer
 
         Friend Shared Function IsDownloadArchive(valuePath As String) As Boolean
             Select Case Path.GetExtension(valuePath).ToLowerInvariant()
-                Case ".7z", ".zip", ".rar", ".gz", ".xz", ".zst", ".tar"
+                Case ".7z", ".zip", ".gz", ".xz", ".zst", ".tar"
                     Return True
                 Case Else
                     Return False

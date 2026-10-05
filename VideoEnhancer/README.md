@@ -1,36 +1,10 @@
-# VideoEnhancer Ext
+# VideoEnhancer Ext 插件
 
 面向 FFmpegFreeUI API Extended Edition 的视频 AI 增强插件，前端和后端合并发布为 `videoenhancer.ext.3fui.dll`。
 
 发行的插件 DLL 采用 AGPL-3.0-only，独立自有源码保留 MIT；[许可范围](LICENSING.md) 明确列出例外及第三方边界。完整对应源码和许可材料随 ZIP 提供。
 
 需要 Ext API 2.5、LakeUI 5.112 或更新的 5.x，以及 .NET 10 Desktop Runtime。插件不引用 FFmpegFreeUI 主程序集，不提供旧宿主兼容入口。
-
-## 安装
-
-关闭宿主，将 `VideoEnhancer-0.1.0-win-x64.zip` 解压到宿主的 `Plugin` 目录。若存在旧的 `Plugin/videoenhancer.3fui.dll`，关闭宿主后删除该文件。ZIP 根目录附有 [中文安装说明](VideoEnhancer-安装说明.txt)，包含目录布局、首次使用、升级和常见问题。ZIP 包含插件 DLL、FFF.Native 预览库及配套 DLL、aria2-next、许可及对应源码；Python / RVE、RTX 运行组件和模型在“视频超分 → 模型下载”中按需安装。
-
-从源码安装：
-
-```powershell
-$env:FFMPEGFREEUI_HOME = "相对或绝对宿主目录"
-./Install.ps1
-```
-
-也可以使用 `./Install.ps1 -HostDirectory ../FFmpegFreeUI`。相对目录以本插件源码目录为基准。源码安装通过 ZIP 安装本插件的文件，保留现有模型、用户配置和其他插件。
-
-```powershell
-dotnet build VideoEnhancer.slnx -c Release
-./release/Build-Zip.ps1
-dotnet run --project tests/VideoEnhancer.Tests.csproj -c Release
-python -B tests/FrameBackendTests.py
-./tests/NativeDependencyTests.ps1
-./tests/DistributionLicenseTests.ps1
-```
-
-可将 `VIDEOENHANCER_TEST_HOST` 设为 Ext 宿主编译输出目录，额外验证真实宿主入口扫描、命令生成及插件组合。测试只读加载宿主程序集，不修改宿主。
-
-媒体回归需要 FFmpeg 与 FFprobe 位于 PATH，可分别设置 `VIDEOENHANCER_TEST_FFMPEG`、`VIDEOENHANCER_TEST_FFPROBE`。视频帧模块测试只需 Python 和 NumPy，不依赖 GPU。
 
 ## 入口与预设
 
@@ -61,9 +35,35 @@ python -B tests/FrameBackendTests.py
 - 完全自写命令应使用明确的 `-map 0:v:序号` 或 `[0:v:序号]` 滤镜输入。无法确认来源时会报错。
 - 前置步骤、原生滤镜、额外输入及后处理插件可按 Ext 现有顺序组合。其他插件若在 `TaskBeforePrepare` 就分析视频（如提前搜索质量参数），仍分析原始输入；现有接口不提供向这类插件交换增强视频的统一契约。
 
+## 安装
+
+关闭宿主，将 `VideoEnhancer-0.1.0-win-x64.zip` 解压到宿主的 `Plugin` 目录。若存在旧的 `Plugin/videoenhancer.3fui.dll`，关闭宿主后删除该文件。ZIP 根目录附有 [中文安装说明](VideoEnhancer-安装说明.txt)，包含目录布局、首次使用、升级和常见问题。ZIP 包含插件 DLL、FFF.Native 预览库及配套 DLL、aria2-next、7za、许可及对应源码；Python / RVE、RTX 运行组件和模型在“视频超分 → 模型下载”中按需安装。
+
+从源码安装：
+
+```powershell
+$env:FFMPEGFREEUI_HOME = "相对或绝对宿主目录"
+./Install.ps1
+```
+
+也可以使用 `./Install.ps1 -HostDirectory ../FFmpegFreeUI`。相对目录以本插件源码目录为基准。源码安装通过 ZIP 安装本插件的文件，保留现有模型、用户配置和其他插件。
+
+```powershell
+dotnet build VideoEnhancer.slnx -c Release
+./release/Build-Zip.ps1
+dotnet run --project tests/VideoEnhancer.Tests.csproj -c Release
+python -B tests/FrameBackendTests.py
+./tests/NativeDependencyTests.ps1
+./tests/DistributionLicenseTests.ps1
+```
+
+可将 `VIDEOENHANCER_TEST_HOST` 设为 Ext 宿主编译输出目录，额外验证真实宿主入口扫描、命令生成及插件组合。测试只读加载宿主程序集，不修改宿主。
+
+媒体回归需要 FFmpeg 与 FFprobe 位于 PATH，可分别设置 `VIDEOENHANCER_TEST_FFMPEG`、`VIDEOENHANCER_TEST_FFPROBE`。视频帧模块测试只需 Python 和 NumPy，不依赖 GPU。
+
 ## 目录和依赖
 
-`Frontend` 为 VB / LakeUI 界面，`Backend` 为 C# 服务与处理链，自有托管代码构建后合并为一个 DLL。预览原生库由 `release/acquire-fff-native.ps1` 按 `release/fff-native.lock.json` 下载和校验，缓存到 `Frontend/obj/third-party/fff-native/2026.8.18/native`；源码仓库不保存 DLL。固定的官方 FFF.Player 2026.8.18 下载包仅用于读取其中的 API 11 原生库。十个 DLL 随 ZIP 放入 `videoenhancer/bin/fff-native-11`，构建输出采用相同布局，预览直接加载这些文件。有效缓存可离线复用，最终用户无需额外下载预览库。界面通过类型化服务调用管理操作，不解析插件命令行输入。RVE / Python、FFmpeg、RTX 和 aria2-next 保留各自的外部进程协议。
+`Frontend` 为 VB / LakeUI 界面，`Backend` 为 C# 服务与处理链，自有托管代码构建后合并为一个 DLL。预览原生库由 `release/acquire-fff-native.ps1` 按 `release/fff-native.lock.json` 下载和校验，缓存到 `Frontend/obj/third-party/fff-native/2026.8.18/native`；源码仓库不保存 DLL。固定的官方 FFF.Player 2026.8.18 下载包仅用于读取其中的 API 11 原生库。十个 DLL 随 ZIP 放入 `videoenhancer/bin/fff-native-11`，构建输出采用相同布局，预览直接加载这些文件。有效缓存可离线复用，最终用户无需额外下载预览库。全部安装和模型导入的解压统一使用固定版 7za（多线程），保留路径、链接和加密项检查以及取消和进度报告。支持 ZIP、7z、TAR、GZ、XZ、ZST，压缩 TAR 自动进行第二层解包；不支持 RAR。发行 ZIP、对应源码 ZIP 的打包与源码安装的解压也使用构建缓存中的 7za。界面通过类型化服务调用管理操作，不解析插件命令行输入。RVE / Python、FFmpeg、RTX 和 aria2-next 保留各自的外部进程协议。
 
 源码与发行 DLL 的许可范围见 [LICENSING.md](LICENSING.md)，完整正文位于 `LICENSES`。RVE 的 AGPL 集成、RTX 专有组件、FFF.Native 及配套库原始许可与版本源码见 [依赖许可说明](DEPENDENCIES-LICENSES.md)。构建会把源码清单内嵌到 DLL，打包时核验同一快照，并将对应插件源码和第三方源码归档放入 ZIP；旧 DLL 与新源码不匹配时拒绝打包。
 

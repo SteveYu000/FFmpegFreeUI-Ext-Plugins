@@ -226,8 +226,8 @@ public sealed partial class ExtVideoPipeline : IDisposable
     private void AddOverview(ExtPluginPresetOverviewContext context)
     {
         var settings=EnhancementSettings.FromJson(context.PluginStateJson);
-        context.Rows.Add(new("视频参数 | AI增强："+settings.Summary()));
         if(!settings.IsEnabled)return;
+        context.Rows.Add(new("视频参数 | AI增强："+settings.Summary()));
         if(settings.UpscaleEnabled)context.Rows.Add(new($"超分输出倍率：{(settings.OutputScale==0?"模型原生":settings.OutputScale+"x")}；分块：{settings.UpscaleTileSize}"));
         if(settings.InterpEnabled)context.Rows.Add(new($"补帧转场阈值：{settings.SceneDetectThreshold:g}；动态光流：{settings.InterpDynamicScaledOpticalFlow}；精度：{(settings.InterpHalfPrecision?"auto":"float32")}"));
         if(settings.SegmentedEnabled)

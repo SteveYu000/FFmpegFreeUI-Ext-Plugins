@@ -997,7 +997,7 @@ public static partial class BackendServices
         {
             if (!File.Exists(archive)) return Fail("压缩文件不存在：" + archive, 1);
             if (printComplete) Console.WriteLine("EXTRACT_START|" + outputDirectory);
-            ManagedArchiveExtractor.Extract(archive, outputDirectory,
+            NativeSevenZipExtractor.Extract(archive, outputDirectory,
                 printComplete ? percent => Console.WriteLine("EXTRACT_PROGRESS|" + percent) : null);
             if (printComplete) Console.WriteLine("EXTRACT_COMPLETE|" + outputDirectory);
             return 0;
@@ -1559,6 +1559,8 @@ public static partial class BackendServices
     private static int ImportModels(string requested, bool json)
     {
         var source = Path.GetFullPath(requested.Trim().Trim('"'));
+        if (Path.GetExtension(source).Equals(".rar", StringComparison.OrdinalIgnoreCase))
+            return Fail("7za 不支持 RAR，请先转换为 ZIP 或 7z");
         string? extractionRoot = null;
         try
         {
@@ -1592,7 +1594,7 @@ public static partial class BackendServices
     }
 
     private static bool IsModelArchive(string path) =>
-        new[] { ".zip", ".7z", ".rar", ".tar", ".gz", ".xz", ".zst" }
+        new[] { ".zip", ".7z", ".tar", ".gz", ".xz", ".zst" }
             .Contains(Path.GetExtension(path), StringComparer.OrdinalIgnoreCase);
 
     private static void WriteInspectionJson(ModelImportInspection item)

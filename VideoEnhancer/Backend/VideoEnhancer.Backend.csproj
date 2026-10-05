@@ -13,7 +13,6 @@
     <SevenZipCacheDirectory>$(MSBuildProjectDirectory)\obj\third-party\7zip\26.03</SevenZipCacheDirectory>
   </PropertyGroup>
   <ItemGroup>
-    <PackageReference Include="SharpCompress" Version="[0.50.3]" />
     <PackageReference Include="FFmpegFreeUI.Ext.PluginSdk" Version="[2.5.0]" PrivateAssets="all" ExcludeAssets="runtime" />
   </ItemGroup>
   <ItemGroup>
@@ -22,7 +21,6 @@
     <EmbeddedResource Include="..\LICENSE" LogicalName="VideoEnhancer.Embedded.LICENSE.txt" />
     <EmbeddedResource Include="..\LICENSES\AGPL-3.0-only.txt" LogicalName="VideoEnhancer.Embedded.AGPL-3.0-only.txt" />
     <EmbeddedResource Include="..\LICENSING.md" LogicalName="VideoEnhancer.Embedded.LICENSING.md" />
-    <EmbeddedResource Include="third-party\SharpCompress\LICENSE.txt" LogicalName="VideoEnhancer.Embedded.SharpCompress.LICENSE.txt" />
     <EmbeddedResource Include="$(SevenZipCacheDirectory)\extra\x64\7za.exe" LogicalName="VideoEnhancer.Embedded.SevenZip.7za.exe" />
     <EmbeddedResource Include="$(SevenZipCacheDirectory)\extra\License.txt" LogicalName="VideoEnhancer.Embedded.SevenZip.License.txt" />
     <EmbeddedResource Include="third-party\7zip\SOURCE.txt" LogicalName="VideoEnhancer.Embedded.SevenZip.SOURCE.txt" />

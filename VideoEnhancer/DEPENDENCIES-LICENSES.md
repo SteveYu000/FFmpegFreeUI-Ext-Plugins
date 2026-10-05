@@ -15,13 +15,12 @@ RVE 原始许可与参考源码固定于提交 `8541c46ca14e6f84fc86c5b9d3b75373
 | 依赖 | 版本 | 使用方式 | 许可 |
 | --- | --- | --- | --- |
 | FFmpegFreeUI.Ext.PluginSdk | 2.5.0 | 宿主提供 | MIT |
-| SharpCompress | 0.50.3 | 合并进入插件 DLL；随包原始许可 | MIT |
 | ILRepack.Lib.MSBuild.Task | 2.0.48 | 仅构建 | MIT |
 | Vortice.Direct2D1 / Direct3D11 / DirectComposition / DirectX / DXGI | 3.8.3 | LakeUI 传递依赖、宿主提供 | MIT |
 | Vortice.Mathematics | 2.1.0 | 宿主提供 | MIT |
 | SharpGen.Runtime / COM | 2.4.2-beta | 宿主提供 | MIT |
 
-来源：[Ext SDK](https://github.com/SteveYu000/FFmpegFreeUI-API-Extended-Edition)、[SharpCompress](https://github.com/adamhathcock/sharpcompress)、[ILRepack](https://github.com/ravibpatel/ILRepack.Lib.MSBuild.Task)、[Vortice.Windows](https://github.com/amerkoleci/Vortice.Windows)、[Vortice.Mathematics](https://github.com/amerkoleci/Vortice.Mathematics)、[SharpGenTools](https://github.com/SharpGenTools/SharpGenTools)。
+来源：[Ext SDK](https://github.com/SteveYu000/FFmpegFreeUI-API-Extended-Edition)、[ILRepack](https://github.com/ravibpatel/ILRepack.Lib.MSBuild.Task)、[Vortice.Windows](https://github.com/amerkoleci/Vortice.Windows)、[Vortice.Mathematics](https://github.com/amerkoleci/Vortice.Mathematics)、[SharpGenTools](https://github.com/SharpGenTools/SharpGenTools)。
 
 ## 随包独立工具
 
@@ -30,7 +29,7 @@ RVE 原始许可与参考源码固定于提交 `8541c46ca14e6f84fc86c5b9d3b75373
 | aria2-next | 2.8.3 | GPL-2.0-or-later | COPYING、AUTHORS、依赖声明、SOURCE.txt、同版完整源码 |
 | 7-Zip Extra x64 7za.exe | 26.03 | LGPL-2.1-or-later，部分 BSD | License.txt、SOURCE.txt、同版完整源码；这些材料及程序也内嵌于 DLL |
 
-二者通过独立进程执行。原始版权、精确二进制和源码校验信息见 `licenses/aria2-next` 与 `licenses/7zip`；这些许可证不被插件许可取代。
+7za 负责 ZIP、7z、TAR、GZ、XZ、ZST 的安装及模型导入解压，压缩 TAR 会继续解包；不支持 RAR。二者通过独立进程执行。原始版权、精确二进制和源码校验信息见 `licenses/aria2-next` 与 `licenses/7zip`；这些许可证不被插件许可取代。
 
 ## 原生预览库
 

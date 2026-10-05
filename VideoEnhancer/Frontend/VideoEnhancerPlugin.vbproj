@@ -22,7 +22,7 @@
     <FffNativeCacheDirectory>$(MSBuildProjectDirectory)\obj\third-party\fff-native\2026.8.18</FffNativeCacheDirectory>
   </PropertyGroup>
   <ItemGroup>
-    <!-- 宿主提供 SDK 和 LakeUI；插件只合并自身前后端与私有托管依赖。 -->
+    <!-- 宿主提供 SDK 和 LakeUI；插件只合并自身前后端。 -->
     <PackageReference Include="FFmpegFreeUI.Ext.PluginSdk" Version="[2.5.0]" PrivateAssets="all" ExcludeAssets="runtime" />
     <PackageReference Include="LakeUI" Version="[5.112.0]" PrivateAssets="all" ExcludeAssets="runtime" />
     <PackageReference Include="ILRepack.Lib.MSBuild.Task" Version="[2.0.48]" PrivateAssets="all" />

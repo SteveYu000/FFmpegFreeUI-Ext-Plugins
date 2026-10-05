@@ -46,7 +46,18 @@ $licenseSourceCache = Join-Path $projectRoot 'Backend/obj/third-party/license-so
 $licenseSourceLock = Get-Content -LiteralPath (Join-Path $PSScriptRoot 'third-party-sources.lock.json') -Raw -Encoding UTF8 | ConvertFrom-Json
 $ariaCache = Join-Path $projectRoot 'Backend/obj/third-party/aria2-next/2.8.3'
 & (Join-Path $PSScriptRoot 'acquire-aria2.ps1') -CacheDirectory $ariaCache
-& (Join-Path $PSScriptRoot 'acquire-7zip.ps1') -CacheDirectory (Join-Path $projectRoot 'Backend/obj/third-party/7zip/26.03')
+$sevenCache = Join-Path $projectRoot 'Backend/obj/third-party/7zip/26.03'
+& (Join-Path $PSScriptRoot 'acquire-7zip.ps1') -CacheDirectory $sevenCache
+$sevenZip = Join-Path $sevenCache 'extra/x64/7za.exe'
+function Add-Zip([string]$ArchivePath, [string]$WorkingDirectory, [string[]]$InputPaths) {
+    # 显式文件清单和禁用通配符保证对应源码包只包含快照列出的原文。
+    $zipArguments = @('a', '-tzip', $ArchivePath, '-mx=5', '-mmt=on', '-mcu=on', '-scsUTF-8', '-sccUTF-8', '-spd', '-y', '-bd') + $InputPaths
+    Push-Location -LiteralPath $WorkingDirectory
+    try {
+        & $sevenZip @zipArguments | Out-Null
+        if ($LASTEXITCODE -ne 0) { throw "7za ZIP 打包失败（退出码 $LASTEXITCODE）：$ArchivePath" }
+    } finally { Pop-Location }
+}
 $nativeCache = Join-Path $projectRoot 'Frontend/obj/third-party/fff-native/2026.8.18'
 & (Join-Path $PSScriptRoot 'acquire-fff-native.ps1') -CacheDirectory $nativeCache
 $nativeLock = Get-Content -LiteralPath (Join-Path $PSScriptRoot 'fff-native.lock.json') -Raw -Encoding UTF8 | ConvertFrom-Json
@@ -66,6 +77,9 @@ try {
     $ariaDestination = Join-Path $data 'bin/aria2-next'
     [IO.Directory]::CreateDirectory($ariaDestination) | Out-Null
     Copy-Item -LiteralPath (Join-Path $ariaCache 'aria2-next.exe') -Destination $ariaDestination
+    $sevenDestination = Join-Path $data 'bin/7zip'
+    [IO.Directory]::CreateDirectory($sevenDestination) | Out-Null
+    Copy-Item -LiteralPath $sevenZip -Destination $sevenDestination
     $licenses = Join-Path $data 'licenses'
     foreach ($component in Get-ChildItem -LiteralPath (Join-Path $projectRoot 'Backend/third-party') -Directory) {
         $destination = Join-Path $licenses $component.Name
@@ -83,13 +97,12 @@ try {
     $snapshotJson = $sourceSnapshot | ConvertTo-Json -Depth 6
     [IO.File]::WriteAllText((Join-Path $ownLicenseDirectory 'SOURCE-SNAPSHOT.json'), $snapshotJson, [Text.UTF8Encoding]::new($false))
     $sourceArchivePath = Join-Path $ownLicenseDirectory "VideoEnhancer-$version-source.zip"
-    $sourceArchive = [IO.Compression.ZipFile]::Open($sourceArchivePath, [IO.Compression.ZipArchiveMode]::Create)
+    $sourceList = Join-Path $stage 'source-files.txt'
     try {
-        foreach ($file in $sourceSnapshot.files) {
-            [IO.Compression.ZipFileExtensions]::CreateEntryFromFile($sourceArchive, (Join-Path $projectRoot $file.path), $file.path, [IO.Compression.CompressionLevel]::Optimal) | Out-Null
-        }
-        [IO.Compression.ZipFileExtensions]::CreateEntryFromFile($sourceArchive, (Join-Path $ownLicenseDirectory 'SOURCE-SNAPSHOT.json'), 'SOURCE-SNAPSHOT.json') | Out-Null
-    } finally { $sourceArchive.Dispose() }
+        [IO.File]::WriteAllLines($sourceList, [string[]]$sourceSnapshot.files.path, [Text.UTF8Encoding]::new($false))
+        Add-Zip $sourceArchivePath $projectRoot @("@$sourceList")
+        Add-Zip $sourceArchivePath $ownLicenseDirectory @('SOURCE-SNAPSHOT.json')
+    } finally { if (Test-Path -LiteralPath $sourceList) { Remove-Item -LiteralPath $sourceList } }
     $latestSnapshot = & (Join-Path $PSScriptRoot 'Source-Snapshot.ps1')
     if ($latestSnapshot.sha256 -ne $sourceSnapshot.sha256) { throw '打包过程中源码发生变化，请重新构建' }
     $sourceArchiveSha256 = (Get-FileHash -LiteralPath $sourceArchivePath -Algorithm SHA256).Hash.ToLowerInvariant()
@@ -113,8 +126,11 @@ try {
     $manifest = [ordered]@{ id = 'videoenhancer'; version = $version; extApi = '2.5.0'; lakeUi = '5.112.0'; entry = 'videoenhancer.ext.3fui.dll'; runtime = 'videoenhancer'; distribution = 'zip'; license = 'AGPL-3.0-only'; sourceSnapshot = $sourceSnapshot.sha256; sourceArchive = "videoenhancer/licenses/VideoEnhancer/VideoEnhancer-$version-source.zip"; sourceSha256 = $sourceArchiveSha256 }
     [IO.File]::WriteAllText((Join-Path $stage 'videoenhancer.manifest.json'), ($manifest | ConvertTo-Json), [Text.UTF8Encoding]::new($false))
     $package = Join-Path $outputRoot "VideoEnhancer-$version-win-x64.zip"
-    if (Test-Path -LiteralPath $package) { Remove-Item -LiteralPath $package }
-    [IO.Compression.ZipFile]::CreateFromDirectory($stage, $package, [IO.Compression.CompressionLevel]::Optimal, $false)
+    $temporaryPackage = Join-Path $outputRoot ('.package-' + [Guid]::NewGuid().ToString('N') + '.zip')
+    try {
+        Add-Zip $temporaryPackage $stage @('.')
+        [IO.File]::Move($temporaryPackage, $package, $true)
+    } finally { if (Test-Path -LiteralPath $temporaryPackage) { Remove-Item -LiteralPath $temporaryPackage } }
     $hash = (Get-FileHash -LiteralPath $package -Algorithm SHA256).Hash.ToLowerInvariant()
     [IO.File]::WriteAllText($package + '.sha256', "$hash  $([IO.Path]::GetFileName($package))`n", [Text.UTF8Encoding]::new($false))
     Write-Output $package

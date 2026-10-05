@@ -102,6 +102,9 @@ Namespace videoenhancer
 
         Private Sub BuildOfficialSegmentedPage()
             _pageSegmented.Dock = DockStyle.Fill
+            _pageSegmented.BackColor = Color.Transparent
+            _pageSegmented.BackColor1 = Color.Transparent
+            _pageSegmented.BorderSize = 0
             _pageSegmented.LayoutMode = ModernPanel.LayoutModeEnum.Absolute
             _pageSegmented.AutoScroll = False
             _pageSegmented.ScrollBarMode = ModernPanel.ScrollMode.Vertical

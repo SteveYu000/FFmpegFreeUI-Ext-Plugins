@@ -23,16 +23,11 @@ GPL-2.0-or-later；原始 COPYING、AUTHORS、依赖声明、SOURCE.txt 及
 
 7-Zip Extra 26.03
 ----------------
-独立进程的 x64 7za.exe 用于原生 7z 解压，首次使用时释放至 bin/7zip。
+独立进程的 x64 7za.exe 用于全部支持格式的解压，随 ZIP 安装至 bin/7zip。
+单 DLL 首次使用也可释放同版工具；不支持 RAR。
 https://github.com/ip7z/7zip
 LGPL-2.1-or-later，部分 BSD。程序、License.txt、SOURCE.txt 与完整源码
 内嵌于 DLL，原始声明及 7z2603-src.tar.xz 也随 ZIP 位于 licenses/7zip。
-
-SharpCompress 0.50.3
---------------------
-合并进入插件 DLL，用于托管压缩包处理。
-https://github.com/adamhathcock/sharpcompress
-MIT；原始许可及版权见 licenses/SharpCompress/LICENSE.txt。
 
 原生预览库
 ----------

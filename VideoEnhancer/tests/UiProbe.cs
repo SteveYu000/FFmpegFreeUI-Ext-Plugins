@@ -1,4 +1,6 @@
 using System.Drawing;
+using System.Drawing.Drawing2D;
+using LakeUI;
 using System.IO;
 using System.Reflection;
 using System.Runtime.Loader;
@@ -31,6 +33,25 @@ internal static partial class Program
         using var form = new Form { Text = "VideoEnhancer UI Probe", AutoScaleMode = AutoScaleMode.Dpi,
             AutoScaleDimensions = new SizeF(96, 96), ClientSize = new Size(1400, 860), MinimumSize = new Size(840, 620),
             BackColor = Color.FromArgb(24, 26, 30), Font = new Font("Microsoft YaHei UI", 10) };
+        // 彩色背景能直接暴露不透明黑底，模拟宿主对根面板的背景映射。
+        using var backdrop = new Bitmap(1400, 860);
+        using (var graphics = Graphics.FromImage(backdrop))
+        using (var brush = new LinearGradientBrush(new Rectangle(0, 0, 1400, 860), Color.FromArgb(35, 92, 135), Color.FromArgb(125, 63, 87), 25f))
+        {
+            graphics.FillRectangle(brush, 0, 0, 1400, 860);
+            graphics.FillEllipse(Brushes.SteelBlue, 50, 400, 700, 700);
+            graphics.FillEllipse(Brushes.DarkGoldenrod, 950, -80, 420, 420);
+        }
+        using var chrome = new ThisIsYourWindow { BackdropMode = ThisIsYourWindow.BackdropModeEnum.Image,
+            BackdropImage = backdrop, BackdropFirstWindowOnly = false, BackdropTintColor = Color.FromArgb(125, 0, 0, 0),
+            BackdropTintInactiveColor = Color.FromArgb(125, 0, 0, 0), CaptionHeight = 34,
+            CaptionBackColor = Color.Transparent, CaptionInactiveBackColor = Color.Transparent };
+        foreach (var panel in new[] { tools, parameters })
+        {
+            var root = (ModernPanel)panelType.GetField("ModernPanel1", BindingFlags.NonPublic | BindingFlags.Instance)!.GetValue(panel)!;
+            root.BackgroundSource = form;
+        }
+        chrome.Attach(form);
         var content = new Panel { Dock = DockStyle.Fill };
         content.Controls.Add(tools);
         parameters.Visible = false;
