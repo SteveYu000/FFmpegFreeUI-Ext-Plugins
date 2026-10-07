@@ -33,13 +33,13 @@ RVE 原始许可与参考源码固定于提交 `8541c46ca14e6f84fc86c5b9d3b75373
 
 ## 原生预览库
 
-构建下载官方 [FFF.Player 2026.8.18](https://github.com/Lake1059/FFF_Project/releases/tag/2026.8.18)，只读取其中十个原生 DLL，不运行播放器、不将播放器随包分发。官方下载包、每个 DLL 的大小和 SHA-256 固定在 `release/fff-native.lock.json`。ZIP 目录为 `videoenhancer/bin/fff-native-11`，均为可替换的独立 DLL。
+构建下载官方 [FFF.Player 2026.8.19](https://github.com/Lake1059/FFF_Project/releases/tag/2026.8.19)，只读取其中十个原生 DLL，不运行播放器、不将播放器随包分发。官方下载包、每个 DLL 的大小和 SHA-256 固定在 `release/fff-native.lock.json`。ZIP 目录为 `videoenhancer/bin/fff-native-11`，均为可替换的独立 DLL。
 
-FFF_Project 标签提交为 `72d3406738413262d2a99b8fc2a678dfdbf31364`，实际二进制接口为 API 11。配套库的版本已通过 DLL 版本导出确认，与该源码中 vcpkg baseline `e03dc9b29710050cd1018bc5674688108658d327` 一致。
+FFF_Project 标签提交为 `c43614ca5c77f40cb3cb2b2254a54bd4fea2e614`，实际二进制接口为 API 11。配套库的版本已通过 DLL 版本导出确认，与该源码中 vcpkg baseline `e03dc9b29710050cd1018bc5674688108658d327` 一致。
 
 | 组件与文件 | 已确认版本 | 选择的许可 | 随包原文 |
 | --- | --- | --- | --- |
-| FFF.Native.dll | 2026.8.18 / API 11 | MIT | FFF.Native/LICENSE.txt |
+| FFF.Native.dll | 2026.8.19 / API 11 | MIT | FFF.Native/LICENSE.txt |
 | libass / ass-9.dll | 0.17.4 | ISC | libass/COPYING |
 | Brotli / brotlicommon.dll、brotlidec.dll | 1.2.0 | MIT | Brotli/LICENSE |
 | bzip2 / bz2.dll | 1.0.8 | bzip2-1.0.6 | bzip2/LICENSE |

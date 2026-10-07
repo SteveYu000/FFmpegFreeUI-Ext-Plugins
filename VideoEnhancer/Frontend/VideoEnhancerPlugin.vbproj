@@ -19,7 +19,7 @@
     <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
     <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
     <ILRepackTargetsFile>$(MSBuildProjectDirectory)\ILRepack.targets</ILRepackTargetsFile>
-    <FffNativeCacheDirectory>$(MSBuildProjectDirectory)\obj\third-party\fff-native\2026.8.18</FffNativeCacheDirectory>
+    <FffNativeCacheDirectory>$(MSBuildProjectDirectory)\obj\third-party\fff-native\2026.8.19</FffNativeCacheDirectory>
   </PropertyGroup>
   <ItemGroup>
     <!-- 宿主提供 SDK 和 LakeUI；插件只合并自身前后端。 -->

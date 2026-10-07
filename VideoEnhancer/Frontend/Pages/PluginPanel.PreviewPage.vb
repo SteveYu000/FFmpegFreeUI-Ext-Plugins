@@ -26,12 +26,10 @@ Namespace videoenhancer
         Private ReadOnly _lblPreviewStatus As New HtmlColorLabel()
         Private ReadOnly _lblPreviewNote As New HtmlColorLabel()
         Private ReadOnly _lblRate As New HtmlColorLabel()
-        Private ReadOnly _btnQuad As New ModernButton()
 
         ' 定期把「预览输出」右键菜单项挂到编码队列窗体（窗体实例重建后自动恢复）
         Private ReadOnly _taskIds As New List(Of String)()
         Private _pendingPreviewTaskId As String = ""
-        Private _quadForm As QuadGridForm
         Private _engine As PreviewEngine
         Private _lastPreviewImage As Image
         ' ────────────────────────── 实时预览页 ──────────────────────────
@@ -301,10 +299,15 @@ Namespace videoenhancer
             If image Is Nothing Then
                 Return
             End If
-            Dim old = _lastPreviewImage
-            _picPreview.Source = PreviewPictureSource.Create(image)
-            _lastPreviewImage = image
-            If old IsNot Nothing AndAlso Not ReferenceEquals(old, image) Then PreviewPictureSource.Release(old)
+            Try
+                _picPreview.Source = PreviewPictureSource.Create(image)
+                Dim old = _lastPreviewImage
+                _lastPreviewImage = image
+                If old IsNot Nothing AndAlso Not ReferenceEquals(old, image) Then PreviewPictureSource.Release(old)
+            Catch ex As Exception
+                If Not ReferenceEquals(_lastPreviewImage, image) Then PreviewPictureSource.Release(image)
+                OnPreviewStatusChanged(sender, "预览显示失败：" & ex.Message, True)
+            End Try
         End Sub
 
         Private Sub OnPreviewStatusChanged(sender As Object, text As String, isError As Boolean)
@@ -344,19 +347,6 @@ Namespace videoenhancer
             End If
         End Sub
 
-        Private Sub OnQuadClick(sender As Object, e As EventArgs)
-            If _quadForm Is Nothing OrElse _quadForm.IsDisposed Then
-                _quadForm = New QuadGridForm(_config)
-            End If
-            Try
-                If Not _quadForm.Visible Then
-                    _quadForm.Show(Me)
-                Else
-                    _quadForm.Activate()
-                End If
-            Catch
-            End Try
-        End Sub
     End Class
 
 End Namespace

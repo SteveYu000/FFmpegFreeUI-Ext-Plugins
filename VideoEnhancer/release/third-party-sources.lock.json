@@ -1,18 +1,18 @@
 {
   "schemaVersion": 1,
-  "nativeBinaryVersion": "2026.8.18",
+  "nativeBinaryVersion": "2026.8.19",
   "vcpkgBaseline": "e03dc9b29710050cd1018bc5674688108658d327",
   "rveReferenceCommit": "8541c46ca14e6f84fc86c5b9d3b75373e25732e5",
   "artifacts": [
     {
       "component": "FFF_Project",
-      "version": "2026.8.18",
+      "version": "2026.8.19",
       "license": "MIT",
-      "file": "FFF_Project-72d3406-source.tar.gz",
-      "url": "https://github.com/Lake1059/FFF_Project/archive/72d3406738413262d2a99b8fc2a678dfdbf31364.tar.gz",
-      "size": 1271908,
-      "sha256": "a94b4b0f08f55057db2a798289417e62759f4f037b2a6947d4ad19cd63b6b790",
-      "sha512": "0ee263612725f342efcc808b116769680d07ea264b1998db53fb95eb7c48d9d31e392d7852679fde514a9c5c7a156a37b7c6db8b044c4845115d868dcb1fd877"
+      "file": "FFF_Project-c43614ca-source.tar.gz",
+      "url": "https://codeload.github.com/Lake1059/FFF_Project/tar.gz/c43614ca5c77f40cb3cb2b2254a54bd4fea2e614",
+      "size": 1277431,
+      "sha256": "8c9eebbf4f0a7e9d4e7cec6d43822f422178e4a28d6aa54cdd55f05c66dddb71",
+      "sha512": "3e7d714f30ab4db42348ac5b3572df62b4cbfd691c25b2a15356111186df50b6af1af7c093742b6f132cdd0c9fda2b795c47d67127bc8ca466da2e344d417900"
     },
     {
       "component": "vcpkg",

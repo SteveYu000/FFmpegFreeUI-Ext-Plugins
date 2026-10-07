@@ -13,6 +13,8 @@ internal static partial class Program
         string fixture = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", ".test-tools", "ui-probe-data"));
         Directory.CreateDirectory(fixture);
         CreateInstalledModelFixtures(Path.Combine(fixture, "models"));
+        string trtModel=Path.Combine(fixture,"models","PTH","realesr-animevideov3.pth");
+        Directory.CreateDirectory(Path.GetDirectoryName(trtModel)!);File.WriteAllBytes(trtModel,[1]);
         AppDomain.CurrentDomain.UnhandledException += (_, e) => File.WriteAllText(Path.Combine(fixture, "ui-probe-error.txt"), e.ExceptionObject.ToString());
         Environment.SetEnvironmentVariable("VIDEOENHANCER_ROOT", fixture);
         Application.SetHighDpiMode(HighDpiMode.PerMonitorV2);
@@ -32,6 +34,15 @@ internal static partial class Program
         }
         var tools = (Control)Activator.CreateInstance(panelType, Config(), true, false)!;
         var parameters = (Control)Activator.CreateInstance(panelType, Config(), true, true)!;
+        // 给实际合并 DLL 的 LakeUI 图像源呈现固定测试帧，不启动用户队列或读取用户视频。
+        var preview = new Bitmap(320,180);
+        using(var graphics=Graphics.FromImage(preview))
+        using(var brush=new LinearGradientBrush(new Rectangle(0,0,320,180),Color.SteelBlue,Color.Goldenrod,35f))
+        {
+            graphics.FillRectangle(brush,0,0,320,180);
+            graphics.DrawString("Ext · LakeUI Source",SystemFonts.MessageBoxFont!,Brushes.White,40,70);
+        }
+        panelType.GetMethod("OnPreviewFrameReady",BindingFlags.NonPublic|BindingFlags.Instance)!.Invoke(tools,[null,preview]);
         using var form = new Form { Text = "VideoEnhancer UI Probe", AutoScaleMode = AutoScaleMode.Dpi,
             AutoScaleDimensions = new SizeF(96, 96), ClientSize = new Size(1400, 860), MinimumSize = new Size(840, 620),
             BackColor = Color.FromArgb(24, 26, 30), Font = new Font("Microsoft YaHei UI", 10) };

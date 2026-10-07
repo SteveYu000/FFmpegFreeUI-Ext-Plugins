@@ -1,12 +1,18 @@
 # SPDX-License-Identifier: AGPL-3.0-only
-# RVE 集成模块，修改于 2026-10-05；许可与源码范围见 LICENSING.md。
-"""在同一 rve-backend 进程内执行先超分、再补帧的帧级管线。"""
+# Copyright (c) 2026 VideoEnhancer contributors
+# Ext 移植与许可导航调整：2026-10-07。
+# 本脚本与 RVE 结合运行；许可与源码范围见 LICENSING.md。
+"""在同一 rve-backend 进程内执行两种顺序，并及时落实目标尺寸。"""
 
 import os
 import queue
 import runpy
 import sys
 import traceback
+from itertools import chain
+
+sys.path.insert(0, os.path.dirname(__file__))
+from rve_output_scale import resize_frame
 
 
 def _normalise_upscaled_frame(render, source_frame, frame):
@@ -170,7 +176,7 @@ def _patch_render(render_module, instance_holder=None):
                     frame = self.upscaleOption(frame)
                     frame = _normalise_upscaled_frame(self, source_frame, frame)
                     if self.override_upscale_scale:
-                        frame.resize_frame(
+                        frame = resize_frame(frame,
                             self.width * self.override_upscale_scale,
                             self.height * self.override_upscale_scale,
                         )
@@ -204,12 +210,55 @@ def _patch_render(render_module, instance_holder=None):
         finally:
             self.writeBuffer.writeQueue.put(None)
 
+    def render_interp_first(self):
+        frames_rendered = 0
+        self._videoenhancer_render_error = None
+        try:
+            while True:
+                if self.informationHandler.get_is_paused():
+                    from time import sleep
+                    sleep(1)
+                    continue
+                frame = self.readBuffer.get()
+                if frame is None:
+                    self.informationHandler.stopWriting()
+                    break
+                for restoration in self.extraRestorationModels:
+                    frame = restoration(frame)
+                generated = []
+                if self.interpolateModel:
+                    transition = self.sceneDetect.detect(frame)
+                    frame = _align_interpolation_dtype(self, frame)
+                    generated = self.interpolateOption(img1=frame, transition=transition) or []
+                # 先补后超时，每个补帧结果都先落实目标尺寸，再进入输出队列。
+                for value in chain(generated, (frame,)):
+                    if isinstance(value, bytes):
+                        value = frame.get_dummy_frame().set_frame_bytes(value)
+                    if self.upscaleModel:
+                        # 转场补帧可能重复返回源 Frame；超分会原地改写，先复制以免重复超分或污染补帧缓存。
+                        value = value.clone()
+                        source = value
+                        value = _normalise_upscaled_frame(self, source, self.upscaleOption(value))
+                        if self.override_upscale_scale:
+                            value = resize_frame(value, self.width * self.override_upscale_scale,
+                                                 self.height * self.override_upscale_scale)
+                    payload = value.get_frame_bytes()
+                    self.informationHandler.setPreviewFrame(payload)
+                    self.informationHandler.setFramesRendered(frames_rendered)
+                    self.writeBuffer.writeQueue.put(payload)
+                    frames_rendered += 1
+        except BaseException as exc:
+            self._videoenhancer_render_error = exc
+            traceback.print_exc()
+            _stop_after_render_error(self)
+        finally:
+            self.writeBuffer.writeQueue.put(None)
+
     Render.__init__ = capture_instance
     if original_setup_upscale is not None:
         Render.setupUpscale = setup_upscale_with_precision
     Render.setupInterpolate = setup_interpolate_at_upscaled_size
-    if process_order == "upscale-first":
-        Render.render = render_upscale_first
+    Render.render = render_upscale_first if process_order == "upscale-first" else render_interp_first
 
 
 def main():
@@ -235,7 +284,7 @@ def main():
                 render.ffmpegWriteThread.join(timeout=15)
             except Exception:
                 pass
-            print("VIDEOENHANCER_FATAL: upscale-first render thread failed", file=sys.stderr)
+            print("VIDEOENHANCER_FATAL: render thread failed", file=sys.stderr)
             sys.stdout.flush()
             sys.stderr.flush()
             os._exit(1)

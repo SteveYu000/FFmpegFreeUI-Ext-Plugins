@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-// RVE 集成及兼容补丁；修改于 2026-10-05。原始 MIT 声明与上游版权见 LICENSING.md。
+// RVE 集成及兼容补丁；修改于 2026-10-07。原始 MIT 声明与上游版权见 LICENSING.md。
 using System.Diagnostics;
 using System.Globalization;
 using System.IO.Compression;
@@ -37,6 +37,10 @@ public static partial class BackendServices
         }
         return assembly?.GetName().Version?.ToString(3) ?? "0.0.0";
     }
+    private const string EmbeddedOutputScaleResource = "VideoEnhancer.Embedded.rve_output_scale.py";
+    private const string EmbeddedTensorRTConverterResource = "VideoEnhancer.Embedded.convert_tensorrt.py";
+    private const string EmbeddedFlashVsrResource = "VideoEnhancer.Embedded.rve-flashvsr-backend.py";
+    private const string EmbeddedBasicVsrResource = "VideoEnhancer.Embedded.rve-basicvsrpp-backend.py";
     private const string EmbeddedOrderedBackendResource = "VideoEnhancer.Embedded.rve-ordered-backend.py";
     private const string EmbeddedInterpolationInspectorResource = "VideoEnhancer.Embedded.inspect_interpolation_models.py";
     private const string EmbeddedUpscaleInspectorResource = "VideoEnhancer.Embedded.inspect_upscale_models.py";
@@ -532,6 +536,8 @@ public static partial class BackendServices
         var directory = PortablePaths.EmbeddedToolsRoot(ToolVersion);
         Directory.CreateDirectory(directory);
         var path = Path.Combine(directory, fileName);
+        if (fileName == "rve-ordered-backend.py")
+            EnsureEmbeddedFile(EmbeddedOutputScaleResource, "rve_output_scale.py");
         using var resource = Assembly.GetExecutingAssembly().GetManifestResourceStream(resourceName)
             ?? throw new InvalidOperationException("内置工具资源不存在：" + fileName);
         var needsUpdate = !File.Exists(path);
@@ -562,6 +568,10 @@ public static partial class BackendServices
             InstallEmbeddedBackendScript(EmbeddedUpscaleInspectorResource, UpscaleInspectorScript);
             InstallEmbeddedBackendScript(EmbeddedRifeTensorRTPrepareResource, RifeTensorRTPrepareScript);
             InstallEmbeddedBackendScript(EmbeddedFrameBackendResource, FrameBackendScript);
+            InstallEmbeddedBackendScript(EmbeddedTensorRTConverterResource, TensorRTConverterScript);
+            InstallEmbeddedBackendScript(EmbeddedOutputScaleResource, Path.Combine(backendDirectory, "rve_output_scale.py"));
+            InstallEmbeddedBackendScript(EmbeddedFlashVsrResource, Path.Combine(backendDirectory, "rve-flashvsr-backend.py"));
+            InstallEmbeddedBackendScript(EmbeddedBasicVsrResource, Path.Combine(backendDirectory, "rve-basicvsrpp-backend.py"));
             InstallEmbeddedBackendScript(EmbeddedSegmentedBackendResource, SegmentedBackendScript);
             EnsureGmfssModelTypeCompatibility();
             EnsureGimmModelCompatibility();
@@ -945,8 +955,16 @@ public static partial class BackendServices
             };
             PortablePaths.ConfigureChildProcess(start);
             DownloadCancellation.Check();
+            if (Uri.TryCreate(url, UriKind.Absolute, out var downloadUri) && downloadUri.Scheme is "http" or "https")
+            {
+                // HTTP 下载关闭 P2P 监听，避免进程完成下载后仍等待网络线程。
+                foreach (var argument in new[] { "--bt-interface=127.0.0.1", "--enable-dht=false", "--bt-enable-lpd=false", "--bt-port-mapping=false" })
+                    start.ArgumentList.Add(argument);
+            }
             foreach (var argument in new[]
             {
+                // aria2-next 的续传数据库保留在插件便携数据目录。
+                "--no-conf=true", "--state-dir=" + Path.Combine(PortablePaths.CacheRoot, "aria2-next"),
                 "--allow-overwrite=true", "--auto-file-renaming=false", "--continue=true",
                 "--file-allocation=none", "--max-connection-per-server=8", "--split=8",
                 "--min-split-size=1M", "--summary-interval=1", "--enable-color=false",
@@ -1595,7 +1613,7 @@ public static partial class BackendServices
     }
 
     private static bool IsModelArchive(string path) =>
-        new[] { ".zip", ".7z", ".tar", ".gz", ".xz", ".zst" }
+        new[] { ".zip", ".7z", ".tar", ".gz", ".xz", ".bz2", ".zst", ".tgz", ".txz", ".tbz2", ".tzst" }
             .Contains(Path.GetExtension(path), StringComparer.OrdinalIgnoreCase);
 
     private static void WriteInspectionJson(ModelImportInspection item)
@@ -2588,7 +2606,8 @@ public static partial class BackendServices
         return new ModelListCatalogEntry
         {
             Id = id,
-            DisplayName = ModelBaseName(path),
+            DisplayName = !interpolation && backend == "tensorrt" && ModelBaseName(path).Equals("realesr-animevideov3", StringComparison.OrdinalIgnoreCase)
+                ? "realesr-animevideov3 2/3/4x" : ModelBaseName(path),
             RelativePath = UserModelCatalog.NormalizeRelativePath(path, ModelsDir),
             Task = user?.Task ?? (interpolation ? "interpolation" : "upscale"),
             Architecture = architecture,

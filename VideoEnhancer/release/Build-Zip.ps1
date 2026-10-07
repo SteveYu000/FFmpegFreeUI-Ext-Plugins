@@ -58,7 +58,7 @@ function Add-Zip([string]$ArchivePath, [string]$WorkingDirectory, [string[]]$Inp
         if ($LASTEXITCODE -ne 0) { throw "7za ZIP 打包失败（退出码 $LASTEXITCODE）：$ArchivePath" }
     } finally { Pop-Location }
 }
-$nativeCache = Join-Path $projectRoot 'Frontend/obj/third-party/fff-native/2026.8.18'
+$nativeCache = Join-Path $projectRoot 'Frontend/obj/third-party/fff-native/2026.8.19'
 & (Join-Path $PSScriptRoot 'acquire-fff-native.ps1') -CacheDirectory $nativeCache
 $nativeLock = Get-Content -LiteralPath (Join-Path $PSScriptRoot 'fff-native.lock.json') -Raw -Encoding UTF8 | ConvertFrom-Json
 [xml]$project = Get-Content -LiteralPath (Join-Path $projectRoot 'Frontend/VideoEnhancerPlugin.vbproj') -Raw -Encoding UTF8

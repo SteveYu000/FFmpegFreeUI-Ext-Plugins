@@ -160,6 +160,9 @@ public sealed partial class ExtVideoPipeline : IDisposable
         context.Properties.TryGetValue("pluginStepId",out var stepId);
         if(ours)
         {
+            task.TotalFrames=0;
+            task.Progress=stepId is not null&&stepId.StartsWith("rve-",StringComparison.Ordinal)?new RenderProgressTracker():null;
+            task.Progress?.SetPaused(task.Paused);
             EnhancementTaskRegistry.Update(context.TaskId,task.Plan.Input,context.OutputPath,"增强中",context.PhaseName,task.Plan.Settings.ToJson(),task.Plan.BackendDescription);
             if(stepId is not null&&task.Plan.Rtx.TryGetValue(stepId,out var options))
             {
@@ -270,7 +273,7 @@ public sealed partial class ExtVideoPipeline : IDisposable
             else if(name is "task.stopped" or "task.removed")scope.Cancel();
             if(doc.RootElement.TryGetProperty("log",out var log)&&log.ValueKind==JsonValueKind.Object)
             {
-                string line=GetString(log,"text");
+                string line=scope.Progress?.RewriteLine(GetString(log,"text"))??GetString(log,"text");
                 if(line.Contains("VIDEOENHANCER_FATAL",StringComparison.Ordinal)||line.Contains("Traceback (most recent call last)",StringComparison.Ordinal))scope.FatalBackendError=true;
                 var total=Regex.Match(line,@"Total Output Frames:\s*(\d+)");
                 if(total.Success)scope.TotalFrames=long.Parse(total.Groups[1].Value,CultureInfo.InvariantCulture);
@@ -323,12 +326,13 @@ public sealed partial class ExtVideoPipeline : IDisposable
         internal volatile bool Paused,FatalBackendError;
         internal bool Validated;
         internal long TotalFrames;
+        internal RenderProgressTracker? Progress;
         internal TaskScope(EnhancementPlan plan,BackendInvocation invocation,Action<string> cleanupWarning)
         {
             Plan=plan;Preparation=invocation;_cleanupWarning=cleanupWarning;
             _pause=MemoryMappedFile.CreateNew(plan.PauseName,8);_pauseView=_pause.CreateViewAccessor();_pauseView.Write(0,(byte)0);
         }
-        internal void SetPaused(bool paused){if(Volatile.Read(ref _disposed)!=0)return;Paused=paused;try{_pauseView.Write(0,(byte)(paused?1:0));}catch(ObjectDisposedException){}}
+        internal void SetPaused(bool paused){if(Volatile.Read(ref _disposed)!=0)return;Paused=paused;Progress?.SetPaused(paused);try{_pauseView.Write(0,(byte)(paused?1:0));}catch(ObjectDisposedException){}}
         internal void Cancel(){try{Lifetime.Cancel();}catch(ObjectDisposedException){}Preparation.Stop();foreach(var runtime in Rtx.Values)runtime.Cancel();}
         public async ValueTask DisposeAsync()
         {

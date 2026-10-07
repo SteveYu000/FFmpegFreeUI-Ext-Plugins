@@ -44,6 +44,7 @@ Namespace videoenhancer
             Public Property Name As String
             Public Property RelativePath As String
             Public Property Size As Long
+            Public Property Sha256 As String = ""
             Public Property Installed As Boolean
             Public Property StatusText As String = ""
             Public Property ActionText As String = ""
@@ -273,12 +274,20 @@ Namespace videoenhancer
                             Dim name = item.GetProperty("name").GetString()
                             Dim relativePath = item.GetProperty("path").GetString()
                             Dim size = item.GetProperty("size").GetInt64()
+                            Dim hashElement As JsonElement
+                            Dim remoteHash = If(item.TryGetProperty("sha256", hashElement), hashElement.GetString(), "")
                             Dim entry = New DownloadModelEntry With {
-                                .Name = If(name, relativePath), .RelativePath = If(relativePath, ""), .Size = size,
-                                .Installed = DownloadInstallStatus.IsDownloadInstalled(If(relativePath, ""), ResolveCoreRoot())
+                                .Name = If(name, relativePath), .RelativePath = If(relativePath, ""), .Size = size, .Sha256 = If(remoteHash, ""),
+                                .Installed = DownloadInstallStatus.IsDownloadInstalled(If(relativePath, ""), ResolveCoreRoot(), If(remoteHash, ""))
                             }
                             entry.IsBackend = DownloadCategory(entry.RelativePath).Equals("Backend", StringComparison.OrdinalIgnoreCase)
                             If entry.IsBackend Then ApplyBackendDownloadStatus(entry, backendStatus)
+                            Dim componentFile = DownloadInstallStatus.ComponentCoreFile(ResolveCoreRoot(), entry.RelativePath)
+                            If Not entry.Installed AndAlso Not String.IsNullOrEmpty(componentFile) AndAlso File.Exists(componentFile) Then
+                                Dim marker = DownloadInstallStatus.ComponentArchiveMarkerPath(ResolveCoreRoot(), entry.RelativePath)
+                                entry.StatusText = If(File.Exists(marker), "可更新", "版本待核验")
+                                entry.ActionText = "更新组件"
+                            End If
                             entries.Add(entry)
                         Next
                     End Using
@@ -532,7 +541,7 @@ Namespace videoenhancer
                     ShowStatus("本地模型删除失败：" & errorText, True)
                     Return
                 End If
-                entry.Installed = DownloadInstallStatus.IsDownloadInstalled(entry.RelativePath, ResolveCoreRoot())
+                entry.Installed = DownloadInstallStatus.IsDownloadInstalled(entry.RelativePath, ResolveCoreRoot(), entry.Sha256)
                 SetDownloadRowState(entry.RelativePath, "未安装", "下载", UiTextMuted, UiAccent)
                 RefreshDownloadGroupSummary(DownloadCategory(entry.RelativePath))
                 RefreshModels()

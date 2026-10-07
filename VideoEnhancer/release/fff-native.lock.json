@@ -1,12 +1,12 @@
 {
-  "version": "2026.8.18",
+  "version": "2026.8.19",
   "api": 11,
-  "sourceCommit": "72d3406738413262d2a99b8fc2a678dfdbf31364",
+  "sourceCommit": "c43614ca5c77f40cb3cb2b2254a54bd4fea2e614",
   "archive": {
     "name": "FFF.Player.exe",
-    "url": "https://github.com/Lake1059/FFF_Project/releases/download/2026.8.18/FFF.Player.exe",
-    "size": 36293155,
-    "sha256": "c6a3ef170d0f45e12da6b886eea89640ccfdebf44cdcb804657d17db74a4eee9"
+    "url": "https://github.com/Lake1059/FFF_Project/releases/download/2026.8.19/FFF.Player.exe",
+    "size": 36294691,
+    "sha256": "d948c48fc31c28fa17e485d4565f1a1f283037a11f2925476dacad59a4219906"
   },
   "files": [
     {
@@ -31,8 +31,8 @@
     },
     {
       "name": "FFF.Native.dll",
-      "size": 572928,
-      "sha256": "8c625701f499e3257e12c09a914c2216040dd0680c47fea7072b5676a8fa2e6e"
+      "size": 574464,
+      "sha256": "3d78ebff7407adaa4a947d1310f87b29dddedc662d4e6373def095f7397db494"
     },
     {
       "name": "freetype.dll",

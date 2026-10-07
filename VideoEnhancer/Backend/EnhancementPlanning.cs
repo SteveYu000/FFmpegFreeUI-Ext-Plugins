@@ -86,23 +86,26 @@ public static partial class BackendServices
                 if(model.Length>0&&settings.OutputScale>0&&ModelCapabilityCatalog.TryGet(model,ModelsDir,out var capability)&&capability.InferenceScales.Contains(settings.OutputScale))
                 {scale=settings.OutputScale.ToString(CultureInfo.InvariantCulture);nativeScale=settings.OutputScale;}
                 int outputScale=settings.OutputScale>0?settings.OutputScale:nativeScale;
+                // TRT 低倍率直接编入 GPU 图；其他后端在超分结果进入补帧前缩放。
+                int engineScale=settings.Backend=="tensorrt"&&settings.OutputScale>0?Math.Min(nativeScale,settings.OutputScale):nativeScale;
+                if(model.Length>0&&settings.OutputScale>0&&settings.Backend is not ("flashvsr" or "basicvsrpp"))
+                    scale=settings.OutputScale.ToString(CultureInfo.InvariantCulture);
                 if(prepareModels&&model.Length>0&&settings.Backend=="tensorrt")
                 {
                     int engineWidth=width,engineHeight=height;
-                    if(settings.InterpEnabled&&settings.ProcessOrder=="interp-first"){} // 补帧不改变尺寸。
                     if(ModelCapabilityCatalog.TryGet(model,ModelsDir,out var capability2))
                     {
                         int multiple=Math.Max(1,capability2.InputMultiple);
                         engineWidth=(engineWidth+multiple-1)/multiple*multiple;engineHeight=(engineHeight+multiple-1)/multiple*multiple;
                     }
-                    model=EnsureTensorRtEngine(model,engineWidth,engineHeight,settings.UpscaleTileSize,nativeScale,settings.UpscaleHalfPrecision?"auto":"float32");
+                    model=EnsureTensorRtEngine(model,engineWidth,engineHeight,settings.UpscaleTileSize,engineScale,settings.UpscaleHalfPrecision?"auto":"float32");
                     if(model.Length==0)throw new InvalidOperationException("TensorRT 超分 Engine 构建失败");
                 }
                 string upPrecision=ResolveUpscalePrecision(model,settings.Backend,settings.UpscaleHalfPrecision?"auto":"float32");
                 string interpPrecision=ResolveInterpPrecision(interp,settings.InterpBackend,settings.InterpHalfPrecision?"auto":"float32");
                 if(prepareModels&&interp is not null&&settings.InterpBackend=="tensorrt")
                 {
-                    int prepScale=settings.Backend==settings.InterpBackend?nativeScale:outputScale;
+                    int prepScale=outputScale;
                     int iw=settings.ProcessOrder=="upscale-first"&&model.Length>0?width*prepScale:width;
                     int ih=settings.ProcessOrder=="upscale-first"&&model.Length>0?height*prepScale:height;
                     if(PrepareRifeTensorRTEngine(interp,iw,ih,false)!=0)
@@ -117,16 +120,16 @@ public static partial class BackendServices
                     string between=Path.Combine(work,$"rve-between-{ordinal}.mkv");
                     AddRve(plan,$"rve-first-{ordinal}",upFirst?"超分（第一阶段）":"补帧（第一阶段）",current,between,
                         upFirst?model:"",upFirst?null:interp,upFirst?scale:null,upFirst?settings.Backend:settings.InterpBackend,
-                        upFirst?rveEncoder:encoder,upPrecision,interpPrecision,ffmpeg,ffprobe,hdr,false);
+                        upFirst?rveEncoder:encoder,upPrecision,interpPrecision,ffmpeg,ffprobe,hdr);
                     AddRve(plan,$"rve-second-{ordinal}",upFirst?"补帧（第二阶段）":"超分（第二阶段）",between,rveOutput,
                         upFirst?"":model,upFirst?interp:null,upFirst?null:scale,upFirst?settings.InterpBackend:settings.Backend,
-                        upFirst?encoder:rveEncoder,upPrecision,interpPrecision,ffmpeg,ffprobe,hdr,false);
+                        upFirst?encoder:rveEncoder,upPrecision,interpPrecision,ffmpeg,ffprobe,hdr);
                 }
                 else
                 {
                     string backend=model.Length>0?settings.Backend:settings.InterpBackend;
                     AddRve(plan,$"rve-{ordinal}","RVE 视频增强",current,rveOutput,model,interp,scale,backend,rveEncoder,
-                        upPrecision,interpPrecision,ffmpeg,ffprobe,hdr,model.Length>0&&interp is not null);
+                        upPrecision,interpPrecision,ffmpeg,ffprobe,hdr);
                 }
                 current=rveOutput;
                 if(model.Length>0){width*=outputScale;height*=outputScale;}
@@ -181,10 +184,10 @@ public static partial class BackendServices
     }
 
     private static void AddRve(EnhancementPlan plan,string id,string name,string input,string output,string model,string? interp,
-        string? scale,string backend,string encoder,string upscalePrecision,string interpPrecision,string ffmpeg,string ffprobe,bool hdr,bool ordered)
+        string? scale,string backend,string encoder,string upscalePrecision,string interpPrecision,string ffmpeg,string ffprobe,bool hdr)
     {
         var settings=plan.Settings;
-        string script=ordered?ExtToolPath("rve-ordered-backend.py"):BackendScript;
+        string script=model.Length>0&&backend is not ("flashvsr" or "basicvsrpp")?ExtToolPath("rve-ordered-backend.py"):BackendScript;
         var args=BuildBackendArgs(input,output,model,encoder,true,scale,plan.PauseName,interp,
             settings.InterpFactor.ToString("0.########",CultureInfo.InvariantCulture),backend,script,hdr,
             settings.InterpDynamicScaledOpticalFlow,settings.SceneDetectThreshold,settings.UpscaleTileSize,model.Length>0?upscalePrecision:interpPrecision);
@@ -198,7 +201,7 @@ public static partial class BackendServices
         int multiple=ModelCapabilityCatalog.TryGet(model,ModelsDir,out var cap)?Math.Max(1,cap.InputMultiple):1;
         var args=new List<string>{"-u","-X","utf8",ExtToolPath("rve-ext-launch.py"),"--backend-dir",Path.GetDirectoryName(BackendScript)!,
             "--work-dir",plan.WorkDirectory,"--target-script",script,"--upscale-precision",upPrecision,"--interp-precision",interpPrecision,
-            "--process-order",plan.Settings.ProcessOrder,"--input-multiple",multiple.ToString(CultureInfo.InvariantCulture),"--ffprobe-path",ffprobe,"--"};
+            "--process-order",plan.Settings.ProcessOrder,"--output-scale",(model.Length>0?plan.Settings.OutputScale:0).ToString(CultureInfo.InvariantCulture),"--input-multiple",multiple.ToString(CultureInfo.InvariantCulture),"--ffprobe-path",ffprobe,"--"};
         args.AddRange(forwarded);
         AddStep(plan,id,name,PythonExe,args,false);
     }

@@ -131,7 +131,7 @@ Namespace videoenhancer
         End Function
 
         Friend Shared Function ModelDisplayText(entry As ModelCatalogItem, interpolation As Boolean) As String
-            Dim suffix = If(entry.Scale > 0 AndAlso Not interpolation, "  · " & entry.Scale.ToString() & "x", "")
+            Dim suffix = If(entry.Scale > 0 AndAlso Not interpolation AndAlso Not entry.DisplayName.EndsWith("2/3/4x", StringComparison.Ordinal), "  · " & entry.Scale.ToString() & "x", "")
             If String.Equals(entry.Source, "user", StringComparison.OrdinalIgnoreCase) Then suffix &= "  [用户]"
             Return entry.DisplayName & suffix
         End Function

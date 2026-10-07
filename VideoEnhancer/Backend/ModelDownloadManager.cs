@@ -49,6 +49,7 @@ internal sealed class ModelDownloadManager
                         writer.WriteString("name", model.Name);
                         writer.WriteString("path", model.Path);
                         writer.WriteNumber("size", model.Size);
+                        writer.WriteString("sha256", model.Sha256);
                         writer.WriteEndObject();
                     }
                     writer.WriteEndArray();
@@ -84,7 +85,7 @@ internal sealed class ModelDownloadManager
 
         var normalized = requestedPath.Replace('\\', '/').TrimStart('/');
         if (normalized.StartsWith("Backend/", StringComparison.OrdinalIgnoreCase))
-            return _fail("后端不能再用覆盖解压方式安装，请改用 --update-backend", 1);
+            return _fail("后端应在模型下载页通过后端更新服务进行安装或修复", 1);
         var model = models.FirstOrDefault(m => m.Path.Equals(normalized, StringComparison.OrdinalIgnoreCase));
         if (model is null) return _fail("镜像中不存在该文件：" + normalized, 1);
 
@@ -106,7 +107,22 @@ internal sealed class ModelDownloadManager
         // 完成下载及解压后才移除标记，刷新列表不会把取消后的半成品认作已安装。
         Directory.CreateDirectory(Path.GetDirectoryName(destination)!);
         var pending = destination + ".pending";
-        File.WriteAllText(pending, model.Path, new UTF8Encoding(false));
+        var pendingIdentity = category.Equals("Bin", StringComparison.OrdinalIgnoreCase)
+            ? model.Path + "\n" + model.Sha256 : model.Path;
+        if (category.Equals("Bin", StringComparison.OrdinalIgnoreCase) && File.Exists(destination))
+        {
+            // 同路径组件换包后，不能续传旧内容或复用旧的完整归档。
+            var partial = File.Exists(destination + ".aria2");
+            var stale = partial
+                ? !File.Exists(pending) || File.ReadAllText(pending, Encoding.UTF8) != pendingIdentity
+                : !string.IsNullOrWhiteSpace(model.Sha256) && !ArchiveHashMatches(destination, model.Sha256);
+            if (stale)
+            {
+                File.Delete(destination);
+                File.Delete(destination + ".aria2");
+            }
+        }
+        File.WriteAllText(pending, pendingIdentity, new UTF8Encoding(false));
         Console.WriteLine("DOWNLOAD_START|" + model.Path);
         var code = _token is null
             ? _downloadWithAria(url, destination, false)
@@ -133,7 +149,7 @@ internal sealed class ModelDownloadManager
 
         if (IsArchiveFile(destination))
         {
-            // 模型包按分类解压；补帧包只包含架构目录，直接解到 Frame-Interpolation。
+            // 旧镜像压缩包包含一级分类目录；新版补帧包只包含架构目录，需直接解到 Frame-Interpolation。
             var extractionRoot = category.Equals("Backend", StringComparison.OrdinalIgnoreCase)
                 ? _coreRoot
                 : category.Equals("Bin", StringComparison.OrdinalIgnoreCase)
@@ -148,6 +164,16 @@ internal sealed class ModelDownloadManager
                 var marker = FrameInterpolationArchiveMarkerPath(model.Path);
                 Directory.CreateDirectory(Path.GetDirectoryName(marker)!);
                 File.WriteAllText(marker, model.Path, Encoding.UTF8);
+            }
+            if (category.Equals("Bin", StringComparison.OrdinalIgnoreCase))
+            {
+                // 组件同一路径也可能更新，完成校验和解压后保存远端内容哈希。
+                DownloadCancellation.Check();
+                var normalizedPath = model.Path.Replace('\\', '/').ToUpperInvariant();
+                var key = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(normalizedPath)));
+                var marker = Path.Combine(_coreRoot, "bin", ".downloads", key + ".installed");
+                Directory.CreateDirectory(Path.GetDirectoryName(marker)!);
+                File.WriteAllText(marker, model.Sha256, new UTF8Encoding(false));
             }
             if (IsRtxVideoRuntimeArchivePath(model.Path))
             {
@@ -238,6 +264,12 @@ internal sealed class ModelDownloadManager
         }
     }
 
+    private static bool ArchiveHashMatches(string path, string expected)
+    {
+        using var stream = File.OpenRead(path);
+        return Convert.ToHexString(SHA256.HashData(stream)).Equals(expected, StringComparison.OrdinalIgnoreCase);
+    }
+
     private string FrameInterpolationArchiveMarkerPath(string relativePath)
     {
         var normalized = relativePath.Replace('\\', '/').ToUpperInvariant();
@@ -313,10 +345,15 @@ internal sealed class ModelDownloadManager
         var extension = Path.GetExtension(path);
         return extension.Equals(".7z", StringComparison.OrdinalIgnoreCase)
             || extension.Equals(".zip", StringComparison.OrdinalIgnoreCase)
+            || extension.Equals(".tar", StringComparison.OrdinalIgnoreCase)
+            || extension.Equals(".bz2", StringComparison.OrdinalIgnoreCase)
+            || extension.Equals(".tgz", StringComparison.OrdinalIgnoreCase)
+            || extension.Equals(".txz", StringComparison.OrdinalIgnoreCase)
+            || extension.Equals(".tbz2", StringComparison.OrdinalIgnoreCase)
+            || extension.Equals(".tzst", StringComparison.OrdinalIgnoreCase)
             || extension.Equals(".gz", StringComparison.OrdinalIgnoreCase)
             || extension.Equals(".xz", StringComparison.OrdinalIgnoreCase)
-            || extension.Equals(".zst", StringComparison.OrdinalIgnoreCase)
-            || extension.Equals(".tar", StringComparison.OrdinalIgnoreCase);
+            || extension.Equals(".zst", StringComparison.OrdinalIgnoreCase);
     }
 
     private static bool IsRtxVideoRuntimeArchivePath(string path)

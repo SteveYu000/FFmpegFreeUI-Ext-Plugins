@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: AGPL-3.0-only
-# RVE 集成模块，修改于 2026-10-05；许可与源码范围见 LICENSING.md。
+# RVE 集成模块，修改于 2026-10-07；许可与源码范围见 LICENSING.md。
 """由 Ext 插件提供的 RVE 启动包装器；参数仍直接传给真实 RVE 后端。"""
 from __future__ import annotations
 import argparse
@@ -52,6 +52,7 @@ def main():
     parser.add_argument("--interp-precision", default="auto")
     parser.add_argument("--process-order", default="upscale-first")
     parser.add_argument("--input-multiple", default="1")
+    parser.add_argument("--output-scale", type=int, choices=range(9), default=0)
     parser.add_argument("--ffprobe-path", required=True)
     parser.add_argument("backend_args", nargs=argparse.REMAINDER)
     args = parser.parse_args()
@@ -70,6 +71,7 @@ def main():
     os.environ["VIDEOENHANCER_UPSCALE_PRECISION"] = args.upscale_precision
     os.environ["VIDEOENHANCER_INTERP_PRECISION"] = args.interp_precision
     os.environ["VIDEOENHANCER_PROCESS_ORDER"] = args.process_order
+    os.environ["VIDEOENHANCER_OUTPUT_SCALE"] = str(args.output_scale)
     os.environ["VIDEOENHANCER_UPSCALE_INPUT_MULTIPLE"] = args.input_multiple
     os.environ["VIDEOENHANCER_ONNX_INPUT_MULTIPLE"] = args.input_multiple
     for key, suffix in (("XDG_CACHE_HOME",""),("HF_HOME","huggingface"),("TORCH_HOME","torch"),("CUDA_CACHE_PATH","cuda"),("PYTHONPYCACHEPREFIX","pycache"),("NUMBA_CACHE_DIR","numba"),("MPLCONFIGDIR","matplotlib")):

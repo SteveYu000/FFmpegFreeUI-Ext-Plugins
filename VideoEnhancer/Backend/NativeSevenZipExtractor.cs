@@ -187,6 +187,7 @@ internal static class NativeSevenZipExtractor
     private static void ValidateEntries(ArchiveListing listing, string archive, string output)
     {
         bool stream = StreamFormats.Contains(listing.Type);
+        var destinations = new Dictionary<string, bool>(StringComparer.OrdinalIgnoreCase);
         if (!stream && listing.Type is not ("7z" or "zip" or "tar" or "Cab" or "cab"))
             throw new InvalidDataException("7za 不支持此安装压缩格式：" + listing.Type);
         foreach (var entry in listing.Entries)
@@ -196,13 +197,25 @@ internal static class NativeSevenZipExtractor
                 throw new InvalidDataException("压缩项没有有效的文件名");
             var name = EntryName(entry, archive);
             if (entry.GetValueOrDefault("Encrypted") == "+") throw new InvalidDataException("不支持加密压缩项：" + name);
-            if (!string.IsNullOrEmpty(entry.GetValueOrDefault("Symbolic Link")) ||
+            if (entry.GetValueOrDefault("Anti") == "+" || !string.IsNullOrEmpty(entry.GetValueOrDefault("Symbolic Link")) ||
                 !string.IsNullOrEmpty(entry.GetValueOrDefault("Hard Link")) || HasLinkOrSpecialAttributes(entry))
                 throw new InvalidDataException("出于安全原因不解压链接或特殊文件：" + name);
             if (!stream && (!entry.TryGetValue("Size", out var size) ||
                 !long.TryParse(size, NumberStyles.None, CultureInfo.InvariantCulture, out _)))
                 throw new InvalidDataException("压缩项没有有效的大小：" + name);
-            ResolveEntry(output, name, IsDirectory(entry));
+            var target = ResolveEntry(output, name, IsDirectory(entry));
+            if (target is not null && !destinations.TryAdd(target, IsDirectory(entry)))
+                throw new InvalidDataException("压缩包包含重复或大小写冲突路径：" + name);
+        }
+        foreach (var target in destinations.Keys)
+        {
+            var parent = Path.GetDirectoryName(target);
+            while (parent is not null && !parent.Equals(output, StringComparison.OrdinalIgnoreCase))
+            {
+                if (destinations.TryGetValue(parent, out var directory) && !directory)
+                    throw new InvalidDataException("压缩包包含文件与目录路径冲突：" + parent);
+                parent = Path.GetDirectoryName(parent);
+            }
         }
     }
 

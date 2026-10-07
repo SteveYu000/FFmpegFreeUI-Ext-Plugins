@@ -125,6 +125,14 @@ internal static partial class Program
             ExpectArchiveFailure(extractor, archive, output, "拒绝不安全路径：" + entry, typeof(InvalidDataException));
             Check(!Directory.Exists(output), "目录预检失败之前没有创建目标目录：" + entry);
         }
+        foreach(var names in new[]{new[]{"same.txt","same.txt"},new[]{"A.txt","a.txt"},new[]{"parent","parent/child.txt"}})
+        {
+            string archive=Path.Combine(_root,"conflict-"+ ++index+".zip"),output=Path.Combine(_root,"conflict-output-"+index);
+            using(var zip=ZipFile.Open(archive,ZipArchiveMode.Create))
+                foreach(string name in names)using(var writer=new StreamWriter(zip.CreateEntry(name).Open()))writer.Write("冲突数据");
+            ExpectArchiveFailure(extractor,archive,output,"预检拒绝重复或文件目录冲突",typeof(InvalidDataException));
+            Check(!Directory.Exists(output),"冲突归档在写盘前被拒绝");
+        }
         foreach (var type in new[] { TarEntryType.SymbolicLink, TarEntryType.HardLink, TarEntryType.Fifo })
         {
             string archive = Path.Combine(_root, type + ".tar"), output = Path.Combine(_root, type + "-output");

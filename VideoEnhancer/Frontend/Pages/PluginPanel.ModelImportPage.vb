@@ -672,7 +672,7 @@ Namespace videoenhancer
             If _modelImportBusy Then Return
             Using dialog As New OpenFileDialog With {
                 .Title = "选择要预检并导入的模型",
-                .Filter = "支持的模型|*.pth;*.pt;*.pkl;*.ckpt;*.safetensors;*.onnx;*.param;*.bin;*.zip;*.7z;*.tar;*.gz;*.xz;*.zst|所有文件|*.*",
+                .Filter = "支持的模型|*.pth;*.pt;*.pkl;*.ckpt;*.safetensors;*.onnx;*.param;*.bin;*.zip;*.7z;*.tar;*.gz;*.bz2;*.xz;*.zst;*.tgz;*.txz;*.tbz2;*.tzst|所有文件|*.*",
                 .CheckFileExists = True,
                 .Multiselect = False
             }

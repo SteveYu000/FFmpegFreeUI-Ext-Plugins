@@ -36,7 +36,7 @@ third-party-sources/7zip 提供，下载位置见 licenses/VideoEnhancer/SOURCE.
 
 原生预览库
 ----------
-FFF.Native 来自 Lake1059/FFF_Project 官方 2026.8.18，API 11，MIT。
+FFF.Native 来自 Lake1059/FFF_Project 官方 2026.8.19，API 11，MIT。
 原许可、二进制清单、来源与构建说明见 licenses/FFF.Native。
 上游版权行含占位文本，随包原样保留。
 

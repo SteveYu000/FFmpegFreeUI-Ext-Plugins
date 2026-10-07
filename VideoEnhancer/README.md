@@ -16,6 +16,10 @@
 
 用户的最终 FFmpeg 编码、音频、字幕、容器及自定义参数由宿主预设控制。参数总览显示 AI 设置、分段方案与 RTX 真实请求结构；命令预览显示 RVE / 中间 FFmpeg 的实际命令结构。运行时生成的端口、会话、尺寸及完整 RTX JSON 写入任务日志和结构化结果。
 
+当前 Ext 源码移植自上游 [v1.3.13](https://github.com/maxzrb/VideoEnhancer/releases/tag/v1.3.13)，对应上游主线提交 `472d62fcb484557acc33a0df17ddbb01c77f0b2e`。已同步超分结果阶段的目标倍率、TensorRT 图内低倍率、FPS 初始帧偏移修正、预览错误处理和组件内容哈希更新识别；四宫格已随上游取消。Ext 的版本号仍为 0.1.0。
+
+目标倍率在超分后、补帧和预览前落实。TensorRT 低倍率使用 GPU 图内双三次，CUDA / BasicVSR++ 使用原设备上的 Lanczos4；NCNN / ONNX 和 FlashVSR 保留各自的 CPU 帧或拼块边界。学习网络和官方模型权重不随目标倍率更改。RTX 使用单独下载的最新运行组件，解码回退与可见矩形修复由该组件提供。
+
 ## 处理链
 
 1. 从任务的预设快照读取本插件私有数据；不读取之后被用户改动的当前面板设置。
@@ -56,17 +60,18 @@ dotnet build VideoEnhancer.slnx -c Release
 ./release/Build-Zip.ps1
 dotnet run --project tests/VideoEnhancer.Tests.csproj -c Release
 python -B tests/FrameBackendTests.py
+python -B -m unittest discover -s tests -p "test_*.py"
 ./tests/NativeDependencyTests.ps1
 ./tests/DistributionLicenseTests.ps1
 ```
 
 可将 `VIDEOENHANCER_TEST_HOST` 设为 Ext 宿主编译输出目录，额外验证真实宿主入口扫描、命令生成及插件组合。测试只读加载宿主程序集，不修改宿主。
 
-媒体回归需要 FFmpeg 与 FFprobe 位于 PATH，可分别设置 `VIDEOENHANCER_TEST_FFMPEG`、`VIDEOENHANCER_TEST_FFPROBE`。视频帧模块测试只需 Python 和 NumPy，不依赖 GPU。
+媒体回归需要 FFmpeg 与 FFprobe 位于 PATH，可分别设置 `VIDEOENHANCER_TEST_FFMPEG`、`VIDEOENHANCER_TEST_FFPROBE`。视频帧模块测试只需 Python 和 NumPy，不依赖 GPU。上游顺序与倍率回归还需 PyTorch 和 OpenCV；可使用 CPU 版 PyTorch，CUDA 专项在无 GPU 时明确跳过。
 
 ## 目录和依赖
 
-`Frontend` 为 VB / LakeUI 界面，`Backend` 为 C# 服务与处理链，自有托管代码构建后合并为一个 DLL。预览原生库由 `release/acquire-fff-native.ps1` 按 `release/fff-native.lock.json` 下载和校验，缓存到 `Frontend/obj/third-party/fff-native/2026.8.18/native`；源码仓库不保存 DLL。固定的官方 FFF.Player 2026.8.18 下载包仅用于读取其中的 API 11 原生库。十个 DLL 随 ZIP 放入 `videoenhancer/bin/fff-native-11`，构建输出采用相同布局，预览直接加载这些文件。有效缓存可离线复用，最终用户无需额外下载预览库。全部安装和模型导入的解压统一使用固定版 7za（多线程），保留路径、链接和加密项检查以及取消和进度报告。支持 ZIP、7z、TAR、GZ、XZ、ZST，压缩 TAR 自动进行第二层解包；不支持 RAR。发行 ZIP、对应源码 ZIP 的打包与源码安装的解压也使用构建缓存中的 7za。界面通过类型化服务调用管理操作，不解析插件命令行输入。RVE / Python、FFmpeg、RTX 和 aria2-next 保留各自的外部进程协议。
+`Frontend` 为 VB / LakeUI 界面，`Backend` 为 C# 服务与处理链，自有托管代码构建后合并为一个 DLL。预览原生库由 `release/acquire-fff-native.ps1` 按 `release/fff-native.lock.json` 下载和校验，缓存到 `Frontend/obj/third-party/fff-native/2026.8.19/native`；源码仓库不保存 DLL。固定的官方 FFF.Player 2026.8.19 下载包仅用于读取其中的 API 11 原生库。十个 DLL 随 ZIP 放入 `videoenhancer/bin/fff-native-11`，构建输出采用相同布局，预览直接加载这些文件。有效缓存可离线复用，最终用户无需额外下载预览库。全部安装和模型导入的解压统一使用固定版 7za（多线程），保留路径、链接和加密项检查以及取消和进度报告。支持 ZIP、7z、TAR、GZ、BZ2、XZ、ZST 及 TGZ/TXZ/TBZ2/TZST，压缩 TAR 自动进行第二层解包；不支持 RAR。发行 ZIP、对应源码 ZIP 的打包与源码安装的解压也使用构建缓存中的 7za。界面通过类型化服务调用管理操作，不解析插件命令行输入。RVE / Python、FFmpeg、RTX 和 aria2-next 保留各自的外部进程协议。
 
 源码与发行 DLL 的许可范围见 [LICENSING.md](LICENSING.md)，完整正文位于 `LICENSES`。RVE 的 AGPL 集成、RTX 专有组件、FFF.Native 及配套库原始许可与版本源码见 [依赖许可说明](DEPENDENCIES-LICENSES.md)。构建会把源码清单内嵌到 DLL，打包时核验同一快照，并生成安装 ZIP 与独立源码 ZIP；旧 DLL 与新源码不匹配时拒绝打包。
 

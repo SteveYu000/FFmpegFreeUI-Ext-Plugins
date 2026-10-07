@@ -2,15 +2,15 @@ FFF.Native 来源与许可证
 ======================
 
 上游：https://github.com/Lake1059/FFF_Project
-官方发行：FFF.Player 2026.8.18；本插件只读取其中十个预览 DLL。
-https://github.com/Lake1059/FFF_Project/releases/download/2026.8.18/FFF.Player.exe
-官方下载包 SHA-256：c6a3ef170d0f45e12da6b886eea89640ccfdebf44cdcb804657d17db74a4eee9
-源码提交：72d3406738413262d2a99b8fc2a678dfdbf31364
-https://github.com/Lake1059/FFF_Project/tree/72d3406738413262d2a99b8fc2a678dfdbf31364
+官方发行：FFF.Player 2026.8.19；本插件只读取其中十个预览 DLL。
+https://github.com/Lake1059/FFF_Project/releases/download/2026.8.19/FFF.Player.exe
+官方下载包 SHA-256：d948c48fc31c28fa17e485d4565f1a1f283037a11f2925476dacad59a4219906
+源码提交：c43614ca5c77f40cb3cb2b2254a54bd4fea2e614
+https://github.com/Lake1059/FFF_Project/tree/c43614ca5c77f40cb3cb2b2254a54bd4fea2e614
 许可：MIT；LICENSE.txt 原样保留上游版权行中的 [year] [fullname] 占位文本。
 
 实际 FFF.Native.dll：API 11，采用 FFmpeg 与 libass 的 delay-load 动态链接。
-SHA-256：8c625701f499e3257e12c09a914c2216040dd0680c47fea7072b5676a8fa2e6e
+SHA-256：3d78ebff7407adaa4a947d1310f87b29dddedc662d4e6373def095f7397db494
 全部文件的大小与 SHA-256 见同目录 fff-native.lock.json。
 安装目录：videoenhancer/bin/fff-native-11；所有 DLL 均为可替换的独立文件。
 下载与读取脚本：release/acquire-fff-native.ps1；源码仓库不保存这些二进制。
