@@ -15,7 +15,7 @@ internal static partial class Program
         var text = File.ReadAllText(path, Encoding.UTF8);
         Check(first.AsSpan().StartsWith(Encoding.UTF8.Preamble), "RVE 修改声明保留 UTF-8 BOM");
         Check(text.Contains(original, StringComparison.Ordinal), "RVE 修改声明不覆盖原始版权与源码");
-        Check(text.Contains("AGPL-3.0-only") && text.Contains("2026-10-05") && text.Contains("licenses/VideoEnhancer"), "RVE 修改文件记录许可、日期和对应源码");
+        Check(text.Contains("AGPL-3.0-only") && text.Contains($"# VideoEnhancer 修改声明：{BackendServices.Version}，2026-10-07。") && text.Contains("licenses/VideoEnhancer"), "RVE 修改文件记录版本、许可、日期和对应源码");
         Check(!text.Replace("\r\n", "").Contains('\n'), "RVE 修改声明保留 CRLF");
         writer.Invoke(null, [path, text, true]);
         Check(File.ReadAllBytes(path).SequenceEqual(first), "重复写入 RVE 修改声明保持内容不变");

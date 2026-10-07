@@ -1,4 +1,4 @@
-# VideoEnhancer 0.1.0 依赖与许可证
+# VideoEnhancer 0.2.0 依赖与许可证
 
 发行的插件 DLL 采用 AGPL-3.0-only；根目录 MIT 声明继续用于独立源码。文件范围和再分发要求见 [LICENSING.md](LICENSING.md)。第三方组件保持原授权。LakeUI 按维护者的赞助者许可使用，由宿主提供，本文件不审查其开源许可。
 

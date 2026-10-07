@@ -16,7 +16,7 @@
 
 用户的最终 FFmpeg 编码、音频、字幕、容器及自定义参数由宿主预设控制。参数总览显示 AI 设置、分段方案与 RTX 真实请求结构；命令预览显示 RVE / 中间 FFmpeg 的实际命令结构。运行时生成的端口、会话、尺寸及完整 RTX JSON 写入任务日志和结构化结果。
 
-当前 Ext 源码移植自上游 [v1.3.13](https://github.com/maxzrb/VideoEnhancer/releases/tag/v1.3.13)，对应上游主线提交 `472d62fcb484557acc33a0df17ddbb01c77f0b2e`。已同步超分结果阶段的目标倍率、TensorRT 图内低倍率、FPS 初始帧偏移修正、预览错误处理和组件内容哈希更新识别；四宫格已随上游取消。Ext 的版本号仍为 0.1.0。
+当前 Ext 源码移植自上游 [v1.3.13](https://github.com/maxzrb/VideoEnhancer/releases/tag/v1.3.13)，对应上游主线提交 `472d62fcb484557acc33a0df17ddbb01c77f0b2e`。已同步超分结果阶段的目标倍率、TensorRT 图内低倍率、FPS 初始帧偏移修正、预览错误处理和组件内容哈希更新识别；四宫格已随上游取消。Ext 版本为 0.2.0。
 
 目标倍率在超分后、补帧和预览前落实。TensorRT 低倍率使用 GPU 图内双三次，CUDA / BasicVSR++ 使用原设备上的 Lanczos4；NCNN / ONNX 和 FlashVSR 保留各自的 CPU 帧或拼块边界。学习网络和官方模型权重不随目标倍率更改。RTX 使用单独下载的最新运行组件，解码回退与可见矩形修复由该组件提供。
 
@@ -42,9 +42,9 @@
 
 ## 安装
 
-关闭宿主，将 `VideoEnhancer-0.1.0-win-x64.zip` 解压到宿主的 `Plugin` 目录。若存在旧的 `Plugin/videoenhancer.3fui.dll`，关闭宿主后删除该文件。ZIP 根目录附有 [中文安装说明](VideoEnhancer-安装说明.txt)，包含目录布局、首次使用、升级和常见问题。安装 ZIP 包含插件 DLL、FFF.Native 预览库及配套 DLL、aria2-next、7za、许可及源码获取说明；Python / RVE、RTX 运行组件和模型在“视频超分 → 模型下载”中按需安装。
+关闭宿主，将 `VideoEnhancer-0.2.0-win-x64.zip` 解压到宿主的 `Plugin` 目录。若存在旧的 `Plugin/videoenhancer.3fui.dll`，关闭宿主后删除该文件。ZIP 根目录附有 [中文安装说明](VideoEnhancer-安装说明.txt)，包含目录布局、首次使用、升级和常见问题。安装 ZIP 包含插件 DLL、FFF.Native 预览库及配套 DLL、aria2-next、7za、许可及源码获取说明；Python / RVE、RTX 运行组件和模型在“视频超分 → 模型下载”中按需安装。
 
-同一 Release 另行提供 `VideoEnhancer-0.1.0-source.zip`，包含本次构建的完整插件源码、第三方版本源码与构建配方，使用插件时无需安装源码包。两包各附 `.sha256` 文件；安装包的 `videoenhancer/licenses/VideoEnhancer/SOURCE.txt` 和发行元数据记录源码包下载地址与哈希，源码包的 `source-manifest.json` 记录配套 DLL 哈希。发布及镜像时应同时免费提供两包。
+同一 Release 另行提供 `VideoEnhancer-0.2.0-source.zip`，包含本次构建的完整插件源码、第三方版本源码与构建配方，使用插件时无需安装源码包。两包各附 `.sha256` 文件；安装包的 `videoenhancer/licenses/VideoEnhancer/SOURCE.txt` 和发行元数据记录源码包下载地址与哈希，源码包的 `source-manifest.json` 记录配套 DLL 哈希。发布及镜像时应同时免费提供两包。
 
 从源码安装：
 

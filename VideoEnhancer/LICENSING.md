@@ -1,4 +1,4 @@
-# VideoEnhancer 0.1.0 许可范围
+# VideoEnhancer 0.2.0 许可范围
 
 发行的 `videoenhancer.ext.3fui.dll` 采用 **AGPL-3.0-only**。它包含 RVE 集成和源文件补丁；将这些代码与 MIT 部分编译、合并为一个 DLL 时，按 AGPL 第三版分发该组合。
 

@@ -610,7 +610,7 @@ public static partial class BackendServices
         if (!text.Contains(marker, StringComparison.Ordinal))
         {
             var newline = text.Contains("\r\n", StringComparison.Ordinal) ? "\r\n" : "\n";
-            text = marker + "0.1.0，2026-10-05。" + newline
+            text = marker + ToolVersion + "，2026-10-07。" + newline
                 + "# 本插件的修改按 AGPL-3.0-only 授权；保留原始版权与许可声明。" + newline
                 + "# 对应修改源码在同版本 source.zip 中，下载地址见插件 licenses/VideoEnhancer/SOURCE.txt。" + newline + text;
         }

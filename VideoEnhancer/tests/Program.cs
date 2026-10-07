@@ -172,7 +172,9 @@ internal static partial class Program
         Check(!assembly.GetReferencedAssemblies().Any(reference=>reference.Name is "VideoEnhancer.Backend" or "SharpCompress" or "FFmpegFreeUI"),"没有私有依赖 DLL 或宿主主程序集引用");
         Check(assembly.GetManifestResourceNames().Contains("VideoEnhancer.Embedded.rve-ext-launch.py"),"真实 RVE 启动资源包含在 DLL 中");
         var services=assembly.GetType("VideoEnhancer.BackendServices")!;
-        Check((string)services.GetProperty("Version")!.GetValue(null)! == "0.1.0","合并 DLL 的版本从 0.1.0 开始");
+        string expectedVersion=typeof(videoenhancer.Entry).Assembly.GetName().Version!.ToString(3);
+        Check(assembly.GetName().Version!.ToString(3)==expectedVersion&&
+            (string)services.GetProperty("Version")!.GetValue(null)! == expectedVersion,"合并 DLL 和后端服务版本与前端发布版本一致");
         Check(assembly.GetType("VideoEnhancer.ServiceRequestParser") is null&&assembly.GetType("VideoEnhancer.ServiceOptions") is null&&
             assembly.GetType("VideoEnhancer.BackendOperation") is null,"合并 DLL 没有旧 CLI 参数解析和伪进程类型");
         services.GetMethod("ConfigureRuntime")!.Invoke(null,[Path.Combine(_root,"merged-runtime")]);

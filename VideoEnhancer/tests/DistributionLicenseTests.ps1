@@ -26,6 +26,7 @@ $fixtureBase = [IO.Path]::GetFullPath((Join-Path ([IO.Path]::GetTempPath()) 'Vid
 $fixture = Join-Path $fixtureBase ([Guid]::NewGuid().ToString('N'))
 try {
     $manifest = [Text.Encoding]::UTF8.GetString((Read-EntryBytes $archive 'videoenhancer.manifest.json')) | ConvertFrom-Json
+    Assert ($manifest.version -ceq $version) '安装元数据与当前项目发布版本一致'
     Assert ($manifest.license -eq 'AGPL-3.0-only') '发行 DLL 的许可元数据正确'
     Assert ($manifest.entry -eq 'videoenhancer.ext.3fui.dll') '元数据使用 Ext 插件二进制名称'
     Assert ($null -ne $archive.GetEntry($manifest.entry)) '安装包包含声明的插件 DLL'
@@ -81,6 +82,7 @@ try {
     $notice = [Text.Encoding]::UTF8.GetString((Read-EntryBytes $archive 'videoenhancer/licenses/VideoEnhancer/SOURCE.txt'))
     Assert ($notice.Contains($manifest.sourceArchive) -and $notice.Contains($manifest.sourceUrl) -and $notice.Contains($manifest.sourceSha256)) '安装包保留明确且可校验的源码获取说明'
     $assembly = [Reflection.Assembly]::Load($binary)
+    Assert ($assembly.GetName().Version.ToString(3) -ceq $version) '发行 DLL 的程序集版本与当前发布版本一致'
     $resource = $assembly.GetManifestResourceStream('VideoEnhancer.SourceSnapshot')
     $reader = [IO.StreamReader]::new($resource, [Text.Encoding]::UTF8)
     try { $compiled = $reader.ReadToEnd() | ConvertFrom-Json } finally { $reader.Dispose() }

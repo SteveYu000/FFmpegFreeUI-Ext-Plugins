@@ -4,7 +4,7 @@
     <OutputType>Library</OutputType>
     <AssemblyName>videoenhancer.ext.3fui</AssemblyName>
     <RootNamespace />
-    <Version>0.1.0</Version>
+    <Version>0.2.0</Version>
     <PackageLicenseExpression>AGPL-3.0-only</PackageLicenseExpression>
     <VideoEnhancerSourceSnapshot>$(MSBuildProjectDirectory)\obj\source\source-snapshot.json</VideoEnhancerSourceSnapshot>
     <UseWindowsForms>true</UseWindowsForms>

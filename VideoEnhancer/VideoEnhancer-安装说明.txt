@@ -1,4 +1,4 @@
-VideoEnhancer Ext 0.1.0 安装说明
+VideoEnhancer Ext 0.2.0 安装说明
 ==============================
 
 一、适用环境
@@ -10,7 +10,7 @@ LakeUI 5.112 或更新的 5.x；.NET 10 Desktop Runtime（x64）。
 1. 完全关闭 FFmpegFreeUI 宿主。
 2. 若 Plugin 中仍有旧的 videoenhancer.3fui.dll，先删除该文件。
    将本 ZIP 的全部内容直接解压到宿主程序目录下的 Plugin 文件夹。
-   不要再套一层 VideoEnhancer-0.1.0-win-x64 文件夹，不要只复制插件 DLL。
+   不要再套一层 VideoEnhancer-0.2.0-win-x64 文件夹，不要只复制插件 DLL。
 3. 正确的相对布局如下：
 
    宿主目录/
