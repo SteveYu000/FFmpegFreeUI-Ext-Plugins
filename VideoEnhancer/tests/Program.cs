@@ -49,6 +49,7 @@ internal static partial class Program
             TestRveLicenseNotices();
             System.Console.WriteLine("运行：TestRvePreview");
             TestRvePreview();
+            TestParameterPresentation();
             TestUpstreamPort();
             TestManagementServices();
             TestInstalledModelCatalog();

@@ -14,12 +14,6 @@
 - 模型管理入口位于实时预览下方，按超分/补帧和模型架构分组，名称与 AI 增强页一致，可刷新和移除已安装模型。
 - 分段方案通过 AI 参数页中的“编辑分段方案”配置，按输入文件保存进预设。没有配置分段方案的文件沿用普通 AI 开关；普通开关都关闭时交给宿主直接处理。没有独立图片页面或右键超分模块。
 
-用户的最终 FFmpeg 编码、音频、字幕、容器及自定义参数由宿主预设控制。参数总览显示 AI 设置、分段方案与 RTX 真实请求结构；命令预览显示 RVE / 中间 FFmpeg 的实际命令结构。运行时生成的端口、会话、尺寸及完整 RTX JSON 写入任务日志和结构化结果。
-
-当前 Ext 源码移植自上游 [v1.3.13](https://github.com/maxzrb/VideoEnhancer/releases/tag/v1.3.13)，对应上游主线提交 `472d62fcb484557acc33a0df17ddbb01c77f0b2e`。已同步超分结果阶段的目标倍率、TensorRT 图内低倍率、FPS 初始帧偏移修正、预览错误处理和组件内容哈希更新识别；四宫格已随上游取消。Ext 版本为 0.2.0。
-
-目标倍率在超分后、补帧和预览前落实。TensorRT 低倍率使用 GPU 图内双三次，CUDA / BasicVSR++ 使用原设备上的 Lanczos4；NCNN / ONNX 和 FlashVSR 保留各自的 CPU 帧或拼块边界。学习网络和官方模型权重不随目标倍率更改。RTX 使用单独下载的最新运行组件，解码回退与可见矩形修复由该组件提供。
-
 ## 处理链
 
 1. 从任务的预设快照读取本插件私有数据；不读取之后被用户改动的当前面板设置。
@@ -64,10 +58,6 @@ python -B -m unittest discover -s tests -p "test_*.py"
 ./tests/NativeDependencyTests.ps1
 ./tests/DistributionLicenseTests.ps1
 ```
-
-可将 `VIDEOENHANCER_TEST_HOST` 设为 Ext 宿主编译输出目录，额外验证真实宿主入口扫描、命令生成及插件组合。测试只读加载宿主程序集，不修改宿主。
-
-媒体回归需要 FFmpeg 与 FFprobe 位于 PATH，可分别设置 `VIDEOENHANCER_TEST_FFMPEG`、`VIDEOENHANCER_TEST_FFPROBE`。视频帧模块测试只需 Python 和 NumPy，不依赖 GPU。上游顺序与倍率回归还需 PyTorch 和 OpenCV；可使用 CPU 版 PyTorch，CUDA 专项在无 GPU 时明确跳过。
 
 ## 目录和依赖
 

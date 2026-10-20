@@ -8,10 +8,12 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <NuGetAudit>false</NuGetAudit>
+    <!-- 真实宿主验证使用其配套 LakeUI；不改变发行插件的最低依赖。 -->
+    <VideoEnhancerTestLakeUiVersion Condition="'$(VideoEnhancerTestLakeUiVersion)' == ''">5.112.0</VideoEnhancerTestLakeUiVersion>
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="..\Frontend\VideoEnhancerPlugin.vbproj" />
     <PackageReference Include="FFmpegFreeUI.Ext.PluginSdk" Version="[2.5.0]" />
-    <PackageReference Include="LakeUI" Version="[5.112.0]" />
+    <PackageReference Include="LakeUI" Version="[$(VideoEnhancerTestLakeUiVersion)]" />
   </ItemGroup>
 </Project>

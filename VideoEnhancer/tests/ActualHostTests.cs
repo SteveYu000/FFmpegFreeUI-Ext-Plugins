@@ -122,6 +122,14 @@ internal static partial class Program
             Check(preview.Length>0&&!preview.Any(step=>(bool)step.GetType().GetProperty("是插件步骤")!.GetValue(step)!),
                 "真实宿主预览遇到未选模型仍正常返回，不插入不完整的 AI 步骤");
             Check(EnhancementTaskRegistry.CurrentParameterError.Contains("尚未选择超分模型"),"真实宿主预览的模型错误保留在插件诊断中");
+            var rtxData=data.DeepClone();
+            rtxData["插件扩展数据"]!["videoenhancer"]=new EnhancementSettings{UpscaleEnabled=true,Backend="rtxvsr",RtxTarget="2x",RtxQuality=4,
+                RtxHdrEnabled=true,RtxHdrMaxLuminance=1200}.ToJson();
+            var rtxPreset=JsonSerializer.Deserialize(rtxData.ToJsonString(),presetType,jsonOptions)!;
+            string template=(string)manager.GetMethod("生成命令行展示文本",flags)!.Invoke(null,[rtxPreset,input,output])!;
+            Check(template.Contains("# RTX POST /api/jobs：")&&template.Contains("--app-session-id")&&template.Contains("\"maxLuminance\":1200"),
+                "真实宿主命令模板展示 RTX 完整协议和服务参数");
+            Check(template.Contains("-c:v ffv1")&&template.Contains("-map 1:s:0"),"RTX 协议注释保留宿主及其他插件的实际命令参数");
         }
         finally{AssemblyLoadContext.Default.Resolving-=Resolve;}
     }

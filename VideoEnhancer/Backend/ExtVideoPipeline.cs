@@ -131,7 +131,7 @@ public sealed partial class ExtVideoPipeline : IDisposable
     {
         if(!Settings(context.PresetJson,context.InputPath,context.IsPreview).IsEnabled)return;
         var plan=ResolvePlan(context.TaskId,context.PresetJson,context.InputPath);
-        foreach(var step in plan.Steps)context.Steps.Add(step);
+        foreach(var step in plan.Steps)context.Steps.Add(context.IsPreview?CreatePreviewStep(step,plan):step);
     }
     private ValueTask AfterBuild(ExtPluginPipelineContext context,CancellationToken _)
     {
@@ -224,33 +224,6 @@ public sealed partial class ExtVideoPipeline : IDisposable
         {
             await task.DisposeAsync();
         }
-    }
-
-    private void AddOverview(ExtPluginPresetOverviewContext context)
-    {
-        var settings=EnhancementSettings.FromJson(context.PluginStateJson);
-        if(!settings.IsEnabled)return;
-        context.Rows.Add(new("视频参数 | AI增强："+settings.Summary()));
-        if(settings.UpscaleEnabled)context.Rows.Add(new($"超分输出倍率：{(settings.OutputScale==0?"模型原生":settings.OutputScale+"x")}；分块：{settings.UpscaleTileSize}"));
-        if(settings.InterpEnabled)context.Rows.Add(new($"补帧转场阈值：{settings.SceneDetectThreshold:g}；动态光流：{settings.InterpDynamicScaledOpticalFlow}；精度：{(settings.InterpHalfPrecision?"auto":"float32")}"));
-        if(settings.SegmentedEnabled)
-            {
-                foreach(var video in settings.SegmentedVideos.Where(video=>video.Enabled))
-                    context.Rows.Add(new("分段："+Path.GetFileName(video.Path)+" "+JsonSerializer.Serialize(video.Segments)));
-                context.Rows.Add(new("未配置分段的文件沿用普通 AI 开关；通用命令预览以首个启用的分段方案为例"));
-            }
-        if((settings.UpscaleEnabled&&settings.Backend=="rtxvsr")||settings.RtxHdrEnabled)
-        {
-            context.Rows.Add(new("RTX 服务启动："+WindowsArguments.Quote(RtxVideoBackendClient.FindBackend(PortablePaths.CoreRoot))+" --port <运行时本地端口> --app-session-id <任务会话 ID>"));
-            var request=RtxVideoBackendClient.CreateJobJson("<选中视频的无损输入>","<中间视频>",settings.UpscaleEnabled&&settings.Backend=="rtxvsr",settings.RtxQuality,
-                settings.RtxTarget.EndsWith('x')&&double.TryParse(settings.RtxTarget[..^1],out var factor)?factor:1,
-                settings.RtxHdrEnabled,settings.RtxHdrContrast,settings.RtxHdrSaturation,settings.RtxHdrMiddleGray,settings.RtxHdrMaxLuminance,
-                settings.RtxHdrEnabled?"hevc":"h264","rawvideo","none","p010le",new Dictionary<string,string>(),[],[],@"\\.\pipe\<任务帧管道>");
-            context.Rows.Add(new("RTX POST /api/jobs："+request));
-            context.Rows.Add(new("RTX 目标："+settings.RtxTarget+"；端口、输入尺寸与最终 scale 在执行前确定并写入任务结果"));
-            if(settings.InterpEnabled)context.Rows.Add(new("RTX VSR 与补帧组合的实际顺序：先 RVE 补帧，再 RTX 增强"));
-        }
-        context.Rows.Add(new("中间视频：仅视频 FFV1 / MKV；最终编码、音频、字幕、章节、元数据及后处理由宿主预设控制"));
     }
 
     // 官方队列事件用于界面状态、RVE 遥测和暂停。不会接管宿主队列或改写全局 FFmpeg 路径。
@@ -398,9 +371,7 @@ internal sealed class RtxFrameRuntime : IAsyncDisposable
                 throw new InvalidOperationException("RTX 运行环境不支持当前任务："+string.Join("；",caps.Messages));
             source=new(options.PipeName+"-source",PipeDirection.In,1,PipeTransmissionMode.Byte,PipeOptions.Asynchronous,4*1024*1024,4*1024*1024);
             destination=new(options.PipeName,PipeDirection.Out,1,PipeTransmissionMode.Byte,PipeOptions.Asynchronous,4*1024*1024,4*1024*1024);
-            string json=RtxVideoBackendClient.CreateJobJson(options.Input,options.Output,options.Vsr,settings.RtxQuality,options.Scale,options.Hdr,
-                settings.RtxHdrContrast,settings.RtxHdrSaturation,settings.RtxHdrMiddleGray,settings.RtxHdrMaxLuminance,options.Hdr?"hevc":"h264",
-                "rawvideo","none","p010le",new Dictionary<string,string>(),[],[],@"\\.\pipe\"+options.PipeName+"-source");
+            string json=CreateRequestJson(options,settings);
             context.ReportResult("ai.rtx.command",client.StartCommand,"RTX 实际启动命令");
             context.ReportResult("ai.rtx.request",json,"RTX 实际请求 JSON");
             EnhancementTaskRegistry.SetBackendDetails(context.TaskId,"RTX 实际启动："+client.StartCommand+Environment.NewLine+"RTX POST /api/jobs："+json);
@@ -410,6 +381,10 @@ internal sealed class RtxFrameRuntime : IAsyncDisposable
         }
         catch{source?.Dispose();destination?.Dispose();client?.Dispose();cancel.Dispose();throw;}
     }
+    internal static string CreateRequestJson(RtxStepOptions options,EnhancementSettings settings)=>
+        RtxVideoBackendClient.CreateJobJson(options.Input,options.Output,options.Vsr,settings.RtxQuality,options.Scale,options.Hdr,
+            settings.RtxHdrContrast,settings.RtxHdrSaturation,settings.RtxHdrMiddleGray,settings.RtxHdrMaxLuminance,options.Hdr?"hevc":"h264",
+            "rawvideo","none","p010le",new Dictionary<string,string>(),[],[],@"\\.\pipe\"+options.PipeName+"-source");
     internal void Cancel(){try{_cancel.Cancel();}catch(ObjectDisposedException){}_source.Dispose();_destination.Dispose();}
     public async ValueTask DisposeAsync()
     {
