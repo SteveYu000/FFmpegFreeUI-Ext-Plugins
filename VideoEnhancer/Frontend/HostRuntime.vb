@@ -161,6 +161,12 @@ Namespace videoenhancer
             End Get
         End Property
 
+        Friend ReadOnly Property 当前步骤 As Object
+            Get
+                Return HostRuntime.ReadMember(Instance, "当前步骤")
+            End Get
+        End Property
+
         Friend Property 手动停止 As Boolean
             Get
                 Return HostRuntime.ReadValue(Of Boolean)(Instance, "手动停止")

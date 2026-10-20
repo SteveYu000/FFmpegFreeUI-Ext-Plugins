@@ -8,10 +8,10 @@
 | --- | --- |
 | 代码位置 | `FFmpegFreeUI-Ext-Plugins/VideoEnhancer/`，不是同名上游独立仓库 |
 | 远程仓库 | [SteveYu000/FFmpegFreeUI-Ext-Plugins](https://github.com/SteveYu000/FFmpegFreeUI-Ext-Plugins) |
-| Git | `main`；本轮实现与工作约定已提交为 `557ed1e`，提交前已安全同步；当前 HEAD 以 Git 查询为准，尚未推送 |
-| 产品版本 / 二进制 | `0.2.0` / `videoenhancer.ext.3fui.dll` |
+| Git | main，HEAD 为 64bf297，领先 origin/main 两项提交；本轮 git pull --ff-only 确认远程无更新；预览移植和 0.3.0 版本修改尚未提交 |
+| 产品版本 / 二进制 | `0.3.0` / `videoenhancer.ext.3fui.dll` |
 | 已发布版本 | [VideoEnhancer/v0.2.0](https://github.com/SteveYu000/FFmpegFreeUI-Ext-Plugins/releases/tag/VideoEnhancer%2Fv0.2.0)，源码为 `9e001d2bf05476365898e5343aec38930028e8d6`；本轮本地修改尚未发布 |
-| 上游移植基线 | maxzrb/VideoEnhancer `v1.3.13`，提交 `472d62fcb484557acc33a0df17ddbb01c77f0b2e`；后续同步需重新检查远程 |
+| 上游同步范围 | v1.3.13 / 472d62f 为完整基线；本轮追加 v1.3.14 / 6fe8545 的前四组预览修复，其余更新未移植 |
 | 构建目标 | `net10.0-windows10.0.17763.0`；Ext SDK `2.5.0`；LakeUI 构建锁定 `5.112.0`，支持后续兼容 5.x |
 | 许可 | 发行 DLL 为 AGPL-3.0-only，独立自有源码保留 MIT；例外和第三方范围见 [LICENSING.md](LICENSING.md) |
 
@@ -21,48 +21,43 @@
 
 ## 当前工作
 
-用户本轮要求：先提交现有改动，再查看上游最新版更新及其与 Ext 项目的关系。已完成本地提交 `557ed1e`（精简视频增强参数展示并建立项目工作约定），共 11 个路径，包含参数展示、对应测试、教程/安装说明及工作约定；未推送或发布。
+用户已授权的前四组 v1.3.14 实时预览修复已完成移植并通过回归。随后按用户要求将产品版本统一更新为 **0.3.0**，发布日志直接在对话中交付。此前修改与审查分别在 `557ed1e`、`64bf297`；预览移植和本次版本修改尚未提交、推送或发布。
 
-已提交的参数展示行为：总览只呈现启用功能和用户参数，去除中间视频说明和内部 JSON；完整 RVE/FFmpeg 参数、RTX 服务启动和 HTTP 请求结构留在命令模板及任务详情。展示逻辑位于 `Backend/ExtVideoPipeline.Presentation.cs`；预览说明不进入真实执行参数。测试可通过 `VideoEnhancerTestLakeUiVersion` 匹配实际宿主，不改变产品最低依赖。
+待提交修改包括：`Frontend/PreviewEngine.vb`、新增 `Frontend/PreviewEngine.ExtSources.vb`、`Frontend/HostRuntime.vb`；后端 `EnhancementPlanning.cs`、`EnhancementTaskRegistry.cs`、`ExtVideoPipeline.cs`；对应预览/计划/真实宿主回归和 README。此次另同步前后端项目版本、Ext 教程、安装说明与两份许可说明的版本标题；后端版本由合并程序集元数据自动读取。当前共 18 个未提交路径，具体以 Git 状态为准。
 
-随后通过 GitHub 实时 API 和实际 Git 对象比较移植基线与最新主线，完成下节审查。本轮未实施上游移植，产品版本仍是 0.2.0。当前业务修改均已提交，审查结果在本文件维护；进入下一轮前重新检查 Git 状态。
+异步探测、取消与关键帧调度来自上游已审查的 v1.3.14；Ext 部分按当前步骤 ID 绑定本计划生成的视频输出和帧率，RVE 使用本阶段遥测，RTX/原生 FFmpeg 使用当前步骤进度，音频及探测阶段等待视频。补帧和跨后端两阶段按实际输出帧率换算时间，切步骤及终态清理旧遥测和路径。
+
+未修改宿主、SDK 接口、预设结构和最终编码链。原版图片页/CLI/安装器等其余更新不在本轮范围内。没有进行部署或生成新 ZIP。
 
 ## 最近验证与产物
 
-以下为此前已观察的产品验证结果；本轮提交与差异审查没有重跑产品测试：
+- **0.3.0 Release 构建通过，0 警告、0 错误**：执行 `dotnet restore Frontend/VideoEnhancerPlugin.vbproj --locked-mode --nologo` 和 `dotnet build Frontend/VideoEnhancerPlugin.vbproj -c Release --no-restore --nologo -v:quiet`；保持 LakeUI 5.112.0 / Ext SDK 2.5.0 / .NET 10 目标。
+- **此前预览移植的完整 C# 回归 476 项断言通过，退出码 0**。此次仅修改版本与配套说明，未重复运行全套回归。其中预览专项 32 项覆盖真实子进程超时退出、UI 消息循环心跳、防止探测重入、零时间关键帧及失败重试、四档刷新、切任务/模式/隐藏/停止/音频步骤取消旧画面、RVE/RTX 进度隔离、实际 FFmpeg 不同画面及 FFprobe 帧率/关键帧。
+- 新增回归先在旧实现上复现“音频阶段误启动视频抽帧”，移植后通过。跨后端先超分/先补帧、同后端组合及 RTX 继承补帧帧率均有语义检查。
+- 真实宿主 6.2.38 / LakeUI 5.115.0 的当前步骤对象、音频等待、临时视频输出、RVE 映射和现有插件组合通过只读加载验证；不修改宿主安装目录。RTX HTTP/帧管道继续使用测试夹具，不代表真实 GPU 推理验证。
+- 测试匹配宿主时使用 `VideoEnhancerTestLakeUiVersion=5.115.0`，有预期 NU1608 警告（前端精确依赖 5.112.0）。产品独立 Release 构建无此警告。
+- 已重新生成 `dist/videoenhancer.ext.3fui.dll`；实测程序集 / 文件版本均为 **0.3.0.0**，后端服务版本为 **0.3.0**。DLL SHA-256：`6c48db67242451f7d841ba842ee220f3417ba6e4ed08ac70d7281ea611a8a230`。
+- 当前源码快照及 DLL 内嵌快照一致，版本均为 0.3.0：`480c9997cdefd4a9f52b91df3c7039e8853783fd1148ad0f02c053c8fa338d42`，共 147 个源码文件。此前已确认合并 DLL 包含预览元数据类型，不引用 FFmpegFreeUI 主程序集或独立 VideoEnhancer.Backend 程序集。此次再次确认管理文档未进入源码发行快照。
+- 没有生成新安装/源码 ZIP；现有 0.2.0 ZIP 及 GitHub Release 仍是旧发行，不能当作本轮结果。
 
-- 插件 Release 构建成功；C# 回归 **423 项断言通过**，包含真实宿主命令生成与其他插件组合、模拟 RTX HTTP、实际 FFmpeg 样本流程。
-- 真实宿主为 6.2.38、配套 LakeUI 5.115.0。测试覆盖命令生成，不代表实际窗口显示或 GPU 模型运行已验证。
-- 测试临时选用 LakeUI 5.115.0，前端声明仍锁定 5.112.0，产生预期 NU1608 警告；不能报告为整个测试构建“零警告”。
-- 本地 DLL 为 `dist/videoenhancer.ext.3fui.dll`，程序集版本 0.2.0.0；SHA-256：`2495eacc01597ec59bf81701d666a0e8ea4362bdeabd883956aed80ccb32b7e4`。
-- 本次只读核实 DLL 内嵌源码快照为 `34889a4269b93a6c84ca34ff5094f76aea1ddc2b7d41629edcce3685d9b3c4be`；当前源码快照为 `044700a0231d11f3ed25169e8046ceb86f6c6fba1ad06c3928a4b7687fea66c5`。两份清单的差异是 `README.md`、`VideoEnhancer-安装说明.txt`，本次均未修改。发布前必须重新构建，不能直接用当前 DLL 执行 `-SkipBuild` 打包。
-- 没有重新生成两份 ZIP；现有 0.2.0 ZIP 及 GitHub Release 仍是已发布基线，不能称为包含本地修改的新包。
+本轮 Computer Use 已按当前技能初始化；`list_apps` 返回 native pipe 不可用（os error 2）。重置、重新初始化后重试仍失败，未操作实际窗口，**未完成真实界面视觉复测**。自动化消息循环和媒体测试不能替代此项。
 
-本轮记录检查：UTF-8、相对链接及 `git diff --check` 通过。`AGENTS.md`、`PROJECT_STATE.md` 仍不在发行源码快照和安装包复制清单中。参考仓库只获取上游 Git 对象，原分支及工作文件保持不变。本轮未运行产品构建、GPU 或窗口测试。
+测试日志位于本机忽略目录 `.test-tools/preview-port/`（full-tests.log、full-build.log、release-build.log；本次版本构建为 version-030-restore.log、version-030-build.log）。Git diff、UTF-8、相对链接及管理文档发行排除检查通过；参考仓库分支和工作文件未改动。
 
-## 上游 v1.3.14 审查（2026-10-21，未移植）
+## 上游 v1.3.14 移植范围
 
-最新正式版为 [v1.3.14](https://github.com/maxzrb/VideoEnhancer/releases/tag/v1.3.14)，2026-10-20 发布，标签指向 `6fe854505e869bba76c7b10efde7703f0dd7eeb9`。实时主线为 `a4f4bf0ce2587aac0b35aecb765fd1e6536a035a`，比标签多一条发布验证文档提交。GitHub 网页缓存曾仍显示 1.3.13，本轮以实时 API、标签对象和 Git 差异交叉核实。
+上游正式版 [v1.3.14](https://github.com/maxzrb/VideoEnhancer/releases/tag/v1.3.14) 于 2026-10-20 发布，标签提交 `6fe854505e869bba76c7b10efde7703f0dd7eeb9`。已审查主线 `a4f4bf0ce2587aac0b35aecb765fd1e6536a035a` 比标签多一条发布验证文档提交。以实际移植基线 `472d62f` 比较，10 个新增提交、34 个变动路径；网页缓存曾仍显示 1.3.13，本轮依据实时 API 与实际 Git 对象核实。
 
-比较基线为 Ext 实际移植的 `472d62f`；截至最新主线共 10 个新增提交、34 个变动路径，主要是预览、原版图片页/CLI/安装器及测试文档。实际移植基线仍为 1.3.13，不能因为已审查而改写成已同步 1.3.14。
-
-| 上游变化 | Ext 相关性与现状 |
+| 本轮已移植项 | Ext 实现 |
 | --- | --- |
-| ffprobe 异步探测、2500ms 超时和取消、同时排空输出管道 | 高，建议优先移植。`Frontend/PreviewEngine.vb` 的 OnTick 仍同步调用 ProbeInputFps/CheckKeyframeProbe；ReadToEnd 在 WaitForExit 前，等待时间不能限制前面的阻塞读取 |
-| 帧率探测失败后可恢复，仅缓存正帧率 | 高。Ext 仍将 0 写入输入帧率缓存，临时不可读后可能不再重试 |
-| 有界窗口读取关键帧 packet，支持零时间帧，成功显示后才消费关键帧 | 高。Ext 仍用 show_frames 全量扫描，SeekSeconds 判断为大于 0，探测时即推进已用关键帧 |
-| 刷新调度、慢速任务换帧，切任务/模式/隐藏时取消并丢弃旧图 | 高。Ext 仍为 500ms 定时器、每轮改写进度游标，后台回图仅判断 running，存在对应旧逻辑 |
-| 分步编码等待视频阶段，读取当前步骤输出，进度回退时重置 | 高，需适配 Ext。当前只读 task.输出文件；AI 前置步骤写中间视频，最终文件可能尚不存在。应结合现有步骤/事件与中间路径做只读适配，不引入 CLI 中转识别或旧宿主兼容分支 |
-| 图片输出根目录/末尾反斜杠时改用 ArgumentList，避免丢失后端模型参数 | 原修复入口不适用。Ext 已删除独立图片页→CLI 链，前端直接传设置；外部进程参数另由 WindowsArguments 处理末尾反斜杠。用户此前 ONNX 任务已成功加载模型，不是这个参数丢失问题 |
-| 图片失败显示主因、完整错误详情/日志及高 DPI 提示布局 | 可借鉴并适配首页任务详情、宿主日志，不恢复图片页面。与现有日志复制异常不是同一项修复 |
-| 安装器/自更新接受 FFmpegFreeUI.exe 与 FFmpegFreeUI.x64.exe | 无需直接移植。Ext 仅发 ZIP，Install.ps1 按 SDK/PluginHost 检查宿主，不依赖这两个 EXE 名字 |
-| 原生 FFmpeg 工具命令透传、停用后只清理本插件替代路径 | 无需直接移植。上游为全局替代进程/CLI 补救；Ext 正常入口不写全局替代路径，原生命令由宿主执行。HostSettings 中仍有未使用的属性定义，不等于启用了替代机制 |
+| 异步探测与恢复 | stdout/stderr 同时异步读取，2.5 秒超时覆盖读取和等待，取消时结束子进程；仅缓存正帧率，超时后同一输入可重新探测 |
+| 关键帧读取与重试 | 按有界时间窗口读取 packet 标记；支持 PTS=0；成功显示后才消费关键帧，不可解码时保留同一关键帧重试 |
+| 刷新节奏与生命周期 | 100ms 调度保持 0.5/1/2/3 秒选择；按上次抽帧累计进度；切任务/模式、隐藏、停止、换阶段或进度回退时取消旧工作，不回写旧图 |
+| 分步输出适配 | 当前宿主步骤只读适配；自有 FFmpeg/RVE/RTX/分段视频使用计划登记的路径和输出帧率；等待音频、探测和无视频输出步骤，未知进程参数不当作视频路径 |
 
-主要证据：[预览修复 f29d011](https://github.com/maxzrb/VideoEnhancer/commit/f29d0112b92a8572ddc3df8e61ec60123890ccfd)、[探测恢复/输出路径补修 dbf7e24](https://github.com/maxzrb/VideoEnhancer/commit/dbf7e24345096156387cdbdaa777f9fd8913532f)、[图片参数与错误详情 99ed3d9](https://github.com/maxzrb/VideoEnhancer/commit/99ed3d9e75bbd7bf74693af31e7a3a1b845aee32)、[宿主名/工具透传 d7441ae](https://github.com/maxzrb/VideoEnhancer/commit/d7441aefcf7efbca7838a646f59ccb075be69b62)。
+来源：[预览主修复 f29d011](https://github.com/maxzrb/VideoEnhancer/commit/f29d0112b92a8572ddc3df8e61ec60123890ccfd)、[探测恢复/输出路径补修 dbf7e24](https://github.com/maxzrb/VideoEnhancer/commit/dbf7e24345096156387cdbdaa777f9fd8913532f)。使用当前 Ext 数据结构适配，没有引入上游 CLI 中转识别、旧宿主兼容或全局替代 FFmpeg。
 
-建议后续将整组预览修复作为一次移植：异步/取消/超时及缓存恢复、刷新和关键帧语义、按 Ext 步骤绑定输出，并改造上游预览回归夹具。错误详情展示可另行改进。本轮为源码静态审查，未复现视觉症状，未运行上游测试，不声称 UI 或 GPU 修复已验证。
-
-本次差异没有改动 RVE/RTX 推理算法、模型和自动显存降级策略，也没有修改日志复制实现。上游明确说明启用时 VMAF 内置模型自动枚举仍待完善，不能称所有评测问题均已解决。以下两项原问题继续保持未解决。
+本轮没有移植图片参数/错误详情界面、EXE 安装器或原生 FFmpeg CLI 透传；Ext 已移除相关原版入口。上游 VMAF 内置模型自动枚举尚未完善。本轮也没有修改 RVE/RTX 推理算法、显存策略或日志复制实现，下列两项问题继续保持未解决。
 
 ## 尚未解决的问题
 
@@ -78,7 +73,7 @@
 
 已有检查：宿主复制读取控件 `.Text`；检查的 LakeUI 5.112 实现中，getter 与 AppendLine 使用同一行集合，尚无“缓存未同步”的证据。ANSI 色码、控制字符或粘贴目标的影响均未证实。一次只读剪贴板检查未捕获目标日志，不能据此判断截断原因。
 
-当时 Computer Use 返回 native pipe 不可用（os error 2），重置重试仍失败，未完成实际窗口复制测试。曾请求用户粘贴到记事本比较，尚无结果。用户恢复该问题后，优先获取完整粘贴结果和真实控件操作证据，再决定修复位置；不是本次文档任务的自动待办。
+当时 Computer Use 返回 native pipe 不可用（os error 2），重置重试仍失败，未完成实际窗口复制测试。曾请求用户粘贴到记事本比较，尚无结果。用户恢复该问题后，优先获取完整粘贴结果和真实控件操作证据，再决定修复位置；不属于本轮预览移植范围。
 
 ## 本地执行条件
 
@@ -105,4 +100,4 @@ dotnet run --project tests/VideoEnhancer.Tests.csproj -c Release --no-build -p:V
 
 ## 后续接手
 
-用户本轮只要求审查上游更新，尚未要求实际移植。下一次明确要求移植时，以上节预览修复为首批范围，保留 Ext 处理链与现有入口。显存和日志复制问题继续分别复测，不因升级上游版本而自动关闭。发布前重建并校验源码身份，不能直接上传旧 ZIP；当前仅本地提交，未推送或发布。
+预览移植和 0.3.0 版本修改已完成，工作区有未提交修改；尚未生成 0.3.0 ZIP 或更新 GitHub Release。用户要求提交时使用中文消息并只暂存明确范围；发布前确认源码身份后生成两包，不上传旧 ZIP。待 Computer Use 恢复后可补做真实窗口预览检查；ONNX 显存不足和宿主日志复制问题继续单独处理。

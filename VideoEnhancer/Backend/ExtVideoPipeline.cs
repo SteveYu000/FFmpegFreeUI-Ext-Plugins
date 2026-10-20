@@ -98,6 +98,7 @@ public sealed partial class ExtVideoPipeline : IDisposable
             scope=new TaskScope(plan,invocation,message=>_host.Log(ExtPluginLogLevel.Warning,message));
             if(!_tasks.TryAdd(context.TaskId,scope))throw new InvalidOperationException("任务已存在，拒绝覆盖正在执行的 AI 上下文");
             scope.Cancellation=token.Register(scope.Cancel);
+            EnhancementTaskRegistry.SetPreviewSources(context.TaskId,plan.PreviewSources);
             context.ReportResult("ai.parameters",settings.ToJson(),"AI 任务参数");
             context.ReportResult("ai.backend.commands",plan.BackendDescription,"真实 AI 后端命令");
             EnhancementTaskRegistry.Update(context.TaskId,context.InputPath,context.OutputPath,"准备完成","等待 AI 前置步骤",settings.ToJson(),plan.BackendDescription);
@@ -156,6 +157,7 @@ public sealed partial class ExtVideoPipeline : IDisposable
                 throw new InvalidOperationException("AI 任务尚未成功准备，拒绝执行缺少中间视频上下文的命令");
             return;
         }
+        EnhancementTaskRegistry.ClearTelemetry(context.TaskId);
         bool ours=context.Properties.TryGetValue("pluginId",out var id)&&id==PluginId;
         context.Properties.TryGetValue("pluginStepId",out var stepId);
         if(ours)
@@ -218,6 +220,7 @@ public sealed partial class ExtVideoPipeline : IDisposable
     private async ValueTask FinishAsync(ExtPluginPipelineContext context,CancellationToken _)
     {
         _parameterFailures.TryRemove(context.TaskId,out var ignoredError);
+        EnhancementTaskRegistry.ClearPreviewSources(context.TaskId);
         if(context.TaskStatus==ExtPluginTaskStatus.Canceled)EnhancementTaskRegistry.SetStatus(context.TaskId,"已停止");
         else if(context.TaskStatus==ExtPluginTaskStatus.Succeeded)EnhancementTaskRegistry.SetStatus(context.TaskId,"已完成");
         if(_tasks.TryRemove(context.TaskId,out var task))
@@ -275,7 +278,7 @@ public sealed partial class ExtVideoPipeline : IDisposable
     {
         foreach(var registration in _registrations)registration.Dispose();
         foreach(var item in _tasks.ToArray())
-            if(_tasks.TryRemove(item.Key,out var task)){task.Cancel();_ = Task.Run(async()=>await task.DisposeAsync());}
+            if(_tasks.TryRemove(item.Key,out var task)){EnhancementTaskRegistry.ClearPreviewSources(item.Key);task.Cancel();_ = Task.Run(async()=>await task.DisposeAsync());}
     }
     internal static void DeleteWorkDirectory(string work)
     {

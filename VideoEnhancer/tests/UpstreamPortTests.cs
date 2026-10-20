@@ -16,6 +16,39 @@ internal static partial class Program
         internal void Advance(int seconds) => _stamp += TimeSpan.FromSeconds(seconds).Ticks;
     }
 
+    private static void TestPreviewPlanRates(string models)
+    {
+        const BindingFlags flags=BindingFlags.NonPublic|BindingFlags.Static|BindingFlags.Instance;
+        foreach(string file in new[]{"model.param","model.bin"})
+        {
+            string path=Path.Combine(models,"RIFE","rife-v4.25",file);
+            Directory.CreateDirectory(Path.GetDirectoryName(path)!);File.WriteAllBytes(path,[1]);
+        }
+        var media=new VideoMediaInfo([new(0,96,64,24,"24/1",48,2,0,false,8,0,"","","","1:1")],2);
+        IReadOnlyDictionary<string,EnhancementPreviewSource> Build(EnhancementSettings settings)
+        {
+            var plan=typeof(BackendServices).GetMethod("BuildEnhancementPlan",flags)!.Invoke(null,
+                [settings,Preset(settings),"source.mkv",Path.Combine(_root,"preview-plan"),"pause",Ffmpeg,Ffprobe,media,false])!;
+            var sources=(IReadOnlyDictionary<string,EnhancementPreviewSource>)plan.GetType().GetField("PreviewSources",flags)!.GetValue(plan)!;
+            var steps=(IEnumerable<ExtPluginCommandStep>)plan.GetType().GetField("Steps",flags)!.GetValue(plan)!;
+            Check(steps.All(step=>sources.ContainsKey(step.Id)),"每个自有视频步骤都有明确预览输出");
+            return sources;
+        }
+        foreach(string order in new[]{"upscale-first","interp-first"})
+        {
+            var sources=Build(new(){UpscaleEnabled=true,Backend="onnx",Model="ONNX/RealESRGAN-x4-jp-Illustration-fix1-d.onnx",
+                InterpEnabled=true,InterpBackend="ncnn",InterpModel="RIFE/rife-v4.25",InterpFactor=2.5,ProcessOrder=order});
+            Check(sources["rve-first-0"].FrameRate==(order=="upscale-first"?24:60)&&sources["rve-second-0"].FrameRate==60,
+                "跨后端两阶段按实际补帧位置传递输出帧率："+order);
+        }
+        var same=Build(new(){UpscaleEnabled=true,Backend="ncnn",Model="Param-Bin/fixture-4x",InterpEnabled=true,
+            InterpBackend="ncnn",InterpModel="RIFE/rife-v4.25",InterpFactor=2.5});
+        Check(same["rve-0"].FrameRate==60&&same["rve-0"].UseTelemetry,"同后端组合预览按最终补帧帧率读取遥测");
+        var rtx=Build(new(){UpscaleEnabled=true,Backend="rtxvsr",InterpEnabled=true,InterpBackend="ncnn",InterpModel="RIFE/rife-v4.25",InterpFactor=2.5});
+        Check(rtx["rve-0"].FrameRate==60&&rtx["rtx-input-0"].FrameRate==60&&rtx["rtx-0"].FrameRate==60&&!rtx["rtx-0"].UseTelemetry,
+            "补帧后 RTX 的转换及写入继承输出帧率并使用 FFmpeg 进度");
+    }
+
     private static void TestUpstreamPort()
     {
         System.Console.WriteLine("运行：上游倍率命令、初始帧偏移和组件哈希更新");
@@ -48,6 +81,7 @@ internal static partial class Program
         FileAt("FlashVSR/model.pth");
         FileAt("BasicVSR++/basicvsr_plusplus_c64n7_8x1_600k_reds4_20210217-db622b2f.pth");
         BackendServices.ConfigureRuntime(runtime);
+        TestPreviewPlanRates(models);
         var host=new TestHost();using(var pipeline=new ExtVideoPipeline(host,()=>Ffmpeg,()=>Ffprobe))
         {
             foreach(var (backend,model) in new[]{("ncnn","Param-Bin/fixture-4x"),("cuda","PTH/realesr-animevideov3.pth"),

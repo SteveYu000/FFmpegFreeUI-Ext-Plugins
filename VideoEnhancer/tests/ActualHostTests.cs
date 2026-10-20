@@ -36,6 +36,7 @@ internal static partial class Program
             var hostSettings=Activator.CreateInstance(settingsType)!;
             settingsType.GetProperty("工作目录")!.SetValue(hostSettings,_root);
             settingsType.GetProperty("实例对象",flags)!.SetValue(null,hostSettings);
+            TestActualHostPreviewAdapter(core);
             var createScope=hostType.GetMethod("创建插件作用域",flags)!;
             var compatible=(IExtFFmpegFreeUIHost)createScope.Invoke(null,["compat-fixture","组合测试"])!;
             using var compatibleLifetime=(IDisposable)compatible;
@@ -133,4 +134,48 @@ internal static partial class Program
         }
         finally{AssemblyLoadContext.Default.Resolving-=Resolve;}
     }
+    private static void TestActualHostPreviewAdapter(Assembly core)
+    {
+        const BindingFlags flags=BindingFlags.NonPublic|BindingFlags.Public|BindingFlags.Static|BindingFlags.Instance;
+        var assembly=typeof(videoenhancer.Entry).Assembly;
+        var runtime=assembly.GetType("videoenhancer.HostRuntime",true)!;
+        var overrideHost=runtime.GetProperty("TestAssembly",flags)!;
+        object? previous=overrideHost.GetValue(null);
+        var taskType=core.GetType("FFmpegFreeUI.编码任务_v6",true)!;
+        var stepType=core.GetType("FFmpegFreeUI.编码步骤_v6",true)!;
+        var task=Activator.CreateInstance(taskType)!;
+        var step=Activator.CreateInstance(stepType)!;
+        string id=(string)taskType.GetProperty("ID")!.GetValue(task)!;
+        try
+        {
+            overrideHost.SetValue(null,core);
+            taskType.GetProperty("输出文件")!.SetValue(task,Path.Combine(_root,"final-not-muxed.mkv"));
+            ((IList)taskType.GetProperty("步骤")!.GetValue(task)!).Add(step);
+            taskType.GetProperty("当前步骤索引")!.SetValue(task,0);
+            void Set(string name,object value)=>stepType.GetProperty(name)!.SetValue(step,value);
+            var wrapped=assembly.GetType("videoenhancer.HostTask",true)!.GetMethod("Wrap",flags)!.Invoke(null,[task])!;
+            var resolver=assembly.GetType("videoenhancer.PreviewEngine",true)!.GetMethod("ResolvePreviewSource",flags)!;
+            object Source()=>resolver.Invoke(null,[wrapped])!;
+            object Value(object source,string name)=>source.GetType().GetField(name,flags)!.GetValue(source)!;
+            Check(ReferenceEquals(wrapped.GetType().GetProperty("当前步骤",flags)!.GetValue(wrapped),step),"真实 Ext 当前步骤适配读取原生步骤对象");
+            Set("显示名称","音频编码");Set("实际执行参数","-vn audio.flac");
+            Check((bool)Value(Source(),"Waiting"),"真实 Ext 音频步骤等待视频预览");
+            string video=Path.Combine(_root,"actual-step-video.mkv");
+            Set("显示名称","视频编码");Set("实际执行参数",WindowsArguments.Join(["-i","input.mkv","-an",video,"-y"]));
+            Check((string)Value(Source(),"Output")==video,"真实 Ext 视频步骤读取临时输出而不是任务最终输出");
+            typeof(EnhancementTaskRegistry).GetMethod("SetPreviewSources",flags)!.Invoke(null,
+                [id,new Dictionary<string,EnhancementPreviewSource>{{"rve-first-1",new(video,60,true)}}]);
+            Set("是插件步骤",true);Set("插件ID","videoenhancer");Set("插件步骤ID","rve-first-1");
+            Set("进程文件名","python.exe");Set("实际执行参数","launch.py --ffprobe-path C:/tools/ffprobe.exe");
+            object source=Source();
+            Check((string)Value(source,"Output")==video&&(double)Value(source,"FrameRate")==60&&(bool)Value(source,"UseTelemetry"),
+                "真实 Ext RVE 步骤使用明确中间视频、补帧后帧率及本阶段遥测");
+        }
+        finally
+        {
+            typeof(EnhancementTaskRegistry).GetMethod("ClearPreviewSources",flags)!.Invoke(null,[id]);
+            overrideHost.SetValue(null,previous);
+        }
+    }
+
 }

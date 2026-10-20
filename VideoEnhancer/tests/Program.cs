@@ -17,6 +17,7 @@ internal static partial class Program
     [STAThread]
     static int Main(string[] args)
     {
+        if(RunPreviewToolFixture(args))return 0;
         if((args.Length>0&&args[0]=="--ui-probe")||string.Equals(Path.GetFileNameWithoutExtension(Environment.ProcessPath),"VideoEnhancer.UiProbe",StringComparison.OrdinalIgnoreCase))return RunUiProbe();
         if(args.Length>0&&args[0]=="--port")return RtxSidecarFixture.Run(args).GetAwaiter().GetResult();
         if(args.Length>1&&Path.GetFileName(args[0])=="inspect_upscale_models.py"&&Environment.GetEnvironmentVariable("VIDEOENHANCER_TEST_SERVICE_CHILD") is {} marker)
@@ -31,6 +32,7 @@ internal static partial class Program
         Environment.SetEnvironmentVariable("VIDEOENHANCER_ROOT",Path.Combine(_root,"runtime"));
         try
         {
+            if(args.Contains("--preview-tests")){TestPreviewEngine();System.Console.WriteLine($"PASS {_checks} 个预览断言");return 0;}
             System.Console.WriteLine("运行：TestArguments");
             TestArguments();
             System.Console.WriteLine("运行：TestBinder");
@@ -46,6 +48,7 @@ internal static partial class Program
             TestMergedAssembly();
             System.Console.WriteLine("运行：TestNativePreview");
             TestNativePreview();
+            TestPreviewEngine();
             TestRveLicenseNotices();
             System.Console.WriteLine("运行：TestRvePreview");
             TestRvePreview();
@@ -219,7 +222,12 @@ internal static partial class Program
         {
             var stepContext=new ExtPluginPipelineContext{TaskId=id,InputPath=input,OutputPath=output,PresetJson=preset,ProcessFileName=step.ProcessFileName,CommandLine=step.Arguments,PhaseName=step.DisplayName};
             stepContext.Properties["pluginId"]="videoenhancer";stepContext.Properties["pluginStepId"]=step.Id;stepContext.Properties["isPluginStep"]="true";
+            EnhancementTaskRegistry.SetTelemetry(id,1000,2000,30);
             await host.PipelineImpl.Invoke(ExtFFmpegFreeUIPipelineStages.ProcessBeforeStart,stepContext);
+            var previewSource=EnhancementTaskRegistry.GetPreviewSource(id,step.Id);
+            Check(previewSource is not null&&previewSource.OutputPath==WindowsArguments.Parse(step.Arguments)[^1]&&
+                previewSource.FrameRate==25&&!previewSource.UseTelemetry,"AI FFmpeg 步骤登记当前视频输出及帧率："+step.Id);
+            Check(EnhancementTaskRegistry.GetTelemetry(id) is null,"切换步骤清理上一阶段遥测："+step.Id);
             await Run(stepContext.ProcessFileName,WindowsArguments.Parse(stepContext.CommandLine));
             stepContext.ExitCode=0;
             await host.PipelineImpl.Invoke(ExtFFmpegFreeUIPipelineStages.ProcessAfterExit,stepContext);
@@ -267,6 +275,7 @@ internal static partial class Program
         await host.PipelineImpl.Invoke(ExtFFmpegFreeUIPipelineStages.TaskAfterFinish,context);
         Check(!Directory.Exists(Path.GetDirectoryName(enhanced)),"成功后清理任务中间文件");
         Check(File.Exists(output),"保留最终文件");
+        Check(EnhancementTaskRegistry.GetPreviewSource(id,command.Steps.FirstOrDefault()?.Id??"source-0") is null&&EnhancementTaskRegistry.GetTelemetry(id) is null,"终态清理预览路径及遥测");
         settings.SegmentedVideos[0].Segments[1].Start=27;
         context=new(){TaskId="invalid",InputPath=input,OutputPath=output,PresetJson=Preset(settings)};
         bool rejected=false;

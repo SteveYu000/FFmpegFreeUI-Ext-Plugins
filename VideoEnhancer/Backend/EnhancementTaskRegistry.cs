@@ -2,10 +2,18 @@ using System.Collections.Concurrent;
 namespace VideoEnhancer;
 
 public sealed record EnhancementTaskView(string TaskId,string InputPath,string OutputPath,string Status,string Phase,string Settings,string BackendRequest,DateTime UpdatedAt);
+public sealed record EnhancementPreviewSource(string OutputPath,double FrameRate,bool UseTelemetry);
 public static class EnhancementTaskRegistry
 {
     private static readonly ConcurrentDictionary<string,EnhancementTaskView> Records=new();
     private static readonly ConcurrentDictionary<string,EnhancementTelemetry> Telemetry=new();
+    private static readonly ConcurrentDictionary<string,IReadOnlyDictionary<string,EnhancementPreviewSource>> PreviewSources=new();
+    public static EnhancementPreviewSource? GetPreviewSource(string taskId,string stepId)=>
+        PreviewSources.TryGetValue(taskId,out var sources)&&sources.TryGetValue(stepId,out var source)?source:null;
+    internal static void SetPreviewSources(string taskId,IReadOnlyDictionary<string,EnhancementPreviewSource> sources)=>
+        PreviewSources[taskId]=new Dictionary<string,EnhancementPreviewSource>(sources);
+    internal static void ClearTelemetry(string taskId)=>Telemetry.TryRemove(taskId,out _);
+    internal static void ClearPreviewSources(string taskId){PreviewSources.TryRemove(taskId,out _);ClearTelemetry(taskId);}
     public static EnhancementTelemetry? GetTelemetry(string id)=>Telemetry.GetValueOrDefault(id);
     public static void SetTelemetry(string id,long frame,long total,double fps)=>Telemetry[id]=new(frame,total,fps);
     public static event EventHandler? Changed;

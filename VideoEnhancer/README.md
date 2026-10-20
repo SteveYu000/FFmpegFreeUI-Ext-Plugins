@@ -11,6 +11,7 @@
 - 参数面板 → 画面帧下方 → **视频参数 | AI增强**：超分、补帧、HDR 和分段开关直接控制功能，参数随 v6 预设保存和恢复。
 - 主导航参数面板下方 → **视频超分**：竖排“首页、实时预览、模型管理、模型下载、模型转换、模型导入、使用教程”。
 - 首页显示本插件任务的生命周期状态、当前用户参数、插件 ZIP 更新信息；双击任务可查看其参数和后端命令。
+- 实时预览优先读取当前视频阶段的输出，包括 AI 中间视频和宿主编码输出；音频、媒体探测阶段等待视频开始。切换任务、刷新模式或隐藏预览页会取消旧的预览工作，探测超时后可恢复。
 - 模型管理入口位于实时预览下方，按超分/补帧和模型架构分组，名称与 AI 增强页一致，可刷新和移除已安装模型。
 - 分段方案通过 AI 参数页中的“编辑分段方案”配置，按输入文件保存进预设。没有配置分段方案的文件沿用普通 AI 开关；普通开关都关闭时交给宿主直接处理。没有独立图片页面或右键超分模块。
 
@@ -36,9 +37,9 @@
 
 ## 安装
 
-关闭宿主，将 `VideoEnhancer-0.2.0-win-x64.zip` 解压到宿主的 `Plugin` 目录。若存在旧的 `Plugin/videoenhancer.3fui.dll`，关闭宿主后删除该文件。ZIP 根目录附有 [中文安装说明](VideoEnhancer-安装说明.txt)，包含目录布局、首次使用、升级和常见问题。安装 ZIP 包含插件 DLL、FFF.Native 预览库及配套 DLL、aria2-next、7za、许可及源码获取说明；Python / RVE、RTX 运行组件和模型在“视频超分 → 模型下载”中按需安装。
+关闭宿主，将 `VideoEnhancer-0.3.0-win-x64.zip` 解压到宿主的 `Plugin` 目录。若存在旧的 `Plugin/videoenhancer.3fui.dll`，关闭宿主后删除该文件。ZIP 根目录附有 [中文安装说明](VideoEnhancer-安装说明.txt)，包含目录布局、首次使用、升级和常见问题。安装 ZIP 包含插件 DLL、FFF.Native 预览库及配套 DLL、aria2-next、7za、许可及源码获取说明；Python / RVE、RTX 运行组件和模型在“视频超分 → 模型下载”中按需安装。
 
-同一 Release 另行提供 `VideoEnhancer-0.2.0-source.zip`，包含本次构建的完整插件源码、第三方版本源码与构建配方，使用插件时无需安装源码包。两包各附 `.sha256` 文件；安装包的 `videoenhancer/licenses/VideoEnhancer/SOURCE.txt` 和发行元数据记录源码包下载地址与哈希，源码包的 `source-manifest.json` 记录配套 DLL 哈希。发布及镜像时应同时免费提供两包。
+同一 Release 另行提供 `VideoEnhancer-0.3.0-source.zip`，包含本次构建的完整插件源码、第三方版本源码与构建配方，使用插件时无需安装源码包。两包各附 `.sha256` 文件；安装包的 `videoenhancer/licenses/VideoEnhancer/SOURCE.txt` 和发行元数据记录源码包下载地址与哈希，源码包的 `source-manifest.json` 记录配套 DLL 哈希。发布及镜像时应同时免费提供两包。
 
 从源码安装：
 

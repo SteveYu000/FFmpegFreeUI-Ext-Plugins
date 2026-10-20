@@ -17,6 +17,7 @@ internal sealed class EnhancementPlan
     internal Dictionary<int,string> Videos = [];
     internal Dictionary<int,VideoStreamInfo> Sources = [];
     internal Dictionary<string,RtxStepOptions> Rtx = [];
+    internal Dictionary<string,EnhancementPreviewSource> PreviewSources = [];
     internal int VideoCount;
     internal string BackendDescription => string.Join(Environment.NewLine,Steps.Select(step => WindowsArguments.Quote(step.ProcessFileName)+" "+step.Arguments));
 }
@@ -181,6 +182,17 @@ public static partial class BackendServices
         }
         plan.Steps.Add(new(id,name,process,WindowsArguments.Join(arguments)){Placement=ExtPluginCommandStepPlacement.BeforeNative,
             Order=plan.Steps.Count,WorkingDirectory=CoreRoot,ParseFFmpegProgress=progress});
+        // 此处只处理本计划生成的 FFmpeg 参数列表，输出位置和帧率供预览只读使用。
+        if(progress)
+        {
+            double frameRate=plan.Sources.Values.LastOrDefault()?.FrameRate??0;
+            int input=arguments.IndexOf("-i");
+            if(input>=0&&input+1<arguments.Count)frameRate=PreviewFrameRate(plan,arguments[input+1]);
+            int rate=arguments.IndexOf("-r");
+            if(rate>=0&&rate+1<arguments.Count&&double.TryParse(arguments[rate+1],NumberStyles.Float,CultureInfo.InvariantCulture,out var explicitRate))
+                frameRate=explicitRate;
+            plan.PreviewSources[id]=new(arguments[^1],frameRate,false);
+        }
     }
 
     private static void AddRve(EnhancementPlan plan,string id,string name,string input,string output,string model,string? interp,
@@ -193,6 +205,7 @@ public static partial class BackendServices
             settings.InterpDynamicScaledOpticalFlow,settings.SceneDetectThreshold,settings.UpscaleTileSize,model.Length>0?upscalePrecision:interpPrecision);
         int ff=args.IndexOf("--ffmpeg_path");args[ff+1]=ffmpeg;
         AddPythonStep(plan,id,name,script,args.Skip(1),upscalePrecision,interpPrecision,model,ffprobe);
+        plan.PreviewSources[id]=new(output,PreviewFrameRate(plan,input)*(interp is null?1:settings.InterpFactor),true);
     }
 
     private static void AddPythonStep(EnhancementPlan plan,string id,string name,string script,IEnumerable<string> forwarded,
@@ -205,6 +218,10 @@ public static partial class BackendServices
         args.AddRange(forwarded);
         AddStep(plan,id,name,PythonExe,args,false);
     }
+
+    private static double PreviewFrameRate(EnhancementPlan plan,string input)=>
+        plan.PreviewSources.Values.LastOrDefault(source=>string.Equals(source.OutputPath,input,StringComparison.OrdinalIgnoreCase))?.FrameRate
+        ??plan.Sources.Values.LastOrDefault()?.FrameRate??0;
 
     private static string ColorFrameFilter(VideoStreamInfo source,bool rtxHdr=false,bool includeSpace=false)
     {
@@ -410,5 +427,6 @@ public static partial class BackendServices
             "--encoder-args-base64",EncodeStringList(WindowsArguments.Parse(LosslessEncoder(false,plan.Sources.Values.Last()))),
             "--ffmpeg-path",ffmpeg,"--tile-size",plan.Settings.UpscaleTileSize.ToString(CultureInfo.InvariantCulture),"--pause-shm",plan.PauseName,"--overwrite"};
         AddPythonStep(plan,id,"分段 RVE 视频增强",script,args,precision,"auto","",ffprobe);
+        plan.PreviewSources[id]=new(output,PreviewFrameRate(plan,input),true);
     }
 }
