@@ -91,6 +91,7 @@ public static partial class BackendServices
                 int engineScale=settings.Backend=="tensorrt"&&settings.OutputScale>0?Math.Min(nativeScale,settings.OutputScale):nativeScale;
                 if(model.Length>0&&settings.OutputScale>0&&settings.Backend is not ("flashvsr" or "basicvsrpp"))
                     scale=settings.OutputScale.ToString(CultureInfo.InvariantCulture);
+                int modelInputMultiple=ModelCapabilityCatalog.TryGet(model,ModelsDir,out var sourceCapability)?Math.Max(1,sourceCapability.InputMultiple):1;
                 if(prepareModels&&model.Length>0&&settings.Backend=="tensorrt")
                 {
                     int engineWidth=width,engineHeight=height;
@@ -121,16 +122,16 @@ public static partial class BackendServices
                     string between=Path.Combine(work,$"rve-between-{ordinal}.mkv");
                     AddRve(plan,$"rve-first-{ordinal}",upFirst?"超分（第一阶段）":"补帧（第一阶段）",current,between,
                         upFirst?model:"",upFirst?null:interp,upFirst?scale:null,upFirst?settings.Backend:settings.InterpBackend,
-                        upFirst?rveEncoder:encoder,upPrecision,interpPrecision,ffmpeg,ffprobe,hdr);
+                        upFirst?rveEncoder:encoder,upPrecision,interpPrecision,ffmpeg,ffprobe,hdr,modelInputMultiple);
                     AddRve(plan,$"rve-second-{ordinal}",upFirst?"补帧（第二阶段）":"超分（第二阶段）",between,rveOutput,
                         upFirst?"":model,upFirst?interp:null,upFirst?null:scale,upFirst?settings.InterpBackend:settings.Backend,
-                        upFirst?encoder:rveEncoder,upPrecision,interpPrecision,ffmpeg,ffprobe,hdr);
+                        upFirst?encoder:rveEncoder,upPrecision,interpPrecision,ffmpeg,ffprobe,hdr,modelInputMultiple);
                 }
                 else
                 {
                     string backend=model.Length>0?settings.Backend:settings.InterpBackend;
                     AddRve(plan,$"rve-{ordinal}","RVE 视频增强",current,rveOutput,model,interp,scale,backend,rveEncoder,
-                        upPrecision,interpPrecision,ffmpeg,ffprobe,hdr);
+                        upPrecision,interpPrecision,ffmpeg,ffprobe,hdr,modelInputMultiple);
                 }
                 current=rveOutput;
                 if(model.Length>0){width*=outputScale;height*=outputScale;}
@@ -196,7 +197,7 @@ public static partial class BackendServices
     }
 
     private static void AddRve(EnhancementPlan plan,string id,string name,string input,string output,string model,string? interp,
-        string? scale,string backend,string encoder,string upscalePrecision,string interpPrecision,string ffmpeg,string ffprobe,bool hdr)
+        string? scale,string backend,string encoder,string upscalePrecision,string interpPrecision,string ffmpeg,string ffprobe,bool hdr,int inputMultiple=0)
     {
         var settings=plan.Settings;
         string script=model.Length>0&&backend is not ("flashvsr" or "basicvsrpp")?ExtToolPath("rve-ordered-backend.py"):BackendScript;
@@ -204,14 +205,14 @@ public static partial class BackendServices
             settings.InterpFactor.ToString("0.########",CultureInfo.InvariantCulture),backend,script,hdr,
             settings.InterpDynamicScaledOpticalFlow,settings.SceneDetectThreshold,settings.UpscaleTileSize,model.Length>0?upscalePrecision:interpPrecision);
         int ff=args.IndexOf("--ffmpeg_path");args[ff+1]=ffmpeg;
-        AddPythonStep(plan,id,name,script,args.Skip(1),upscalePrecision,interpPrecision,model,ffprobe);
+        AddPythonStep(plan,id,name,script,args.Skip(1),upscalePrecision,interpPrecision,model,ffprobe,inputMultiple);
         plan.PreviewSources[id]=new(output,PreviewFrameRate(plan,input)*(interp is null?1:settings.InterpFactor),true);
     }
 
     private static void AddPythonStep(EnhancementPlan plan,string id,string name,string script,IEnumerable<string> forwarded,
-        string upPrecision,string interpPrecision,string model,string ffprobe)
+        string upPrecision,string interpPrecision,string model,string ffprobe,int inputMultiple=0)
     {
-        int multiple=ModelCapabilityCatalog.TryGet(model,ModelsDir,out var cap)?Math.Max(1,cap.InputMultiple):1;
+        int multiple=model.Length==0?1:inputMultiple>0?inputMultiple:ModelCapabilityCatalog.TryGet(model,ModelsDir,out var cap)?Math.Max(1,cap.InputMultiple):1;
         var args=new List<string>{"-u","-X","utf8",ExtToolPath("rve-ext-launch.py"),"--backend-dir",Path.GetDirectoryName(BackendScript)!,
             "--work-dir",plan.WorkDirectory,"--target-script",script,"--upscale-precision",upPrecision,"--interp-precision",interpPrecision,
             "--process-order",plan.Settings.ProcessOrder,"--output-scale",(model.Length>0?plan.Settings.OutputScale:0).ToString(CultureInfo.InvariantCulture),"--input-multiple",multiple.ToString(CultureInfo.InvariantCulture),"--ffprobe-path",ffprobe,"--"};

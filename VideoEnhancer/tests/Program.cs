@@ -17,6 +17,13 @@ internal static partial class Program
     [STAThread]
     static int Main(string[] args)
     {
+        if(args.Length>0&&args[0]=="--echo-converter-args"){System.Console.Write(JsonSerializer.Serialize(args.Skip(1).ToArray()));return 0;}
+        if(args.Length==2&&args[0]=="--patch-trt-loader")
+        {
+            BackendServices.ConfigureRuntime(args[1]);
+            typeof(BackendServices).GetMethod("EnsurePytorchUpscaleCompatibility",BindingFlags.NonPublic|BindingFlags.Static)!.Invoke(null,null);
+            return 0;
+        }
         if(RunPreviewToolFixture(args))return 0;
         if((args.Length>0&&args[0]=="--ui-probe")||string.Equals(Path.GetFileNameWithoutExtension(Environment.ProcessPath),"VideoEnhancer.UiProbe",StringComparison.OrdinalIgnoreCase))return RunUiProbe();
         if(args.Length>0&&args[0]=="--port")return RtxSidecarFixture.Run(args).GetAwaiter().GetResult();
@@ -32,6 +39,7 @@ internal static partial class Program
         Environment.SetEnvironmentVariable("VIDEOENHANCER_ROOT",Path.Combine(_root,"runtime"));
         try
         {
+            if(args.Contains("--upstream-1315-tests")){TestUpstream1315();System.Console.WriteLine($"PASS {_checks} 个 1.3.15 移植断言");return 0;}
             if(args.Contains("--preview-tests")){TestPreviewEngine();System.Console.WriteLine($"PASS {_checks} 个预览断言");return 0;}
             System.Console.WriteLine("运行：TestArguments");
             TestArguments();
@@ -54,6 +62,7 @@ internal static partial class Program
             TestRvePreview();
             TestParameterPresentation();
             TestUpstreamPort();
+            TestUpstream1315();
             TestManagementServices();
             TestInstalledModelCatalog();
             TestModelRemoval();

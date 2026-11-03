@@ -157,7 +157,11 @@ Namespace videoenhancer
         End Function
 
         Public Sub Save()
-            RaiseEvent Saved(Me, EventArgs.Empty)
+            TrySave()
+        End Sub
+
+        ''' <summary>配置写入成功后只通知一次；失败时供界面恢复开关和预设状态。</summary>
+        Public Function TrySave() As Boolean
             Dim temporary = ConfigPath & ".new"
             Try
                 Directory.CreateDirectory(ApplicationRoot)
@@ -166,14 +170,16 @@ Namespace videoenhancer
                     New UTF8Encoding(False))
                 File.Move(temporary, ConfigPath, True)
                 RaiseEvent Saved(Me, EventArgs.Empty)
+                Return True
             Catch
+                Return False
             Finally
                 Try
                     If File.Exists(temporary) Then File.Delete(temporary)
                 Catch
                 End Try
             End Try
-        End Sub
+        End Function
 
     End Class
 

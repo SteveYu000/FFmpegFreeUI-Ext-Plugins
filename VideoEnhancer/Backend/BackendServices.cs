@@ -877,9 +877,19 @@ public static partial class BackendServices
         var hasUtf8Bom = bytes.AsSpan().StartsWith(Encoding.UTF8.Preamble);
         var text = Encoding.UTF8.GetString(bytes, hasUtf8Bom ? Encoding.UTF8.Preamble.Length : 0,
             bytes.Length - (hasUtf8Bom ? Encoding.UTF8.Preamble.Length : 0));
+        var newline = text.Contains("\r\n", StringComparison.Ordinal) ? "\r\n" : "\n";
+        const string pathLoad = "            self.__model = torch.jit.load(path, map_location=device).eval()";
+        const string streamLoad =
+            "            # 使用 Python 文件流，避免 Windows 原生文件接口拒绝中文 Engine 路径。\n" +
+            "            with open(path, \"rb\") as engine_file:\n" +
+            "                self.__model = torch.jit.load(engine_file, map_location=device).eval()";
+        if (text.Contains(pathLoad, StringComparison.Ordinal))
+        {
+            text = text.Replace(pathLoad, streamLoad.Replace("\n", newline), StringComparison.Ordinal);
+            WritePatchedRveSource(loader, text, hasUtf8Bom);
+        }
         if (text.Contains("VIDEOENHANCER_UPSCALE_INPUT_MULTIPLE", StringComparison.Ordinal)) return;
 
-        var newline = text.Contains("\r\n", StringComparison.Ordinal) ? "\r\n" : "\n";
         var normalized = text.Replace("\r\n", "\n");
         const string oldInit =
             "        self.tilesize = tilesize\n" +
@@ -1050,6 +1060,9 @@ public static partial class BackendServices
             || ext.Equals(".pt", StringComparison.OrdinalIgnoreCase)
             || ext.Equals(".pkl", StringComparison.OrdinalIgnoreCase);
     }
+
+    private static bool IsOnnxModelFile(string path) =>
+        Path.GetExtension(path).Equals(".onnx", StringComparison.OrdinalIgnoreCase);
 
     private static bool IsTensorRTEngineFile(string path) =>
         Path.GetExtension(path).Equals(".engine", StringComparison.OrdinalIgnoreCase);
@@ -1827,8 +1840,8 @@ public static partial class BackendServices
     }
 
     /// <summary>
-    /// 把 PTH 源模型解析为当前 GPU、TensorRT 版本和输入尺寸对应的 Engine。
-    /// 选择 Engine 时验证当前设备和输入尺寸；选择 PTH 时构建本机缓存。
+    /// 把 PTH/ONNX 源模型解析为当前 GPU、TensorRT 版本和输入尺寸对应的 Engine。
+    /// 选择 Engine 时验证当前设备和输入尺寸；选择源模型时构建本机缓存。
     /// </summary>
     private static string EnsureTensorRtEngine(
         string modelPath, int inputWidth, int inputHeight, int tileSize = 0, int outputScale = 0,
@@ -1843,9 +1856,9 @@ public static partial class BackendServices
                 ? Path.GetFullPath(modelPath) : "";
         }
 
-        if (!IsPthModelFile(sourcePath) || !File.Exists(sourcePath))
+        if (!(IsPthModelFile(sourcePath) || IsOnnxModelFile(sourcePath)) || !File.Exists(sourcePath))
         {
-            Console.Error.WriteLine("[错误] TensorRT 自动构建需要有效的 PTH 源模型：" + sourcePath);
+            Console.Error.WriteLine("[错误] TensorRT 自动构建需要有效的 PTH/ONNX 源模型：" + sourcePath);
             return "";
         }
         if (!File.Exists(TensorRTConverterScript))
@@ -1861,6 +1874,9 @@ public static partial class BackendServices
 
         Directory.CreateDirectory(TensorRTCacheDir);
         var enginePrecision = TensorRtPrecisionForModel(sourcePath, requestedPrecision);
+        // 固定尺寸 ONNX 保留原 profile，由 RVE 按 Engine 尺寸补边或分块。
+        var validationWidth = IsOnnxModelFile(sourcePath) ? 0 : inputWidth;
+        var validationHeight = IsOnnxModelFile(sourcePath) ? 0 : inputHeight;
         var cachePath = BuildTensorRtCachePath(sourcePath, runtime!, inputWidth, inputHeight, tileSize, outputScale,
             enginePrecision);
         var mutexName = "Local\\VideoEnhancer_TRT_" + Convert.ToHexString(
@@ -1880,7 +1896,7 @@ public static partial class BackendServices
             if (File.Exists(cachePath))
             {
                 Console.WriteLine("[TensorRT] 命中本机尺寸缓存，正在验证…");
-                if (ValidateTensorRTEngine(cachePath, printSuccess: true, inputWidth: inputWidth, inputHeight: inputHeight, tileSize: tileSize))
+                if (ValidateTensorRTEngine(cachePath, printSuccess: true, inputWidth: validationWidth, inputHeight: validationHeight, tileSize: tileSize))
                 {
                     EmitTensorRtProgress("超分 Engine", 100, "复用已验证缓存");
                     return cachePath;
@@ -1905,7 +1921,7 @@ public static partial class BackendServices
             try
             {
                 File.Copy(builtPath, partialPath, overwrite: true);
-            if (!ValidateTensorRTEngine(partialPath, printSuccess: false, inputWidth: inputWidth, inputHeight: inputHeight, tileSize: tileSize))
+                if (!ValidateTensorRTEngine(partialPath, printSuccess: false, inputWidth: validationWidth, inputHeight: validationHeight, tileSize: tileSize))
                 {
                     Console.Error.WriteLine("[错误] 自动构建完成，但 Engine 无法在当前 GPU 上反序列化，未写入缓存。");
                     return "";
@@ -1984,6 +2000,9 @@ public static partial class BackendServices
             TensorRtTilePad.ToString(CultureInfo.InvariantCulture), outputScale.ToString(CultureInfo.InvariantCulture),
             sourceHash,
         });
+        if (IsOnnxModelFile(sourcePath) && ModelCapabilityCatalog.TryGet(sourcePath, ModelsDir, out var onnxCapability)
+            && onnxCapability.InputMultiple > 1)
+            configuration += "|input-multiple:" + onnxCapability.InputMultiple.ToString(CultureInfo.InvariantCulture);
         var configurationHash = Convert.ToHexString(
             SHA256.HashData(Encoding.UTF8.GetBytes(configuration))).Substring(0, 20).ToLowerInvariant();
         // 完整配置进入指纹，不再把 GPU/运行时版本全部展开到文件名，避免 Windows MAX_PATH。
@@ -2055,6 +2074,11 @@ public static partial class BackendServices
         start.ArgumentList.Add(tileSize.ToString(CultureInfo.InvariantCulture));
         start.ArgumentList.Add("--tile-pad");
         start.ArgumentList.Add(TensorRtTilePad.ToString(CultureInfo.InvariantCulture));
+        if (IsOnnxModelFile(sourcePath) && ModelCapabilityCatalog.TryGet(sourcePath, ModelsDir, out var onnxCapability))
+        {
+            start.ArgumentList.Add("--input-multiple");
+            start.ArgumentList.Add(Math.Max(1, onnxCapability.InputMultiple).ToString(CultureInfo.InvariantCulture));
+        }
         start.ArgumentList.Add("--precision");
         start.ArgumentList.Add(precision);
         start.ArgumentList.Add("--optimization-level");
@@ -2449,14 +2473,14 @@ public static partial class BackendServices
         Console.WriteLine(isBasicVsrPlusPlus ? "可用 BasicVSR++ 时序视频模型："
             : isFlashVsr ? "可用 FlashVSR 时序视频模型："
             : isTensorRT
-            ? "可用放大模型（TensorRT，PTH 首次使用自动构建本机 Engine）："
+            ? "可用放大模型（TensorRT，PTH/ONNX 首次使用自动构建本机 Engine）："
             : isOnnx ? "可用放大模型（ONNX Runtime，递归扫描 models 的 .onnx 文件）："
             : isCuda ? "可用放大模型（CUDA，递归扫描 models 的 .pth/.pt/.pkl/.ckpt/.safetensors 文件，不含补帧目录）："
             : "可用放大模型（NCNN，递归扫描 models 中含 .param/.bin 的文件夹，不含补帧目录）：");
         if (models.Count == 0)
         {
             Console.WriteLine(isTensorRT
-                ? "  (未找到任何 PTH 源模型或预制 .engine 文件)"
+                ? "  (未找到任何可转换的 PTH/ONNX 源模型)"
                 : isOnnx ? "  (未找到任何 .onnx 模型文件)"
                 : isCuda ? "  (未找到任何 PyTorch/safetensors 模型文件)"
                 : "  (未找到任何含 .param/.bin 的模型文件夹)");
@@ -2548,6 +2572,7 @@ public static partial class BackendServices
         public int[] InferenceScales { get; init; } = [];
         public string Purpose { get; init; } = "";
         public int Scale { get; init; }
+        public int InputMultiple { get; init; } = 1;
         public string Source { get; init; } = "";
         public string[] Backends { get; init; } = [];
     }
@@ -2615,6 +2640,7 @@ public static partial class BackendServices
             InferenceScales = builtIn?.InferenceScales ?? (backends.Contains("flashvsr") ? [2, 4] : []),
             Purpose = user?.Purpose ?? (interpolation ? "Interpolation" : "SR"),
             Scale = inspected?.Scale ?? user?.Scale ?? builtIn?.Scale ?? (int.TryParse(DetectScale(path), out var scale) ? scale : 0),
+            InputMultiple = Math.Max(1, user?.InputMultiple ?? builtIn?.InputMultiple ?? inspected?.InputMultiple ?? 1),
             Source = user is not null ? "user" : builtIn is not null ? "builtin" : "discovered",
             Backends = backends,
         };
@@ -2634,6 +2660,7 @@ public static partial class BackendServices
             writer.WriteString("architecture", item.Architecture);
             writer.WriteString("purpose", item.Purpose);
             writer.WriteNumber("scale", item.Scale);
+            writer.WriteNumber("inputMultiple", item.InputMultiple);
             writer.WriteString("architectureGroup", item.ArchitectureGroup);
             writer.WriteStartArray("inferenceScales");
             foreach (var value in item.InferenceScales) writer.WriteNumberValue(value);
@@ -2714,11 +2741,12 @@ public static partial class BackendServices
     }
 
     /// <summary>
-    /// TensorRT 任务只展示 PTH 源模型；Engine 始终按当前任务配置自动构建到本机缓存。
+    /// TensorRT 任务展示 PTH/ONNX 源模型；Engine 按当前任务配置自动构建到本机缓存。
     /// </summary>
     private static List<string> DiscoverTensorRTSelectableModels()
     {
         return DiscoverUpscalePthModels()
+            .Concat(DiscoverOnnxModels())
             .Where(IsTensorRtConvertibleUpscaleSource)
             .OrderBy(path => UpscaleModelDisplayName(path, "tensorrt"), StringComparer.CurrentCultureIgnoreCase)
             .ToList();
