@@ -100,6 +100,39 @@ Public NotInheritable Class SearchSettings
 
 End Class
 
+Public NotInheritable Class SampleEncodeSettings
+
+    Public Property Metric As QualityScoreMetric = QualityScoreMetric.Vmaf
+    Public Property Crf As Double = 30
+    Public Property Samples As Integer?
+    Public Property SampleDuration As String = "20s"
+    Public Property VmafModel As String = String.Empty
+
+    Public Sub Validate()
+        If Not Double.IsFinite(Crf) OrElse Crf < 0 Then
+            Throw New ArgumentOutOfRangeException(NameOf(Crf), "CRF 必须是大于等于 0 的有限数字。")
+        End If
+        ' 与 CRF 搜索复用采样和模型校验；这里只评估一个 CRF，不使用目标分数或 CRF 搜索范围。
+        Dim sampling As New SearchSettings With {
+            .Metric = Metric,
+            .Samples = Samples,
+            .SampleDuration = SampleDuration,
+            .VmafModel = VmafModel
+        }
+        sampling.Validate()
+    End Sub
+
+End Class
+
+Public NotInheritable Class SampleEncodeResult
+    Public Property Crf As Double
+    Public Property Metric As QualityScoreMetric
+    Public Property Score As Double
+    Public Property PredictedEncodeSize As Long
+    Public Property PredictedEncodeSeconds As Double
+    Public Property PredictedEncodePercent As Double
+End Class
+
 Public NotInheritable Class SearchResult
 
     Public Property Crf As Double

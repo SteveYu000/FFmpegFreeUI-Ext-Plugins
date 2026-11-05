@@ -22,6 +22,7 @@ Friend NotInheritable Class QualitySettingsPanel
     Private Shared ReadOnly ColorSuccess As Color = Color.FromArgb(63, 205, 135)
     Private Shared ReadOnly ColorDanger As Color = Color.FromArgb(235, 93, 93)
     Private Const RefreshDelayMilliseconds As Integer = 120
+    Private Const AutomaticVmafModelText As String = "Auto"
     Private Const FieldLabelHeight As Integer = 30
     Private Const HostControlHeight As Integer = 32
     Private Const HostControlRowHeight As Integer = 42
@@ -33,6 +34,11 @@ Friend NotInheritable Class QualitySettingsPanel
     Private ReadOnly _stateChanged As Action(Of String)
     Private ReadOnly _scanModelsAsync As Func(Of CancellationToken, Task(Of VmafModelScanResult))
     Private ReadOnly _qualityValueStatus As QualityValueStatusAdornment
+    Private ReadOnly _sampleEncodeButton As ModernButton
+    Private ReadOnly _sampleButtonTemplate As ModernButton
+    Private ReadOnly _sampleButtonFallbackFont As Font
+    Private ReadOnly _sampleEncodeToolTip As HoverToolTipBinding
+    Private ReadOnly _samplePageHost As SampleEncodePageHost
     Private ReadOnly _lifetimeCancellation As New CancellationTokenSource()
     Private ReadOnly _normalTextBoxBorders As New Dictionary(Of ModernTextBox, TextBoxBorderStyle)()
     Private ReadOnly _refreshTimer As System.Windows.Forms.Timer
@@ -51,6 +57,7 @@ Friend NotInheritable Class QualitySettingsPanel
     Private ReadOnly _samples As ModernTextBox
     Private ReadOnly _sampleDuration As ModernTextBox
     Private ReadOnly _thorough As ModernCheckBox
+    Private ReadOnly _thoroughHelp As HtmlColorLabel
     Private ReadOnly _vmafModel As ModernComboBox
     Private ReadOnly _scanModelsButton As ModernButton
     Private ReadOnly _browseModelButton As ModernButton
@@ -76,7 +83,8 @@ Friend NotInheritable Class QualitySettingsPanel
 
     Public Sub New(context As IExtPluginUiContext,
                    Optional stateChanged As Action(Of String) = Nothing,
-                   Optional scanModelsAsync As Func(Of CancellationToken, Task(Of VmafModelScanResult)) = Nothing)
+                   Optional scanModelsAsync As Func(Of CancellationToken, Task(Of VmafModelScanResult)) = Nothing,
+                   Optional sampleButtonTemplate As ModernButton = Nothing)
         If context Is Nothing Then Throw New ArgumentNullException(NameOf(context))
         _context = context
         _stateChanged = stateChanged
@@ -140,13 +148,35 @@ Friend NotInheritable Class QualitySettingsPanel
         RememberNormalBorders(_minCrf, _maxCrf, _samples, _sampleDuration)
         If _qualityValue IsNot Nothing Then RememberNormalBorders(_qualityValue)
         _vmafModel = CreateComboBox(
-            "留空使用 ab-av1 自动模型",
+            AutomaticVmafModelText,
             backgroundSource,
             nativeComboBox)
+        _vmafModel.Items.Add(AutomaticVmafModelText)
         Dim animationFps = If(nativeComboBox Is Nothing, 60, nativeComboBox.AnimationFPS)
         _thorough = CreateCheckBox(backgroundSource, animationFps)
+        _thoroughHelp = CreateFieldLabel(String.Empty, backgroundSource)
+        _thoroughHelp.AutoSize = False
+        _thoroughHelp.TextAlign = HtmlColorLabel.TextAlignEnum.MiddleLeft
+        _thoroughHelp.Margin = Padding.Empty
+        _thoroughHelp.ToolTipText = "搜索到更贴近目标值"
         _scanModelsButton = CreateButton("扫描模型", backgroundSource, animationFps)
         _browseModelButton = CreateButton("本地 JSON", backgroundSource, animationFps)
+        _sampleEncodeButton = CreateButton("样本编码", outerBackgroundSource, animationFps)
+        _sampleEncodeButton.Name = "AbAv1SampleEncodeButton"
+        _sampleButtonTemplate = sampleButtonTemplate
+        If _sampleButtonTemplate Is Nothing Then
+            _sampleButtonFallbackFont = New Font(Font.FontFamily, 10.0F, FontStyle.Regular)
+            _sampleEncodeButton.Font = _sampleButtonFallbackFont
+        Else
+            SynchronizeSampleButtonStyle(Me, EventArgs.Empty)
+            AddHandler _sampleButtonTemplate.FontChanged, AddressOf SynchronizeSampleButtonStyle
+            AddHandler _sampleButtonTemplate.ForeColorChanged, AddressOf SynchronizeSampleButtonStyle
+        End If
+        _sampleEncodeToolTip = New HoverToolTipBinding(
+            _sampleEncodeButton,
+            "不知道crf填多少合适？试试使用少量视频样本片段快速预测最终视频质量和大小、编码所需时间")
+        _samplePageHost = New SampleEncodePageHost(context, outerBackgroundSource)
+        AddHandler _sampleEncodeButton.Click, AddressOf OpenSampleEncodePage
 
         _minCrfCaption = CreateFieldLabel("最小 CRF", backgroundSource)
         _maxCrfCaption = CreateFieldLabel("最大 CRF", backgroundSource)
@@ -154,13 +184,13 @@ Friend NotInheritable Class QualitySettingsPanel
         _sampleDurationCaption = CreateFieldLabel("单段时长", backgroundSource)
         _modelCaption = CreateFieldLabel("VMAF 模型", backgroundSource)
 
-        _modelStatus = CreateLabel("留空 = ab-av1 自动模型", ColorMuted, 8.5F, backgroundSource)
+        _modelStatus = CreateLabel("Auto = ab-av1 自动模型", ColorMuted, 8.5F, backgroundSource)
         _validationStatus = CreateLabel(String.Empty, ColorDanger, 8.5F, backgroundSource)
         _environmentStatus = CreateLabel(String.Empty, ColorMuted, 8.5F, outerBackgroundSource)
         _environmentStatus.Name = QualityValueStatusAdornment.StatusControlName
 
         BuildFlatLayout()
-        _qualityValueStatus = New QualityValueStatusAdornment(_qualityValue, _environmentStatus)
+        _qualityValueStatus = New QualityValueStatusAdornment(_qualityValue, _environmentStatus, _sampleEncodeButton)
 
         If _qualityMetric IsNot Nothing Then
             AddHandler _qualityMetric.TextChanged, AddressOf QualityMetricChanged
@@ -214,9 +244,30 @@ Friend NotInheritable Class QualitySettingsPanel
         If active Then RequestAutomaticModelScan()
     End Sub
 
+    Private Sub OpenSampleEncodePage(sender As Object, e As EventArgs)
+        Try
+            _samplePageHost.Open()
+        Catch ex As Exception
+            MessageBox.Show(_context.AnchorControl.FindForm(), ex.Message, "样本编码", MessageBoxButtons.OK, MessageBoxIcon.Warning)
+        End Try
+    End Sub
+
+    Private Sub SynchronizeSampleButtonStyle(sender As Object, e As EventArgs)
+        If _resourcesDisposed OrElse _sampleButtonTemplate Is Nothing OrElse _sampleButtonTemplate.IsDisposed Then Return
+        _sampleEncodeButton.Font = _sampleButtonTemplate.Font
+        _sampleEncodeButton.ForeColor = _sampleButtonTemplate.ForeColor
+        _sampleEncodeButton.TextAlign = _sampleButtonTemplate.TextAlign
+    End Sub
+
     Protected Overrides Sub Dispose(disposing As Boolean)
         If disposing AndAlso Not _resourcesDisposed Then
             _resourcesDisposed = True
+            _sampleEncodeToolTip.Dispose()
+            _samplePageHost.Dispose()
+            If _sampleButtonTemplate IsNot Nothing Then
+                RemoveHandler _sampleButtonTemplate.FontChanged, AddressOf SynchronizeSampleButtonStyle
+                RemoveHandler _sampleButtonTemplate.ForeColorChanged, AddressOf SynchronizeSampleButtonStyle
+            End If
             RemoveHandler _context.StateRestored, _stateRestoredHandler
             If _qualityMetric IsNot Nothing AndAlso Not _qualityMetric.IsDisposed Then
                 RemoveHandler _qualityMetric.TextChanged, AddressOf QualityMetricChanged
@@ -235,6 +286,7 @@ Friend NotInheritable Class QualitySettingsPanel
             _refreshTimer.Dispose()
             _lifetimeCancellation.Dispose()
             _qualityValueStatus.Dispose()
+            _sampleButtonFallbackFont?.Dispose()
         End If
         MyBase.Dispose(disposing)
     End Sub
@@ -318,6 +370,7 @@ Friend NotInheritable Class QualitySettingsPanel
             _samples,
             _sampleDuration,
             _thorough,
+            _thoroughHelp,
             _modelCaption,
             _vmafModel,
             _scanModelsButton,
@@ -371,12 +424,31 @@ Friend NotInheritable Class QualitySettingsPanel
                     Math.Max(0, columnWidth - gap),
                     controlHeight)
             Next
+            Dim thoroughLeft = edges(4) + gap
+            Dim thoroughAvailableWidth = Math.Max(0, width - thoroughLeft)
+            Dim helpWidth = Math.Min(ScaleLogical(24), thoroughAvailableWidth)
+            Dim helpGap = ScaleLogical(4)
+            Dim thoroughTextWidth = TextRenderer.MeasureText(
+                _thorough.Text,
+                _thorough.Font,
+                Size.Empty,
+                TextFormatFlags.NoPadding Or TextFormatFlags.SingleLine).Width
+            Dim thoroughWidth = Math.Min(
+                ScaleLogical(_thorough.BoxSize + _thorough.BoxTextSpacing) + thoroughTextWidth,
+                Math.Max(0, thoroughAvailableWidth - helpWidth - helpGap))
+            _thorough.Padding = New Padding(0, ScaleLogical(5), 0, ScaleLogical(5))
             SetBoundsIfChanged(
                 _thorough,
-                edges(4) + gap,
-                scaledFieldLabelHeight,
-                Math.Max(0, edges(5) - edges(4) - gap),
-                Math.Max(0, scoreRowHeight - scaledFieldLabelHeight))
+                thoroughLeft,
+                scaledFieldLabelHeight + gap,
+                thoroughWidth,
+                controlHeight)
+            SetBoundsIfChanged(
+                _thoroughHelp,
+                Math.Min(width - helpWidth, _thorough.Right + helpGap),
+                _thorough.Top,
+                helpWidth,
+                controlHeight)
 
             Dim captionWidth = ScaleLogical(86)
             Dim scanWidth = ScaleLogical(102)
@@ -498,8 +570,9 @@ Friend NotInheritable Class QualitySettingsPanel
                    String.Empty))
             SetTextIfChanged(_sampleDuration, state.SampleDuration)
             If _thorough.Checked <> state.Thorough Then _thorough.Checked = state.Thorough
-            If Not String.Equals(_vmafModel.Text, state.VmafModel, StringComparison.Ordinal) Then
-                _vmafModel.Text = state.VmafModel
+            Dim modelText = If(String.IsNullOrWhiteSpace(state.VmafModel), AutomaticVmafModelText, state.VmafModel)
+            If Not String.Equals(_vmafModel.Text, modelText, StringComparison.Ordinal) Then
+                _vmafModel.Text = modelText
             End If
             ClearValidationState()
             UpdateMetricLayout(state.Metric)
@@ -555,7 +628,12 @@ Friend NotInheritable Class QualitySettingsPanel
         state.Samples = samplesValue
         state.SampleDuration = duration
         state.Thorough = _thorough.Checked
-        state.VmafModel = If(_vmafModel.Text, String.Empty).Trim()
+        Dim modelText = If(_vmafModel.Text, String.Empty).Trim()
+        ' Auto 只用于显示；保持预设中原有的空值语义，不把它传给 ab-av1 当作模型名。
+        state.VmafModel = If(
+            String.Equals(modelText, AutomaticVmafModelText, StringComparison.OrdinalIgnoreCase),
+            String.Empty,
+            modelText)
         Dim stateJson = state.Serialize()
         _context.StateJson = stateJson
         If _stateChanged IsNot Nothing Then _stateChanged.Invoke(stateJson)
@@ -983,13 +1061,19 @@ Friend NotInheritable Class QualitySettingsPanel
             .AutoScaleMode = System.Windows.Forms.AutoScaleMode.None,
             .BackColor = Color.Transparent,
             .BackgroundSource = backgroundSource,
+            .BoxBorderRadius = 5,
+            .BoxBorderSize = 0,
+            .BoxCheckedBackColor = Color.OliveDrab,
+            .BoxInnerPadding = 6,
+            .BoxSize = 22,
+            .BoxTextSpacing = 10,
+            .BoxUncheckedBackColor = ColorControl,
             .Checked = False,
             .ClickAnywhere = True,
             .Dock = DockStyle.Fill,
             .ForeColor = ColorText,
             .Margin = New Padding(10, 0, 0, 0),
-            .SubText = "搜索到更贴近目标值",
-            .SubTextForeColor = ColorMuted,
+            .Padding = New Padding(0, 5, 0, 5),
             .Text = "彻底搜索"
         }
     End Function

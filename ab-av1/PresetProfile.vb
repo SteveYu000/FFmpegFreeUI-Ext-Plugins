@@ -150,9 +150,14 @@ Public NotInheritable Class PresetProfile
     Private Function BuildSearchArgumentsCore(inputArgument As String,
                                                settings As SearchSettings,
                                                jsonOutput As Boolean) As List(Of String)
+        Dim arguments = BuildEncodeArgumentsCore("crf-search", inputArgument)
+        AppendSearchSettingsArguments(arguments, settings, jsonOutput)
+        Return arguments
+    End Function
 
+    Private Function BuildEncodeArgumentsCore(commandName As String, inputArgument As String) As List(Of String)
         Dim arguments As New List(Of String) From {
-            "crf-search",
+            commandName,
             "--input", inputArgument
         }
 
@@ -207,8 +212,62 @@ Public NotInheritable Class PresetProfile
             arguments.Add(value)
         Next
 
-        AppendSearchSettingsArguments(arguments, settings, jsonOutput)
         Return arguments
+    End Function
+
+    Public Function BuildSampleEncodeArguments(inputPath As String,
+                                               settings As SampleEncodeSettings,
+                                               Optional jsonOutput As Boolean = False) As List(Of String)
+        If Not File.Exists(inputPath) Then Throw New FileNotFoundException("找不到输入文件。", inputPath)
+        Return BuildSampleEncodeArgumentsCore(Path.GetFullPath(inputPath), settings, jsonOutput)
+    End Function
+
+    Public Function BuildSampleEncodeArgumentTemplate(settings As SampleEncodeSettings,
+                                                       Optional jsonOutput As Boolean = False) As List(Of String)
+        Return BuildSampleEncodeArgumentsCore("<输入文件>", settings, jsonOutput)
+    End Function
+
+    Private Function BuildSampleEncodeArgumentsCore(inputArgument As String,
+                                                     settings As SampleEncodeSettings,
+                                                     jsonOutput As Boolean) As List(Of String)
+        settings.Validate()
+        Dim arguments = BuildEncodeArgumentsCore("sample-encode", inputArgument)
+        arguments.AddRange({"--crf", SearchSettings.FormatNumber(settings.Crf)})
+        If settings.Samples.HasValue Then
+            arguments.AddRange({"--samples", settings.Samples.Value.ToString(CultureInfo.InvariantCulture)})
+        End If
+        arguments.AddRange({"--sample-duration", settings.SampleDuration.Trim()})
+        If settings.Metric = QualityScoreMetric.Xpsnr Then
+            arguments.Add("--xpsnr")
+        Else
+            Dim modelArgument = BuildVmafModelArgument(settings.VmafModel)
+            If modelArgument <> String.Empty Then arguments.AddRange({"--vmaf", modelArgument})
+        End If
+        If jsonOutput Then arguments.AddRange({"--stdout-format", "json"})
+        Return arguments
+    End Function
+
+    ''' <summary>只从实际参数向量生成样本参数总览，不读取音频、字幕、封装等未参与采样的预设字段。</summary>
+    Public Function BuildSampleParameterPreview(settings As SampleEncodeSettings) As String
+        Dim arguments = BuildSampleEncodeArgumentTemplate(settings)
+        Dim captions As New Dictionary(Of String, String) From {
+            {"--input", "输入文件"}, {"--encoder", "视频编码器"}, {"--preset", "编码预设"},
+            {"--pix-format", "像素格式"}, {"--vfilter", "视频滤镜"}, {"--keyint", "关键帧间隔"},
+            {"--scd", "场景切换检测"}, {"--svt", "SVT 参数"}, {"--enc", "视频编码参数"},
+            {"--enc-input", "解码输入参数"}, {"--crf", "CRF"}, {"--samples", "采样数量"},
+            {"--sample-duration", "单段时长"}, {"--vmaf", "VMAF 模型"}, {"--xpsnr", "评分指标"}
+        }
+        Dim lines As New List(Of String)()
+        Dim index = 1
+        While index < arguments.Count
+            Dim optionName = arguments(index)
+            Dim value = If(optionName = "--xpsnr", "XPSNR", arguments(index + 1))
+            Dim caption As String = Nothing
+            If Not captions.TryGetValue(optionName, caption) Then caption = optionName
+            lines.Add($"{caption}：{value}")
+            index += If(optionName = "--xpsnr", 1, 2)
+        End While
+        Return String.Join(Environment.NewLine, lines)
     End Function
 
     Private Shared Sub AppendSearchSettingsArguments(arguments As List(Of String),

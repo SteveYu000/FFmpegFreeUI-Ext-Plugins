@@ -14,14 +14,17 @@ Friend NotInheritable Class QualityValueStatusAdornment
     Private ReadOnly _qualityValue As Control
     Private ReadOnly _hostRow As Control
     Private ReadOnly _status As HtmlColorLabel
+    Private ReadOnly _sampleButton As ModernButton
     Private _active As Boolean
     Private _disposed As Boolean
 
-    Public Sub New(qualityValue As Control, status As HtmlColorLabel)
+    Public Sub New(qualityValue As Control, status As HtmlColorLabel,
+                   Optional sampleButton As ModernButton = Nothing)
         If status Is Nothing Then Throw New ArgumentNullException(NameOf(status))
         _qualityValue = qualityValue
         _hostRow = qualityValue?.Parent
         _status = status
+        _sampleButton = sampleButton
         _status.Anchor = AnchorStyles.Top Or AnchorStyles.Left Or AnchorStyles.Right
         _status.BackColor1 = Color.Transparent
         _status.Dock = DockStyle.None
@@ -32,6 +35,11 @@ Friend NotInheritable Class QualityValueStatusAdornment
         If _qualityValue Is Nothing OrElse _hostRow Is Nothing Then Return
 
         _hostRow.Controls.Add(_status)
+        If _sampleButton IsNot Nothing Then
+            _sampleButton.Dock = DockStyle.None
+            _hostRow.Controls.Add(_sampleButton)
+            _sampleButton.BringToFront()
+        End If
         _status.BringToFront()
         AddHandler _hostRow.Layout, AddressOf HostLayoutChanged
         AddHandler _qualityValue.LocationChanged, AddressOf QualityValueBoundsChanged
@@ -67,6 +75,10 @@ Friend NotInheritable Class QualityValueStatusAdornment
             _status.Parent.Controls.Remove(_status)
         End If
         If Not _status.IsDisposed Then _status.Dispose()
+        If _sampleButton IsNot Nothing Then
+            _sampleButton.Parent?.Controls.Remove(_sampleButton)
+            _sampleButton.Dispose()
+        End If
     End Sub
 
     Private Sub HostLayoutChanged(sender As Object, e As LayoutEventArgs)
@@ -87,6 +99,11 @@ Friend NotInheritable Class QualityValueStatusAdornment
         Dim gap = Math.Max(1, CInt(Math.Round(LogicalGap * _qualityValue.DeviceDpi / 96.0R)))
         Dim left = _qualityValue.Right + gap
         Dim right = _hostRow.ClientSize.Width - _hostRow.Padding.Right
+        If _sampleButton IsNot Nothing Then
+            Dim buttonWidth = Math.Min(Math.Max(0, right - left), CInt(Math.Round(108 * _qualityValue.DeviceDpi / 96.0R)))
+            _sampleButton.SetBounds(left, _qualityValue.Top, buttonWidth, _qualityValue.Height)
+            left += buttonWidth + gap
+        End If
         _status.SetBounds(left, _qualityValue.Top, Math.Max(0, right - left), _qualityValue.Height)
         If _active Then _status.BringToFront()
     End Sub

@@ -154,7 +154,13 @@ Public NotInheritable Class AbAv1Plugin
             previous.Dispose()
         End If
 
-        Dim panel As New QualitySettingsPanel(context)
+        Dim descriptor = _host.ParameterPanel?.AvailableControls.FirstOrDefault(
+            Function(item) item.PageId = "video-frame" AndAlso item.ControlName = "MB_动态模糊")
+        Dim enhancementButton As LakeUI.ModernButton = Nothing
+        If descriptor IsNot Nothing Then
+            enhancementButton = TryCast(context.GetAnchorControl(descriptor.AnchorId), LakeUI.ModernButton)
+        End If
+        Dim panel As New QualitySettingsPanel(context, sampleButtonTemplate:=enhancementButton)
         _settingsPanels(context.SurfaceId) = panel
         Return panel
     End Function

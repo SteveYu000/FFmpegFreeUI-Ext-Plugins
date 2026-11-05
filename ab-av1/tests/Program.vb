@@ -17,6 +17,10 @@ Module Program
 
     <STAThread>
     Sub Main(args As String())
+        If args.Length >= 2 AndAlso args(0) = "--real-sample" Then
+            RunRealSampleAsync(args(1)).GetAwaiter().GetResult()
+            Return
+        End If
         If args.Length >= 2 AndAlso String.Equals(args(0), "--real-runner", StringComparison.OrdinalIgnoreCase) Then
             RunRealAbAv1RunnerAsync(args(1)).GetAwaiter().GetResult()
             Return
@@ -28,9 +32,13 @@ Module Program
         End If
         TestPluginDiscoveryContract()
         TestQualitySettingsPanelState()
+        TestVmafModelAutoSelection()
+        TestSampleEncodeMappingAndPage()
+        TestHostPresetSnapshotAndNavigation()
         TestAutomaticVmafModelScan()
         TestPresetOverviewProviderState()
         TestQualitySettingsPanelStyleInheritance()
+        TestSampleEntryButtonStyle()
         TestPluginRegistrationAndPipelineAsync().GetAwaiter().GetResult()
         TestCommandLineTokenizer()
         TestPresetMappingAndCrfWriteBack()
@@ -39,9 +47,45 @@ Module Program
         TestVmafModelArguments()
         TestVmafModelHelpParser()
         TestAbAv1RunnerProcessIntegrationAsync().GetAwaiter().GetResult()
+        TestSampleEncodeRunnerAsync().GetAwaiter().GetResult()
         If args.Contains("--render", StringComparer.OrdinalIgnoreCase) Then RenderQualitySettingsPanel()
         Console.WriteLine($"PASS: {_assertions} assertions")
     End Sub
+
+    Private Sub TestSampleEntryButtonStyle()
+        Dim context As New FakeUiContext With {.ProvideNativeStyleTemplates = True}
+        Using initialFont As New Font("Microsoft YaHei UI", 10.0F),
+              changedFont As New Font("Microsoft YaHei UI", 11.0F),
+              template As New ModernButton With {.Font = initialFont, .ForeColor = Color.Silver}
+            Using panel As New QualitySettingsPanel(context, sampleButtonTemplate:=template)
+                Dim entry = context.AnchorControl.Controls.OfType(Of ModernButton)().Single(
+                    Function(button) button.Name = "AbAv1SampleEncodeButton")
+                IsTrue(entry.Font Is template.Font, "sample entry reuses the enhancement button font")
+                Equal(template.ForeColor, entry.ForeColor, "sample entry uses enhancement button text color")
+                Equal(template.TextAlign, entry.TextAlign, "sample entry uses enhancement button text alignment")
+                template.Font = changedFont
+                IsTrue(entry.Font Is changedFont, "sample entry follows host font changes")
+            End Using
+        End Using
+    End Sub
+
+    Private Async Function RunRealSampleAsync(inputPath As String) As Task
+        Dim preset = JsonNode.Parse(CreateMinimalPresetJson()).AsObject()
+        preset("视频参数_编码器_具体编码") = "libx264"
+        preset("视频参数_编码器_编码预设") = "ultrafast"
+        preset("视频参数_色彩管理_像素格式") = "yuv420p"
+        Dim profile = PresetProfile.LoadJson(preset.ToJsonString())
+        For Each metric In {QualityScoreMetric.Vmaf, QualityScoreMetric.Xpsnr}
+            Dim result = Await New AbAv1Runner().SampleEncodeAsync(profile, inputPath,
+                New SampleEncodeSettings With {.Crf = 28, .Samples = 1, .SampleDuration = "1s", .Metric = metric},
+                New InlineProgress(Of SearchProgress)(Sub(update) Console.WriteLine(update.Message)),
+                CancellationToken.None).ConfigureAwait(False)
+            If Double.IsNaN(result.Score) OrElse result.PredictedEncodeSize <= 0 OrElse result.PredictedEncodeSeconds <= 0 Then
+                Throw New InvalidDataException("Real sample did not return valid score, size and time predictions")
+            End If
+            Console.WriteLine($"REAL_SAMPLE: CRF={result.Crf}; METRIC={result.Metric}; SCORE={result.Score}; BYTES={result.PredictedEncodeSize}; SECONDS={result.PredictedEncodeSeconds}")
+        Next
+    End Function
 
     Private Sub TestQualitySettingsPanelStyleInheritance()
         Dim context As New FakeUiContext With {
@@ -204,10 +248,26 @@ Module Program
                     Function(button) button.Bottom <= button.Parent.ClientSize.Height),
                 "model buttons are not vertically clipped")
             Dim thorough = Descendants(panel).OfType(Of ModernCheckBox)().Single()
-            Equal(42, thorough.Height, "thorough option uses the aligned two-line control row")
+            Equal(32, thorough.Height, "thorough option uses the native single-line control height")
             Equal("彻底搜索", thorough.Text, "thorough primary text")
-            Equal("搜索到更贴近目标值", thorough.SubText, "thorough secondary text")
+            Equal(String.Empty, thorough.SubText, "thorough description is no longer shown as a second line")
+            Equal(22, thorough.BoxSize, "thorough checkbox matches native timestamp checkbox size")
+            Equal(5, thorough.BoxBorderRadius, "thorough checkbox matches native timestamp checkbox radius")
+            Equal(0, thorough.BoxBorderSize, "thorough checkbox has no outline")
+            Equal(Color.FromArgb(40, 220, 220, 220), thorough.BoxUncheckedBackColor, "thorough unchecked fill matches native checkbox")
+            Equal(Color.OliveDrab, thorough.BoxCheckedBackColor, "thorough checked fill matches native checkbox")
             Equal(New Padding(10, 0, 0, 0), thorough.Margin, "thorough reference spacing")
+            Dim thoroughHelp = Descendants(panel).OfType(Of HtmlColorLabel)().Single(
+                Function(label) label.ToolTipText = "搜索到更贴近目标值")
+            Equal(String.Empty, thoroughHelp.Text, "thorough help displays only the native information icon")
+            Equal(thorough.Right + 4, thoroughHelp.Left, "information icon follows thorough checkbox text")
+            Equal(thorough.Top, thoroughHelp.Top, "information icon aligns with thorough checkbox")
+            Equal(thorough.Height, thoroughHelp.Height, "information icon matches thorough row height")
+            IsTrue(thorough.Checked, "thorough selection restored from preset")
+            thorough.Checked = False
+            IsTrue(Not AbAv1PluginState.Deserialize(context.StateJson).Thorough, "thorough single-line checkbox updates saved state")
+            thorough.Checked = True
+            IsTrue(AbAv1PluginState.Deserialize(context.StateJson).Thorough, "thorough checkbox can be re-enabled")
             Dim captions = New HashSet(Of String)(
                 New String() {"最小 CRF", "最大 CRF", "采样数量", "单段时长"})
             Dim captionLabels = Descendants(panel).OfType(Of HtmlColorLabel)().Where(
@@ -234,6 +294,9 @@ Module Program
             panel.PerformLayout()
             IsTrue(searchFields.All(Function(input) input.Height = 48), "text fields follow updated host height")
             Equal(48, modelSelector.Height, "model selector follows updated host height")
+            Equal(48, thorough.Height, "thorough checkbox follows updated host height")
+            Equal(48, thoroughHelp.Height, "information icon follows updated host height")
+            Equal(thorough.Right + 4, thoroughHelp.Left, "information icon remains adjacent after host height change")
             IsTrue(
                 Descendants(panel).OfType(Of ModernButton)().All(Function(button) button.Height = 48),
                 "buttons follow updated host height")
@@ -246,7 +309,11 @@ Module Program
             context.AnchorControl.PerformLayout()
             Dim environmentStatus = context.AnchorControl.Controls.OfType(Of HtmlColorLabel)().Single(
                 Function(label) label.Name = QualityValueStatusAdornment.StatusControlName)
-            Equal(context.NativeTextBox.Right + 10, environmentStatus.Left, "status follows quality value")
+            Dim sampleButton = context.AnchorControl.Controls.OfType(Of ModernButton)().Single(
+                Function(button) button.Name = "AbAv1SampleEncodeButton")
+            Equal(context.NativeTextBox.Right + 10, sampleButton.Left, "sample button follows quality value")
+            Equal(context.NativeTextBox.Height, sampleButton.Height, "sample button follows quality value height")
+            Equal(sampleButton.Right + 10, environmentStatus.Left, "status follows sample button")
             Equal(context.NativeTextBox.Top, environmentStatus.Top, "status aligns with quality value")
             Equal(context.NativeTextBox.Height, environmentStatus.Height, "status matches quality value height")
             Equal("ab-av1 已就绪", environmentStatus.Text, "compact ready status")
@@ -286,6 +353,7 @@ Module Program
 
             context.Restore(New AbAv1PluginState With {.Enabled = False}.Serialize())
             IsTrue(Not panel.Visible, "settings hidden for native mode")
+            IsTrue(sampleButton.Visible, "sample encoding remains available in native CRF mode")
             IsTrue(Not environmentStatus.Visible, "quality value status hidden for native mode")
             IsTrue(context.NativeMetricComboBox.Editable, "native selector editability restored")
             IsTrue(
@@ -302,6 +370,271 @@ Module Program
         disposedPanel.Dispose()
         IsTrue(disposedPanel.IsDisposed, "settings panel disposal is idempotent")
     End Sub
+
+    Private Sub TestVmafModelAutoSelection()
+        Dim context As New FakeUiContext With {
+            .ProvideNativeStyleTemplates = True,
+            .StateJson = New AbAv1PluginState With {.Enabled = True}.Serialize()
+        }
+
+        Using panel As New QualitySettingsPanel(context)
+            Dim modelSelector = Descendants(panel).OfType(Of ModernComboBox)().Single()
+            Equal("Auto", modelSelector.Items(0).ToString(), "automatic model is the first dropdown option")
+            Equal("Auto", modelSelector.Text, "legacy empty model is displayed as Auto")
+            Equal(String.Empty, AbAv1PluginState.Deserialize(context.StateJson).VmafModel, "displaying Auto preserves the empty stored model")
+
+            modelSelector.Items.Add("vmaf_v0.6.1")
+            modelSelector.SelectedIndex = 1
+            Equal("vmaf_v0.6.1", AbAv1PluginState.Deserialize(context.StateJson).VmafModel, "explicit model selection is saved")
+            modelSelector.SelectedIndex = 0
+            Dim automaticState = AbAv1PluginState.Deserialize(context.StateJson)
+            Equal(String.Empty, automaticState.VmafModel, "selecting Auto clears the explicit stored model")
+            Dim profile = PresetProfile.LoadJsonForPreview(CreateMinimalPresetJson())
+            IsTrue(
+                Not profile.BuildSearchArgumentTemplate(automaticState.ToSearchSettings()).Contains("--vmaf"),
+                "Auto does not emit an explicit VMAF model argument")
+
+            context.Restore(context.StateJson)
+            Equal("Auto", modelSelector.Text, "Auto selection survives preset restoration")
+            modelSelector.Text = "C:\models\custom.json"
+            Equal("C:\models\custom.json", AbAv1PluginState.Deserialize(context.StateJson).VmafModel, "custom model paths remain editable")
+            modelSelector.SelectedIndex = 0
+            Equal(String.Empty, AbAv1PluginState.Deserialize(context.StateJson).VmafModel, "Auto can replace a custom model path")
+            Equal(1, modelSelector.Items.Cast(Of String)().Count(Function(item) item = "Auto"), "Auto is not duplicated during preset restoration")
+        End Using
+    End Sub
+
+    Private Sub TestSampleEncodeMappingAndPage()
+        Dim preset = JsonNode.Parse(CreateMinimalPresetJson()).AsObject()
+        preset("音频参数_编码器") = "audio-must-not-appear"
+        preset("自定义参数_音频参数") = "-b:a 192k"
+        preset("输出容器") = "container-must-not-appear"
+        preset("视频参数_质量控制_进阶参数集") = "-preset 8 -crf 12 -c:a aac -svtav1-params keyint=8s:scd=1:tune=0"
+        Dim profile = PresetProfile.LoadJsonForPreview(preset.ToJsonString())
+        Dim settings As New SampleEncodeSettings With {.Crf = 24, .Samples = 3, .SampleDuration = "2s"}
+        Dim arguments = profile.BuildSampleEncodeArgumentTemplate(settings)
+        Equal("sample-encode", arguments(0), "sample encode uses its own command")
+        ContainsPair(arguments, "--crf", "24")
+        ContainsPair(arguments, "--preset", "8")
+        ContainsPair(arguments, "--samples", "3")
+        ContainsPair(arguments, "--sample-duration", "2s")
+        ContainsPair(arguments, "--keyint", "8s")
+        ContainsPair(arguments, "--scd", "true")
+        ContainsPair(arguments, "--svt", "tune=0")
+        IsTrue(Not arguments.Contains("--min-vmaf") AndAlso Not arguments.Contains("--min-crf"), "sample encode does not run a CRF search")
+        IsTrue(Not arguments.Contains("--vmaf"), "automatic sample model emits no model argument")
+        Dim preview = profile.BuildSampleParameterPreview(settings)
+        IsTrue(preview.Contains("CRF：24", StringComparison.Ordinal), "sample preview shows the evaluated CRF")
+        IsTrue(preview.Contains("编码预设：8", StringComparison.Ordinal), "sample preview uses effective mapped arguments")
+        IsTrue(Not preview.Contains("audio-must-not-appear", StringComparison.Ordinal) AndAlso
+               Not preview.Contains("container-must-not-appear", StringComparison.Ordinal) AndAlso
+               Not preview.Contains("aac", StringComparison.Ordinal), "sample preview omits filtered audio and container settings")
+        settings.Metric = QualityScoreMetric.Xpsnr
+        settings.VmafModel = "missing-model.json"
+        arguments = profile.BuildSampleEncodeArgumentTemplate(settings)
+        IsTrue(arguments.Contains("--xpsnr") AndAlso Not arguments.Contains("--vmaf"), "XPSNR sample ignores VMAF-only model")
+        IsTrue(profile.BuildSampleParameterPreview(settings).Contains("评分指标：XPSNR", StringComparison.Ordinal), "sample preview describes XPSNR flag")
+
+        Dim latestPreset = CreateMinimalPresetJson()
+        Dim captures = 0
+        Dim capture As Func(Of String) = Function()
+                                            captures += 1
+                                            Return latestPreset
+                                        End Function
+        Using panel As New SampleEncodePanel(capture, Sub() Return, New AbAv1PluginState(), "23", Nothing)
+            Equal(23.0, panel.ReadSettings().Crf, "sample CRF starts from the native quality value")
+            Dim model = Descendants(panel).OfType(Of ModernComboBox)().Single(Function(combo) combo.Editable)
+            Equal("Auto", model.Text, "sample model defaults to Auto")
+            Equal("Auto", model.Items(0).ToString(), "sample model list starts with Auto")
+            model.Text = "vmaf_v0.6.1"
+            Equal("vmaf_v0.6.1", panel.ReadSettings().VmafModel, "sample page accepts explicit model")
+            model.SelectedIndex = 0
+            Equal(String.Empty, panel.ReadSettings().VmafModel, "sample Auto preserves empty backend model semantics")
+            IsTrue(Not Descendants(panel).Any(Function(control) control.Text = "选择预设"), "sample page has no preset picker")
+            Dim metric = Descendants(panel).OfType(Of ModernComboBox)().Single(Function(combo) Not combo.Editable)
+            panel.Size = New Size(1120, 650)
+            panel.PerformLayout()
+            Dim list = Descendants(panel).OfType(Of UltraDetailListView)().Single()
+            Dim heading = Descendants(panel).OfType(Of HtmlColorLabel)().Single(Function(label) label.Name = "AbAv1SampleHeading")
+            Dim previewEditor = Descendants(panel).OfType(Of ModernTextBox)().Single(Function(editor) editor.Name = "AbAv1SampleParameterPreview")
+            Dim startButton = Descendants(panel).OfType(Of ModernButton)().Single(Function(button) button.Text = "开始")
+            Dim pauseButton = Descendants(panel).OfType(Of ModernButton)().Single(Function(button) button.Text = "暂停 / 恢复")
+            Dim stopButton = Descendants(panel).OfType(Of ModernButton)().Single(Function(button) button.Text = "停止")
+            Dim addButton = Descendants(panel).OfType(Of ModernButton)().Single(Function(button) button.Text = "添加媒体")
+            Dim removeButton = Descendants(panel).OfType(Of ModernButton)().Single(Function(button) button.Text = "移除")
+            Dim resetButton = Descendants(panel).OfType(Of ModernButton)().Single(Function(button) button.Text = "重置状态")
+            Equal(HtmlColorLabel.TextAlignEnum.Center, heading.TextAlign, "sample page heading is centered")
+            IsTrue(Descendants(panel).OfType(Of ModernButton)().Any(
+                       Function(button) button.Text = "返回" OrElse button.Text = "← 返回"),
+                   "sample page has the concise back action")
+            IsTrue(Not Descendants(panel).Any(Function(control) control.Name = "AbAv1SampleCommandPreview" OrElse
+                                                                control.Text = "ab-av1 命令行" OrElse control.Text = "复制命令行"),
+                   "sample page removes the command template section")
+            Dim vmafListTop = list.Top
+            metric.SelectedIndex = 1
+            IsTrue(Not model.Visible, "XPSNR hides sample model controls")
+            IsTrue(list.Top < vmafListTop, "XPSNR collapses sample model row")
+            metric.SelectedIndex = 0
+            For Each panelWidth In {640, 807, 1120}
+                panel.Width = panelWidth
+                panel.PerformLayout()
+                IsTrue(panel.Controls.Cast(Of Control)().All(Function(control) control.Left >= 0 AndAlso control.Right <= panel.ClientSize.Width),
+                       "sample controls fit host width " & panelWidth.ToString())
+                IsTrue(list.Bottom <= panel.ClientSize.Height, "sample task list stays within page height")
+                IsTrue(Math.Abs((heading.Left + heading.Width / 2.0) - panel.ClientSize.Width / 2.0) <= 1,
+                       "sample heading stays at the page center")
+                IsTrue(previewEditor.Right < metric.Left, "parameter preview is left of sample settings")
+                Equal(previewEditor.Top, metric.Top, "preview and sample editors align at the top")
+                IsTrue(previewEditor.Bottom < addButton.Top, "preview stays above the task toolbar")
+                IsTrue(addButton.Right <= removeButton.Left, "remove follows add media")
+                Equal(addButton.Top, removeButton.Top, "media actions share one toolbar row")
+                IsTrue(stopButton.Right <= resetButton.Left, "reset follows stop")
+                Equal(stopButton.Top, resetButton.Top, "execution actions share one toolbar row")
+                IsTrue(startButton.Right <= pauseButton.Left AndAlso pauseButton.Right <= stopButton.Left,
+                       "sample toolbar orders start, pause/resume and stop")
+                Equal(startButton.Top, pauseButton.Top, "start and pause are on the same toolbar row")
+                Equal(startButton.Top, stopButton.Top, "start and stop are on the same toolbar row")
+                IsTrue(stopButton.Bottom < list.Top, "all sample execution actions are above the task list")
+            Next
+            Dim newPreset = JsonNode.Parse(latestPreset).AsObject()
+            newPreset("视频参数_编码器_具体编码") = "libx264"
+            latestPreset = newPreset.ToJsonString()
+            panel.RefreshFromHost()
+            IsTrue(panel.PreviewText.Contains("libx264", StringComparison.Ordinal), "refresh uses new current host settings")
+            Equal(2, captures, "preview uses fresh captures without a background polling timer")
+
+            Dim inputPath = Path.Combine(Path.GetTempPath(), "ab-av1-sample-page-" & Guid.NewGuid().ToString("N") & ".bin")
+            File.WriteAllBytes(inputPath, {CByte(0)})
+            Try
+                Equal(1, panel.AddFilePaths({inputPath, inputPath}), "sample queue deduplicates files")
+                Dim task = panel.RunPendingAsync()
+                WaitForCondition(Function() task.IsCompleted, "sample page queue completes")
+                task.GetAwaiter().GetResult()
+                Equal(3, captures, "starting queue recaptures current host parameters")
+                Equal("已完成", list.Items(0).SubItems(1).Text, "sample queue reports completion")
+                Equal("23", list.Items(0).SubItems(2).Text, "sample queue retains evaluated CRF")
+                IsTrue(list.Items(0).SubItems(3).Text.Contains("95.2", StringComparison.Ordinal), "sample queue displays score")
+                IsTrue(list.Items(0).SubItems(5).Text <> "—", "sample queue displays predicted time")
+                Equal(latestPreset, newPreset.ToJsonString(), "sample evaluation does not modify host preset")
+                list.SelectedIndex = 0
+                ClickTestButton(Descendants(panel).OfType(Of ModernButton)().Single(Function(button) button.Text = "重置状态"))
+                Equal("等待", list.Items(0).SubItems(1).Text, "sample queue supports resetting completed task")
+                ClickTestButton(Descendants(panel).OfType(Of ModernButton)().Single(Function(button) button.Text = "停止"))
+                Equal("已停止", list.Items(0).SubItems(1).Text, "sample queue can stop a pending task")
+                ClickTestButton(Descendants(panel).OfType(Of ModernButton)().Single(Function(button) button.Text = "移除"))
+                Equal(0, list.Items.Count, "sample queue removes selected inactive task")
+                panel.AddFilePaths({inputPath})
+                Dim crfEditor = Descendants(panel).OfType(Of ModernTextBox)().Single(Function(editor) editor.WaterText = "要评估的 CRF")
+                crfEditor.Text = "99.999"
+                Dim slowTask = panel.RunPendingAsync()
+                WaitForCondition(Function() panel.IsRunning, "sample queue enters running state")
+                list.SelectedIndex = 0
+                ClickTestButton(Descendants(panel).OfType(Of ModernButton)().Single(Function(button) button.Text = "暂停"))
+                Equal("已暂停", list.Items(0).SubItems(1).Text, "sample queue pauses active process")
+                ClickTestButton(Descendants(panel).OfType(Of ModernButton)().Single(Function(button) button.Text = "恢复"))
+                Equal("样本编码中", list.Items(0).SubItems(1).Text, "sample queue resumes paused process")
+                ClickTestButton(Descendants(panel).OfType(Of ModernButton)().Single(Function(button) button.Text = "暂停"))
+                ClickTestButton(Descendants(panel).OfType(Of ModernButton)().Single(Function(button) button.Text = "停止"))
+                WaitForCondition(Function() slowTask.IsCompleted, "stopping a paused sample task completes")
+                slowTask.GetAwaiter().GetResult()
+                Equal("已停止", list.Items(0).SubItems(1).Text, "stopping a paused task kills its process")
+            Finally
+                File.Delete(inputPath)
+            End Try
+        End Using
+    End Sub
+
+    Private Sub ClickTestButton(button As ModernButton)
+        button.GetType().GetMethod("OnClick", Reflection.BindingFlags.Instance Or Reflection.BindingFlags.NonPublic).
+            Invoke(button, {EventArgs.Empty})
+    End Sub
+
+    Private Sub TestHostPresetSnapshotAndNavigation()
+        Dim preset = CreateMinimalPresetJson()
+        Using surface As New Global.FFmpegFreeUI.TestParameterSurface With {.CurrentPreset = preset, .Size = New Size(1120, 650)}
+            Dim context As New FakeUiContext With {.ProvideNativeStyleTemplates = True}
+            Dim qualityRoot As New Panel With {.Size = New Size(920, 650)}
+            Dim nativeBackground As New ModernPanel With {.Name = "ModernPanel1", .Dock = DockStyle.Fill}
+            Dim navigationTabs As New ModernTabListControl With {.Dock = DockStyle.Fill}
+            navigationTabs.Items.Add(New ModernTabListControl.ModernTabPage With {.Text = "参数总览", .BoundControl = New Panel()})
+            navigationTabs.Items.Add(New ModernTabListControl.ModernTabPage With {.Text = "质量", .BoundControl = qualityRoot})
+            nativeBackground.Controls.Add(navigationTabs)
+            surface.Controls.Add(nativeBackground)
+            navigationTabs.SelectedIndex = 1
+            context.QualityPageRoot = qualityRoot
+            qualityRoot.Controls.Add(context.AnchorControl)
+            Equal(preset, JsonNode.Parse(HostPresetSnapshot.Capture(context)).ToJsonString(), "snapshot captures its owning parameter panel")
+            Using navigation As New SampleEncodePageHost(context, context.AnchorControl)
+                navigation.Open()
+                IsTrue(navigation.Page.Parent Is surface, "sample subpage covers the owning parameter panel")
+                IsTrue(Not navigationTabs.Visible, "sample subpage hides the secondary navigation too")
+                Equal(surface.ClientSize, navigation.Page.Size, "sample overlay fills the whole parameter panel")
+                IsTrue(Not context.AnchorControl.Visible, "sample subpage hides native quality controls")
+                navigation.Back()
+                IsTrue(context.AnchorControl.Visible, "back restores native quality controls")
+                IsTrue(navigationTabs.Visible, "back restores the secondary navigation")
+                Equal(1, navigationTabs.SelectedIndex, "back preserves the native quality page selection")
+                IsTrue(Not navigation.Page.Visible, "back hides sample subpage without discarding its queue")
+                Dim changed = JsonNode.Parse(preset).AsObject()
+                changed("视频参数_编码器_具体编码") = "libx265"
+                surface.CurrentPreset = changed.ToJsonString()
+                navigation.Open()
+                IsTrue(navigation.Page.PreviewText.Contains("libx265", StringComparison.Ordinal), "reopening sample page captures latest parameters")
+            End Using
+            IsTrue(context.AnchorControl.Visible, "navigation disposal restores quality page")
+            Using otherSurface As New Global.FFmpegFreeUI.TestParameterSurface With {.CurrentPreset = preset}
+                Dim otherContext As New FakeUiContext()
+                otherSurface.Controls.Add(otherContext.AnchorControl)
+                IsTrue(Not HostPresetSnapshot.Capture(otherContext).Contains("libx265", StringComparison.Ordinal), "snapshot never crosses parameter panel instances")
+            End Using
+        End Using
+    End Sub
+
+    Private Async Function TestSampleEncodeRunnerAsync() As Task
+        Dim inputPath = Path.Combine(Path.GetTempPath(), "ab-av1-sample-runner-" & Guid.NewGuid().ToString("N") & ".bin")
+        File.WriteAllBytes(inputPath, {CByte(0)})
+        Try
+            Dim profile = PresetProfile.LoadJson(CreateMinimalPresetJson())
+            For Each metric In {QualityScoreMetric.Vmaf, QualityScoreMetric.Xpsnr}
+                For Each duration In {"1s", "legacy-json"}
+                    Dim settings As New SampleEncodeSettings With {.Metric = metric, .Crf = 24, .SampleDuration = duration}
+                    Dim runner As New AbAv1Runner()
+                    Dim result = Await runner.SampleEncodeAsync(profile, inputPath, settings, Nothing, CancellationToken.None).ConfigureAwait(False)
+                    Equal(24.0, result.Crf, "sample JSON preserves requested CRF")
+                    Equal(metric, result.Metric, "sample JSON preserves metric")
+                    Equal(If(metric = QualityScoreMetric.Vmaf, 95.2, 38.2), result.Score, "sample JSON reads selected score")
+                    Equal(123456789L, result.PredictedEncodeSize, "sample JSON predicted size")
+                    Equal(321.5, result.PredictedEncodeSeconds, "sample JSON predicted time")
+                    Equal(42.1, result.PredictedEncodePercent, "sample JSON predicted percent")
+                    IsTrue(runner.CurrentCommandLine.Contains("sample-encode", StringComparison.Ordinal), "sample runner retains actual command")
+                    IsTrue(Not runner.HasActiveProcess, "sample runner releases completed process")
+                Next
+            Next
+            For Each scenario In {"invalid-json", "missing-score", "nonzero"}
+                Dim failed = False
+                Try
+                    Await New AbAv1Runner().SampleEncodeAsync(profile, inputPath,
+                        New SampleEncodeSettings With {.SampleDuration = scenario}, Nothing, CancellationToken.None).ConfigureAwait(False)
+                Catch ex As Exception
+                    failed = TypeOf ex Is InvalidDataException OrElse TypeOf ex Is InvalidOperationException
+                End Try
+                IsTrue(failed, "sample runner rejects " & scenario)
+            Next
+            Using cancellation As New CancellationTokenSource(TimeSpan.FromMilliseconds(350))
+                Dim runner As New AbAv1Runner()
+                Dim canceled = False
+                Try
+                    Await runner.SampleEncodeAsync(profile, inputPath, New SampleEncodeSettings With {.Crf = 99.999}, Nothing, cancellation.Token).ConfigureAwait(False)
+                Catch ex As OperationCanceledException
+                    canceled = True
+                End Try
+                IsTrue(canceled, "sample cancellation propagates")
+                IsTrue(Not runner.HasActiveProcess, "sample cancellation terminates the process")
+            End Using
+        Finally
+            File.Delete(inputPath)
+        End Try
+    End Function
 
     Private Sub TestAutomaticVmafModelScan()
         Dim scanCalls = 0
@@ -334,6 +667,8 @@ Module Program
                 "selecting target-score mode starts automatic VMAF model scan")
             Equal(1, scanCalls, "selecting target-score mode scans VMAF models automatically")
             Dim modelSelector = Descendants(panel).OfType(Of ModernComboBox)().Single()
+            Equal("Auto", modelSelector.Items(0).ToString(), "automatic scan retains Auto as the first option")
+            Equal("Auto", modelSelector.Text, "automatic scan preserves the automatic model selection")
             IsTrue(
                 modelSelector.Items.Cast(Of String)().Contains("vmaf_v0.6.1"),
                 "automatic scan populates standard VMAF model")
@@ -1528,12 +1863,14 @@ Module Program
         Public ReadOnly Property NativeTextBox As ModernTextBox
         Public ReadOnly Property NativeComboBox As ModernComboBox
         Public ReadOnly Property NativeMetricComboBox As ModernComboBox
+        Public Property QualityPageRoot As Control
         Public Property ProvideNativeStyleTemplates As Boolean
         Public Property StateJson As String = "{}" Implements IExtPluginUiContext.StateJson
         Public Event StateRestored As EventHandler Implements IExtPluginUiContext.StateRestored
         Public Property RefreshCount As Integer
 
         Public Function GetAnchorControl(anchorId As String) As Control Implements IExtPluginUiContext.GetAnchorControl
+            If anchorId = ExtFFmpegFreeUIParameterPanelIds.PageTop("video-quality") Then Return QualityPageRoot
             If Not ProvideNativeStyleTemplates Then Return Nothing
             Select Case anchorId
                 Case ExtFFmpegFreeUIUiAnchors.ParametersVideoQualityValue
