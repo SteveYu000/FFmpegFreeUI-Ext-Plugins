@@ -54,13 +54,13 @@ Namespace videoenhancer
             _pageHome.ScrollBarThumbHoverColor = UiScrollThumbHover
             Dim root As New ModernGridPanel With {.ColumnCount = 1, .RowCount = 6, .Padding = New Padding(12)}
             root.ColumnStyles.Add(New ColumnStyle(SizeType.Percent, 100))
-            For Each rowHeight As Integer In New Integer() {36, 64, 28}
+            For Each rowHeight As Integer In New Integer() {UiRowHeight, 64, 28}
                 root.RowStyles.Add(New RowStyle(SizeType.Absolute, rowHeight))
             Next
             root.RowStyles.Add(New RowStyle(SizeType.Percent, 100))
             root.RowStyles.Add(New RowStyle(SizeType.Absolute, 64))
             root.RowStyles.Add(New RowStyle(SizeType.Absolute, 56))
-            root.AddAt(CreateOfficialCaption("视频超分 · v" & PluginUpdater.CurrentVersion, UiText), 0, 0)
+            root.AddAt(CreateOfficialSectionHeading("视频超分 · v" & PluginUpdater.CurrentVersion, ""), 0, 0)
             _homeSettings.Dock = DockStyle.Fill
             _homeSettings.Margin = Padding.Empty
             _homeSettings.ForeColor = UiTextSecondary

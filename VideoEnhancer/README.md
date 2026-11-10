@@ -44,9 +44,9 @@ TensorRT 的 ONNX 转换要求自包含的单输入、单输出 RGB NCHW 浮点�
 
 ## 安装
 
-关闭宿主，将 `VideoEnhancer-0.3.0-win-x64.zip` 解压到宿主的 `Plugin` 目录。若存在旧的 `Plugin/videoenhancer.3fui.dll`，关闭宿主后删除该文件。ZIP 根目录附有 [中文安装说明](VideoEnhancer-安装说明.txt)，包含目录布局、首次使用、升级和常见问题。安装 ZIP 包含插件 DLL、FFF.Native 预览库及配套 DLL、aria2-next、7za、许可及源码获取说明；Python / RVE、RTX 运行组件和模型在“视频超分 → 模型下载”中按需安装。
+关闭宿主，将 `VideoEnhancer-0.4.0-win-x64.zip` 解压到宿主的 `Plugin` 目录。若存在旧的 `Plugin/videoenhancer.3fui.dll`，关闭宿主后删除该文件。ZIP 根目录附有 [中文安装说明](VideoEnhancer-安装说明.txt)，包含目录布局、首次使用、升级和常见问题。安装 ZIP 包含插件 DLL、FFF.Native 预览库及配套 DLL、aria2-next、7za、许可及源码获取说明；Python / RVE、RTX 运行组件和模型在“视频超分 → 模型下载”中按需安装。
 
-同一 Release 另行提供 `VideoEnhancer-0.3.0-source.zip`，包含本次构建的完整插件源码、第三方版本源码与构建配方，使用插件时无需安装源码包。两包各附 `.sha256` 文件；安装包的 `videoenhancer/licenses/VideoEnhancer/SOURCE.txt` 和发行元数据记录源码包下载地址与哈希，源码包的 `source-manifest.json` 记录配套 DLL 哈希。发布及镜像时应同时免费提供两包。
+同一 Release 另行提供 `VideoEnhancer-0.4.0-source.zip`，包含本次构建的完整插件源码、第三方版本源码与构建配方，使用插件时无需安装源码包。两包各附 `.sha256` 文件；安装包的 `videoenhancer/licenses/VideoEnhancer/SOURCE.txt` 和发行元数据记录源码包下载地址与哈希，源码包的 `source-manifest.json` 记录配套 DLL 哈希。发布及镜像时应同时免费提供两包。
 
 从源码安装：
 

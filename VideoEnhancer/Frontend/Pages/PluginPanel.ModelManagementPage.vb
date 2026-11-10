@@ -25,27 +25,34 @@ Namespace videoenhancer
             _pageModelManagement.ScrollBarTrackColor = UiSurface
             _pageModelManagement.ScrollBarThumbColor = UiScrollThumb
             _pageModelManagement.ScrollBarThumbHoverColor = UiScrollThumbHover
-            Dim root As New ModernGridPanel With {.ColumnCount = 1, .RowCount = 4, .Padding = New Padding(12)}
+            Dim root As New ModernGridPanel With {.ColumnCount = 1, .RowCount = 3, .Padding = New Padding(12)}
             root.ColumnStyles.Add(New ColumnStyle(SizeType.Percent, 100))
-            root.RowStyles.Add(New RowStyle(SizeType.Absolute, 36))
-            root.RowStyles.Add(New RowStyle(SizeType.Absolute, 56))
+            root.RowStyles.Add(New RowStyle(SizeType.Absolute, CSng(UiRowHeight)))
             root.RowStyles.Add(New RowStyle(SizeType.Percent, 100))
             root.RowStyles.Add(New RowStyle(SizeType.Absolute, 48))
-            root.AddAt(CreateOfficialCaption("已安装模型", UiText), 0, 0)
-            Dim actions As New ModernGridPanel With {.ColumnCount = 2, .RowCount = 1, .Dock = DockStyle.Fill, .Margin = New Padding(0, 0, 0, 8)}
-            actions.ColumnStyles.Add(New ColumnStyle(SizeType.Percent, 50))
-            actions.ColumnStyles.Add(New ColumnStyle(SizeType.Percent, 50))
-            actions.RowStyles.Add(New RowStyle(SizeType.Percent, 100))
+            Dim header As New ModernGridPanel With {
+                .Dock = DockStyle.Fill,
+                .ColumnCount = 3,
+                .RowCount = 1,
+                .Margin = Padding.Empty,
+                .Padding = Padding.Empty
+            }
+            header.ColumnStyles.Add(New ColumnStyle(SizeType.Percent, 100.0F))
+            header.ColumnStyles.Add(New ColumnStyle(SizeType.Absolute, 128.0F))
+            header.ColumnStyles.Add(New ColumnStyle(SizeType.Absolute, 136.0F))
+            header.RowStyles.Add(New RowStyle(SizeType.Percent, 100.0F))
+            header.AddAt(CreateOfficialSectionHeading("已安装模型", ""), 0, 0)
             Dim buttons = New ModernButton() {_btnRefreshInstalledModels, _btnRemoveInstalledModel}
             For index = 0 To buttons.Length - 1
                 ConfigureSecondaryButton(buttons(index))
                 buttons(index).Dock = DockStyle.Fill
-                buttons(index).Margin = New Padding(0, 0, If(index = 1, 0, 8), 0)
-                actions.AddAt(buttons(index), index, 0)
+                buttons(index).AutoSize = False
+                buttons(index).Margin = New Padding(UiColumnGap, 4, 0, 4)
+                header.AddAt(buttons(index), index + 1, 0)
             Next
             AddHandler _btnRefreshInstalledModels.Click, Sub() RefreshInstalledModels()
             AddHandler _btnRemoveInstalledModel.Click, AddressOf RemoveInstalledModel
-            root.AddAt(actions, 0, 1)
+            root.AddAt(header, 0, 0)
             ConfigureHomeList(_installedModels)
             _installedModels.GroupHeight = 38
             _installedModels.ItemPadding = New Padding(10, 5, 8, 5)
@@ -54,11 +61,11 @@ Namespace videoenhancer
                 New UltraDetailListView.ListColumn("支持后端", 180),
                 New UltraDetailListView.ListColumn("位置", 400)})
             ConfigureDpiListColumns(_installedModels, 180)
-            root.AddAt(_installedModels, 0, 2)
+            root.AddAt(_installedModels, 0, 1)
             _installedModelMessage.Dock = DockStyle.Fill
             _installedModelMessage.Margin = Padding.Empty
             _installedModelMessage.ForeColor = UiTextSecondary
-            root.AddAt(_installedModelMessage, 0, 3)
+            root.AddAt(_installedModelMessage, 0, 2)
             _pageModelManagement.Controls.Add(root)
             Dim arrange As Action = Sub()
                 root.SetBounds(0, If(_pageModelManagement.VerticalScrollOffset > 0, root.Top, 0),

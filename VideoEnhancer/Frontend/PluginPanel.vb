@@ -589,29 +589,6 @@ Namespace videoenhancer
             textBox.MultiLine = False
         End Sub
 
-        Private Shared Function CreateOfficialSeparator() As Control
-            Dim host As New ModernPanel With {
-                .Margin = Padding.Empty,
-                .Padding = Padding.Empty,
-                .BackColor = Color.Transparent,
-                .BackColor1 = Color.Transparent,
-                .BorderSize = 0
-            }
-            Dim line As New ModernPanel With {
-                .BackColor = Color.Transparent,
-                .BackColor1 = Color.FromArgb(58, 220, 220, 220),
-                .BorderSize = 0
-            }
-            line.Anchor = AnchorStyles.Left Or AnchorStyles.Right Or AnchorStyles.Top
-            host.Controls.Add(line)
-            AddHandler host.Layout,
-                Sub(sender, e)
-                    line.SetBounds(0, Math.Max(0, (host.ClientSize.Height - 1) \ 2),
-                        host.ClientSize.Width, 1)
-                End Sub
-            Return host
-        End Function
-
         Private Shared Function BuildOfficialModeHeader(title As String, description As String,
                                                         switchControl As LakeUI.BooleanSwitch,
                                                         stateControl As Control,

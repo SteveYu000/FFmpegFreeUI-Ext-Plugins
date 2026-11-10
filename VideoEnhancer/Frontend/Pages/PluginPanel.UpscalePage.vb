@@ -1174,7 +1174,6 @@ Namespace videoenhancer
             orderRow.AddColumn(_cmbProcessOrder, 1)
             orderRow.AddColumn(_lblProcessOrder, 2)
             AddWorkbenchRow(root, orderRow, 424, UiRowHeight)
-            AddWorkbenchRow(root, CreateOfficialSeparator(), 716, 16)
 
 
             AddSegmentedEntry(root)
