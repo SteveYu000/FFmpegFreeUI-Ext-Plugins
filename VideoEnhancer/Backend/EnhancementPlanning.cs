@@ -25,10 +25,15 @@ internal sealed class EnhancementPlan
 public static partial class BackendServices
 {
     public static void ConfigureRuntime(string root) => PortablePaths.Configure(root);
-    internal static string ExtToolPath(string file)=>Path.Combine(PortablePaths.EmbeddedToolsRoot(ToolVersion),file);
+    internal static string ExtToolPath(string file)=>BackendProvidesHighBitDepthScripts() && file is "rve-ordered-backend.py" or "rve-segmented-backend.py"
+        ?Path.Combine(CoreRoot,"python","backend",file):Path.Combine(PortablePaths.EmbeddedToolsRoot(ToolVersion),file);
 
-    internal static void PrepareExtSupport()
+    internal static void PrepareExtSupport(EnhancementSettings settings,string input)
     {
+        bool usesRve=settings.SegmentedEnabled
+            ?FindSegmentConfig(settings,input,false)?.Segments.Any(segment=>IsSegmentModelBackend(segment.Backend))==true
+            :settings.InterpEnabled||(settings.UpscaleEnabled&&settings.Backend!="rtxvsr");
+        if(!usesRve)return;
         EnsureInterpolationSupportScripts();
         EnsureEmbeddedFile("VideoEnhancer.Embedded.rve-ext-launch.py","rve-ext-launch.py");
         EnsureEmbeddedFile(EmbeddedOrderedBackendResource,"rve-ordered-backend.py");
@@ -63,9 +68,9 @@ public static partial class BackendServices
             var hdr=source.Hdr;
             if(settings.RtxHdrEnabled&&hdr)throw new InvalidOperationException("输入已是 HDR，不能再次启用 RTX HDR");
             if(hdr&&((settings.UpscaleEnabled&&settings.Backend is "ncnn" or "onnx" or "flashvsr")||(settings.InterpEnabled&&settings.InterpBackend=="ncnn")||settings.SegmentedEnabled))
-                throw new InvalidOperationException("该 AI 组合不支持 HDR 的 16-bit RGB 帧；请使用 CUDA / TensorRT");
+                throw new InvalidOperationException("该 AI 组合尚未通过 HDR 色彩链路验证；请使用 CUDA / TensorRT");
             var encoder=LosslessEncoder(hdr,source);
-            var extract=new List<string>{"-hide_banner","-y","-i",input,"-map",$"0:v:{ordinal}","-an","-sn","-dn","-vf","setpts=PTS-STARTPTS","-c:v","ffv1","-level","3","-pix_fmt",hdr?"gbrp16le":(!settings.InterpEnabled&&(!settings.UpscaleEnabled||settings.Backend=="rtxvsr")&&source.Bits>8?"yuv420p10le":"bgr0"),"-metadata:s:v:0","rotate=0",sourcePath};
+            var extract=new List<string>{"-hide_banner","-y","-i",input,"-map",$"0:v:{ordinal}","-an","-sn","-dn","-vf","setpts=PTS-STARTPTS","-c:v","ffv1","-level","3","-pix_fmt","gbrp16le","-metadata:s:v:0","rotate=0",sourcePath};
             AddStep(plan,$"source-{ordinal}","读取原始视频流 "+ordinal,ffmpeg,extract,true);
             string current=sourcePath;
 
@@ -100,17 +105,17 @@ public static partial class BackendServices
                         int multiple=Math.Max(1,capability2.InputMultiple);
                         engineWidth=(engineWidth+multiple-1)/multiple*multiple;engineHeight=(engineHeight+multiple-1)/multiple*multiple;
                     }
-                    model=EnsureTensorRtEngine(model,engineWidth,engineHeight,settings.UpscaleTileSize,engineScale,settings.UpscaleHalfPrecision?"auto":"float32");
+                    model=EnsureTensorRtEngine(model,engineWidth,engineHeight,settings.UpscaleTileSize,engineScale,settings.UpscaleHalfPrecision?"float16":"float32");
                     if(model.Length==0)throw new InvalidOperationException("TensorRT 超分 Engine 构建失败");
                 }
-                string upPrecision=ResolveUpscalePrecision(model,settings.Backend,settings.UpscaleHalfPrecision?"auto":"float32");
-                string interpPrecision=ResolveInterpPrecision(interp,settings.InterpBackend,settings.InterpHalfPrecision?"auto":"float32");
+                string upPrecision=ResolveUpscalePrecision(model,settings.Backend,settings.UpscaleHalfPrecision?"float16":"float32");
+                string interpPrecision=ResolveInterpPrecision(interp,settings.InterpBackend,settings.InterpHalfPrecision?"float16":"float32");
                 if(prepareModels&&interp is not null&&settings.InterpBackend=="tensorrt")
                 {
                     int prepScale=outputScale;
                     int iw=settings.ProcessOrder=="upscale-first"&&model.Length>0?width*prepScale:width;
                     int ih=settings.ProcessOrder=="upscale-first"&&model.Length>0?height*prepScale:height;
-                    if(PrepareRifeTensorRTEngine(interp,iw,ih,false)!=0)
+                    if(PrepareRifeTensorRTEngine(interp,iw,ih,false,interpPrecision)!=0)
                         throw new InvalidOperationException("TensorRT 补帧 Engine 构建失败");
                 }
                 string rveEncoder=encoder;
@@ -237,7 +242,7 @@ public static partial class BackendServices
 
     private static string LosslessEncoder(bool hdr,VideoStreamInfo source)
     {
-        string result="-c:v ffv1 -level 3 -pix_fmt "+(hdr?"gbrp16le":"bgr0")+" -an -sn -dn -map_metadata -1 -map_chapters -1";
+        string result="-c:v ffv1 -level 3 -pix_fmt gbrp16le -an -sn -dn -map_metadata -1 -map_chapters -1";
         var filters=new List<string>();
         if(source.SampleAspectRatio.Length>0&&source.SampleAspectRatio!="0:1")filters.Add("setsar="+source.SampleAspectRatio.Replace(':','/'));
         // 原始帧输入没有色彩属性，必须在帧上标记，避免被编码器覆盖。
@@ -309,7 +314,8 @@ public static partial class BackendServices
     {
         if(s.UpscaleEnabled&&s.Backend is not ("ncnn" or "cuda" or "tensorrt" or "onnx" or "flashvsr" or "basicvsrpp" or "rtxvsr"))
             throw new InvalidOperationException("未知超分后端："+s.Backend);
-        if(s.InterpEnabled&&s.InterpBackend is not ("ncnn" or "cuda" or "tensorrt"))throw new InvalidOperationException("未知补帧后端："+s.InterpBackend);
+        if(s.InterpEnabled&&s.InterpBackend=="ncnn")throw new InvalidOperationException("NCNN RIFE 仅支持 8bit 字节接口；请改用 CUDA / PyTorch 或 TensorRT 补帧");
+        if(s.InterpEnabled&&s.InterpBackend is not ("cuda" or "tensorrt"))throw new InvalidOperationException("未知补帧后端："+s.InterpBackend);
         if(s.SchemaVersion!=1)throw new InvalidOperationException("不支持的 AI 参数版本："+s.SchemaVersion);
         if(s.InterpEnabled&&(!double.IsFinite(s.InterpFactor)||s.InterpFactor<=1||s.InterpFactor>16))throw new InvalidOperationException("补帧倍率应大于 1 且不超过 16");
         if(s.OutputScale<0||s.OutputScale>8||s.UpscaleTileSize<0)throw new InvalidOperationException("超分倍率或分块大小无效");
@@ -362,7 +368,7 @@ public static partial class BackendServices
                 if(prepare&&backend=="tensorrt")
                 {
                     model=EnsureTensorRtEngine(model,(width+multiple-1)/multiple*multiple,(height+multiple-1)/multiple*multiple,
-                        plan.Settings.UpscaleTileSize,scale,plan.Settings.UpscaleHalfPrecision?"auto":"float32");
+                        plan.Settings.UpscaleTileSize,scale,plan.Settings.UpscaleHalfPrecision?"float16":"float32");
                     if(model.Length==0)throw new InvalidOperationException("分段 TensorRT Engine 构建失败");
                 }
             }
@@ -381,7 +387,7 @@ public static partial class BackendServices
         if(ow<=0||oh<=0)throw new InvalidOperationException("分段必须设置统一目标分辨率");
         if(fixedScale==0&&prepared.Any(r=>r.OutputWidth!=ow||r.OutputHeight!=oh))throw new InvalidOperationException("全部分段的目标分辨率应相同");
         foreach(var range in prepared){range.OutputWidth=ow;range.OutputHeight=oh;}
-        string precision=plan.Settings.UpscaleHalfPrecision?"auto":"float32";
+        string precision=plan.Settings.UpscaleHalfPrecision?"float16":"float32";
         if(prepared.Any(r=>IsSegmentModelBackend(r.Backend)&&ResolveUpscalePrecision(r.Model,r.Backend,precision)=="float32"))precision="float32";
 
         if(prepared.All(r=>IsSegmentModelBackend(r.Backend)))
@@ -400,24 +406,24 @@ public static partial class BackendServices
             {
                 string raw=Path.Combine(plan.WorkDirectory,$"segment-source-{ordinal}-{i}.mkv");
                 AddStep(plan,$"segment-source-{ordinal}-{i}","读取模型分段",ffmpeg,
-                    ["-hide_banner","-y","-i",input,"-map","0:v:0","-an","-sn","-vf",trim,"-c:v","ffv1","-level","3","-pix_fmt","bgr0",raw],true);
+                    ["-hide_banner","-y","-i",input,"-map","0:v:0","-an","-sn","-vf",trim,"-c:v","ffv1","-level","3","-pix_fmt","gbrp16le",raw],true);
                 var rebased=new PreparedSegment{Start=1,End=segment.End-segment.Start+1,Backend=segment.Backend,Model=segment.Model,Scale=segment.Scale,InputMultiple=segment.InputMultiple,OutputWidth=ow,OutputHeight=oh};
                 AddSegmentPython(plan,$"segment-model-{ordinal}-{i}",raw,clip,[rebased],precision,ffmpeg,ffprobe);
             }
             else
             {
-                string filter=trim+","+BuildDirectCustomFilter(segment)+",setsar=1,format=rgb24";
+                string filter=trim+","+BuildDirectCustomFilter(segment)+",setsar=1,format=gbrp16le";
                 var args=new List<string>{"-hide_banner","-y"};
                 if(segment.Backend=="anime4k")args.AddRange(["-init_hw_device","vulkan","-filter_hw_device","vulkan"]);
-                args.AddRange(["-i",input,"-map","0:v:0","-an","-sn","-dn","-vf",filter,"-c:v","ffv1","-level","3","-pix_fmt","bgr0",clip]);
+                args.AddRange(["-i",input,"-map","0:v:0","-an","-sn","-dn","-vf",filter,"-c:v","ffv1","-level","3","-pix_fmt","gbrp16le",clip]);
                 AddStep(plan,$"segment-custom-{ordinal}-{i}","处理 "+segment.Backend+" 分段",ffmpeg,args,true);
             }
         }
         var concat=new List<string>{"-hide_banner","-y"};
         foreach(var clip in clips)concat.AddRange(["-i",clip]);
-        string graph=string.Join(";",clips.Select((_,i)=>$"[{i}:v:0]setpts=PTS-STARTPTS,setsar=1,format=bgr0[s{i}]"))+";"+
+        string graph=string.Join(";",clips.Select((_,i)=>$"[{i}:v:0]setpts=PTS-STARTPTS,setsar=1,format=gbrp16le[s{i}]"))+";"+
             string.Concat(clips.Select((_,i)=>$"[s{i}]"))+$"concat=n={clips.Count}:v=1:a=0[out]";
-        concat.AddRange(["-filter_complex",graph,"-map","[out]","-an","-sn","-dn","-c:v","ffv1","-level","3","-pix_fmt","bgr0",output]);
+        concat.AddRange(["-filter_complex",graph,"-map","[out]","-an","-sn","-dn","-c:v","ffv1","-level","3","-pix_fmt","gbrp16le",output]);
         AddStep(plan,$"segment-join-{ordinal}","拼接增强视频流",ffmpeg,concat,true);
     }
 

@@ -16,3 +16,6 @@ Python 模块提供运行生命周期、帧管线、分段、模型检查与 Ten
 
 参考源码归档保留了各架构目录的独立许可，不授予模型权重额外使用权。
 它不是按需下载的 Python/RVE 运行包的版本证明；该包必须按实际内容核对版本与条款。
+
+RGB48 核心另取自 maxzrb/VideoEnhancer 提交 83c5f1235c2bfbf43fe0f1fa4c01f03712d48e1b，2026-11-10。
+完整修改源码在 Backend/third-party/RVE/high-bit-depth；配套入口与同步器包含在同版 source.zip。

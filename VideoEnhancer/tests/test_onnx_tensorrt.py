@@ -157,6 +157,11 @@ class OnnxTensorRtGpuTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as folder:
             path = self.convert(folder, (1, 3, "height", "width"), half=True)
             self.check_engine(path, (1, 3, 32, 48), 2, self.torch.float16)
+            # 旧 FP16 Engine 即使文件仍存在，也不能供已知不稳定模型继续使用。
+            legacy = path.with_name("AniSD-DAT2-fp16-2x.engine")
+            shutil.copyfile(path, legacy)
+            with self.assertRaisesRegex(ValueError, "FP32"):
+                self.rve_engine(str(legacy), self.torch.device("cuda:0"), self.torch.float32)
 
     def test_fixed_profile_is_kept(self):
         with tempfile.TemporaryDirectory() as folder:

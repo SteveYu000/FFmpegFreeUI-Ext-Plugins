@@ -144,7 +144,8 @@ internal static partial class Program
             {
                 string expected=Path.Combine(_root,"timing-expected.mkv"),actual=Path.Combine(_root,"timing-actual.mkv");
                 var baseline=new List<string>{"-v","error","-y"};baseline.AddRange(timing);
-                baseline.AddRange(["-i",input,"-map","0:v:0","-map","0:a:0","-c:v","ffv1","-pix_fmt","bgr0","-c:a","copy","-fps_mode","passthrough",expected]);
+                // 使用相同的 RGB16 转换精度比较帧内容，避免把 8bit / 16bit 量化差异当作选帧错误。
+                baseline.AddRange(["-i",input,"-map","0:v:0","-map","0:a:0","-vf","format=gbrp16le","-c:v","ffv1","-pix_fmt","bgr0","-c:a","copy","-fps_mode","passthrough",expected]);
                 await Run(Ffmpeg,baseline);
                 var native=baseline.ToList();native[^1]=actual;
                 int inputIndex=native.IndexOf(input);

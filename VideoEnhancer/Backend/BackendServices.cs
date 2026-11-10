@@ -531,8 +531,18 @@ public static partial class BackendServices
         CoreRoot, ModelScopeToken, ToolVersion, CreateModelRepository(),
         DownloadWithAria, ExtractArchive, Fail);
 
+    private static bool BackendProvidesHighBitDepthScripts() =>
+        File.Exists(Path.Combine(CoreRoot, "python", "backend", "src", "utils", "PixelFormat.py"));
+
     private static string EnsureEmbeddedFile(string resourceName, string fileName)
     {
+        if (BackendProvidesHighBitDepthScripts() && fileName is "rve-ordered-backend.py" or "rve-segmented-backend.py")
+        {
+            var backendPath = Path.Combine(CoreRoot, "python", "backend", fileName);
+            if (!File.Exists(backendPath))
+                throw new FileNotFoundException("高位深后端缺少配套脚本，请完整安装后端：" + fileName, backendPath);
+            return backendPath;
+        }
         var directory = PortablePaths.EmbeddedToolsRoot(ToolVersion);
         Directory.CreateDirectory(directory);
         var path = Path.Combine(directory, fileName);
@@ -557,30 +567,42 @@ public static partial class BackendServices
         return path;
     }
 
-    /// <summary>把与插件版本配套的补帧检查/预构建脚本同步到当前 RVE 后端。</summary>
+    private static readonly object RveScriptGate = new();
+
+    /// <summary>同步配套的 RGB48 核心和辅助入口，保留独立后端的脚本所有权。</summary>
     private static void EnsureInterpolationSupportScripts()
     {
-        var backendDirectory = Path.Combine(CoreRoot, "python", "backend");
-        if (!Directory.Exists(backendDirectory)) return;
-        try
+        lock (RveScriptGate)
         {
-            InstallEmbeddedBackendScript(EmbeddedInterpolationInspectorResource, InterpolationInspectorScript);
-            InstallEmbeddedBackendScript(EmbeddedUpscaleInspectorResource, UpscaleInspectorScript);
-            InstallEmbeddedBackendScript(EmbeddedRifeTensorRTPrepareResource, RifeTensorRTPrepareScript);
-            InstallEmbeddedBackendScript(EmbeddedFrameBackendResource, FrameBackendScript);
-            InstallEmbeddedBackendScript(EmbeddedTensorRTConverterResource, TensorRTConverterScript);
-            InstallEmbeddedBackendScript(EmbeddedOutputScaleResource, Path.Combine(backendDirectory, "rve_output_scale.py"));
-            InstallEmbeddedBackendScript(EmbeddedFlashVsrResource, Path.Combine(backendDirectory, "rve-flashvsr-backend.py"));
-            InstallEmbeddedBackendScript(EmbeddedBasicVsrResource, Path.Combine(backendDirectory, "rve-basicvsrpp-backend.py"));
-            InstallEmbeddedBackendScript(EmbeddedSegmentedBackendResource, SegmentedBackendScript);
-            EnsureGmfssModelTypeCompatibility();
-            EnsureGimmModelCompatibility();
-            EnsurePytorchUpscaleCompatibility();
-            EnsureOnnxModelCompatibility();
-        }
-        catch (Exception ex)
-        {
-            Console.Error.WriteLine("[警告] 无法同步补帧辅助脚本：" + ex.Message);
+            var backendDirectory = Path.Combine(CoreRoot, "python", "backend");
+            if (!Directory.Exists(backendDirectory)) return;
+            if (BackendProvidesHighBitDepthScripts() && !RveHighBitDepthSupport.IsManaged(backendDirectory))
+            {
+                RveHighBitDepthSupport.ValidateExternal(backendDirectory);
+                return;
+            }
+            try
+            {
+                RveHighBitDepthSupport.Install(backendDirectory);
+                InstallEmbeddedBackendScript(EmbeddedInterpolationInspectorResource, InterpolationInspectorScript);
+                InstallEmbeddedBackendScript(EmbeddedUpscaleInspectorResource, UpscaleInspectorScript);
+                InstallEmbeddedBackendScript(EmbeddedRifeTensorRTPrepareResource, RifeTensorRTPrepareScript);
+                InstallEmbeddedBackendScript(EmbeddedFrameBackendResource, FrameBackendScript);
+                InstallEmbeddedBackendScript(EmbeddedTensorRTConverterResource, TensorRTConverterScript);
+                InstallEmbeddedBackendScript(EmbeddedOutputScaleResource, Path.Combine(backendDirectory, "rve_output_scale.py"));
+                InstallEmbeddedBackendScript(EmbeddedFlashVsrResource, Path.Combine(backendDirectory, "rve-flashvsr-backend.py"));
+                InstallEmbeddedBackendScript(EmbeddedBasicVsrResource, Path.Combine(backendDirectory, "rve-basicvsrpp-backend.py"));
+                InstallEmbeddedBackendScript(EmbeddedSegmentedBackendResource, SegmentedBackendScript);
+                InstallEmbeddedBackendScript(EmbeddedOrderedBackendResource, Path.Combine(backendDirectory, "rve-ordered-backend.py"));
+                EnsureGmfssModelTypeCompatibility();
+                EnsureGimmModelCompatibility();
+                EnsurePytorchUpscaleCompatibility();
+                EnsureOnnxModelCompatibility();
+            }
+            catch (Exception ex)
+            {
+                throw new InvalidOperationException("无法同步配套的 16bit 后端脚本，任务未开始：" + ex.Message, ex);
+            }
         }
     }
 
@@ -1232,21 +1254,21 @@ public static partial class BackendServices
     /// <summary>超分精度独立决策：用户强制 FP32 优先，已知 FP16 数值不稳定的模型保持 FP32。</summary>
     private static string ResolveUpscalePrecision(string modelPath, string backend, string requested)
     {
-        if (requested == "float32") return "float32";
+        if (requested is "auto" or "float32") return "float32";
         // DAT2 与 AniToon-RPLKSRL 在当前 PyTorch/CUDA FP16 路径会直接输出 NaN；
         // 后续转字节会把 NaN 隐式变为黑值，因此不能依赖编码阶段发现问题。
         if (backend == "cuda" && Regex.IsMatch(
                 ModelBaseName(modelPath), @"SwinIR|GRL|DAT2|AniToon-RPLKSRL", RegexOptions.IgnoreCase))
             return "float32";
-        if (backend == "tensorrt" && Regex.IsMatch(ModelBaseName(modelPath), @"GRL", RegexOptions.IgnoreCase))
+        if (backend == "tensorrt" && Regex.IsMatch(ModelBaseName(modelPath), @"GRL|DAT2|AniToon-RPLKSRL", RegexOptions.IgnoreCase))
             return "float32";
         return requested;
     }
 
-    /// <summary>补帧精度独立决策：GIMM 的 CUDA 路径必须使用 FP32，其他模型优先半精度。</summary>
+    /// <summary>补帧默认使用 FP32；显式半精度仍遵守模型的数值限制。</summary>
     private static string ResolveInterpPrecision(string? modelPath, string backend, string requested)
     {
-        if (requested == "float32") return "float32";
+        if (requested is "auto" or "float32") return "float32";
         if (backend == "cuda" && Regex.IsMatch(ModelBaseName(modelPath ?? ""), @"GIMM", RegexOptions.IgnoreCase))
             return "float32";
         return requested;
@@ -1683,7 +1705,7 @@ public static partial class BackendServices
         Console.WriteLine();
     }
 
-    private static int PrepareRifeTensorRTEngine(string requested, int width, int height, bool staticShape)
+    private static int PrepareRifeTensorRTEngine(string requested, int width, int height, bool staticShape, string precision = "float32")
     {
         if (!File.Exists(PythonExe)) return Fail("找不到便携 Python：" + PythonExe);
         if (!File.Exists(RifeTensorRTPrepareScript))
@@ -1709,7 +1731,8 @@ public static partial class BackendServices
         {
             RifeTensorRTPrepareScript, model,
             "--width", width.ToString(CultureInfo.InvariantCulture),
-            "--height", height.ToString(CultureInfo.InvariantCulture)
+            "--height", height.ToString(CultureInfo.InvariantCulture),
+            "--precision", precision
         }) start.ArgumentList.Add(arg);
         if (staticShape) start.ArgumentList.Add("--static-shape");
 
@@ -1831,7 +1854,12 @@ public static partial class BackendServices
     private static string BuildDirectCustomFilter(PreparedSegment segment)
     {
         if (segment.Backend == "ffmpeg")
+        {
+            // zscale point 避免 swscale 最近邻改变 RGB16 的低位码值。
+            if (segment.Model == "neighbor")
+                return $"zscale=w={segment.OutputWidth}:h={segment.OutputHeight}:filter=point";
             return $"scale={segment.OutputWidth}:{segment.OutputHeight}:flags={segment.Model}";
+        }
         var shader = ResolveAnime4kShaderForFfmpeg(segment.Model);
         if (shader.Length == 0)
             throw new FileNotFoundException("找不到 Anime4K 着色器：" + segment.Model);
@@ -1975,13 +2003,13 @@ public static partial class BackendServices
         return true;
     }
 
-    private const string TensorRtCacheSchema = "3";
+    private const string TensorRtCacheSchema = "4-rgb48-tf32off";
     private const int TensorRtOptimizationLevel = 3;
     private const int TensorRtTilePad = 10;
 
-    /// <summary>GRL 的相对位置编码在 FP16 转换时混用 Float/Half，必须构建 FP32 Engine。</summary>
+    /// <summary>已知 TensorRT FP16 会输出非有限值的模型统一构建 FP32 Engine。</summary>
     private static string TensorRtPrecisionForModel(string sourcePath, string requestedPrecision = "auto") =>
-        requestedPrecision == "float32" || Regex.IsMatch(ModelBaseName(sourcePath), @"GRL", RegexOptions.IgnoreCase)
+        requestedPrecision != "float16" || Regex.IsMatch(ModelBaseName(sourcePath), @"GRL|DAT2|AniToon-RPLKSRL", RegexOptions.IgnoreCase)
             ? "fp32"
             : "fp16";
 

@@ -632,8 +632,17 @@ Namespace videoenhancer
                 halfLabel.Dock = DockStyle.Fill
                 halfLabel.TextAlign = ContentAlignment.MiddleCenter
                 halfLabel.Margin = Padding.Empty
+                halfLabel.InfoIconPosition = HtmlColorLabel.InfoIconPositionEnum.End
+                halfLabel.InfoIconColor = UiTextSecondary
+                halfLabel.InfoIconTextGap = 6
+                halfLabel.ToolTipMaxWidth = 480
+                halfLabel.ToolTipText = title & "精度说明" & Environment.NewLine &
+                    "开启：优先 FP16 加速，可传输高位深帧，但不等于完整 16bit 计算精度。" & Environment.NewLine &
+                    "关闭：采用 FP32，适合保留 12bit / 16bit 细节；组合任务应同时关闭超分和补帧的半精度。" & Environment.NewLine &
+                    "已知不稳定模型使用 FP32；固定精度 ONNX 和预构建 Engine 的内部精度由模型决定。" & Environment.NewLine &
+                    "最终输出位深由宿主预设控制；提高输出位深不能恢复已经丢失的信息。"
                 Dim halfLabelWidth = Math.Max(96,
-                    MeasureTextWidth96(halfLabel.Text, halfLabel.Font) + 10)
+                    MeasureTextWidth96(halfLabel.Text, halfLabel.Font) + 34)
                 row = New ModernHorizontalPanel(
                     CSng(titleWidth), CSng(UiColumnGap), 40.0F, 12.0F, CSng(halfLabelWidth), 6.0F, 40.0F, -1.0F,
                     CSng(stateWidth))

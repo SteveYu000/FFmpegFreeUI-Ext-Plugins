@@ -52,7 +52,7 @@ internal sealed class ModelRepositoryClient
         client.DefaultRequestHeaders.Accept.ParseAdd("application/json");
         var result = new List<RemoteModel>();
         var allowedRoots = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
-            { "Backend", "BasicVSR++", "Bin", "FlashVSR", "Frame-Interpolation", "ONNX", "Param-Bin", "PTH" };
+            { "BasicVSR++", "Bin", "FlashVSR", "Frame-Interpolation", "ONNX", "Param-Bin", "PTH" };
         var fetchedEntries = 0;
         for (var pageNumber = 1; ; pageNumber++)
         {
@@ -71,8 +71,6 @@ internal sealed class ModelRepositoryClient
                 var slash = path.IndexOf('/');
                 var root = slash < 0 ? path : path[..slash];
                 if (!allowedRoots.Contains(root)) continue;
-                if (root.Equals("Backend", StringComparison.OrdinalIgnoreCase)
-                    && !Regex.IsMatch(path, @"^Backend/python_\d{8}\.7z$", RegexOptions.IgnoreCase)) continue;
                 result.Add(new RemoteModel(
                     file.GetProperty("Name").GetString() ?? System.IO.Path.GetFileName(path),
                     path,
@@ -94,7 +92,6 @@ internal sealed class ModelRepositoryClient
             }
         }
         // 同类运行包只展示最新版本；模型权重使用稳定路径。
-        KeepLatestVersionedArchive(result, @"^Backend/python_(?<version>\d{8})\.7z$");
         KeepLatestVersionedArchive(result, @"^Bin/rtx-video/RTXVideoRuntime_(?<version>\d{8})\.7z$");
 
         return result.OrderBy(m => m.Path, StringComparer.OrdinalIgnoreCase).ToList();

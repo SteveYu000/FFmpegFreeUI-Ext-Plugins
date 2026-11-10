@@ -9,7 +9,7 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <NuGetAudit>false</NuGetAudit>
     <!-- 真实宿主验证使用其配套 LakeUI；不改变发行插件的最低依赖。 -->
-    <VideoEnhancerTestLakeUiVersion Condition="'$(VideoEnhancerTestLakeUiVersion)' == ''">5.112.0</VideoEnhancerTestLakeUiVersion>
+    <VideoEnhancerTestLakeUiVersion Condition="'$(VideoEnhancerTestLakeUiVersion)' == ''">5.117.0</VideoEnhancerTestLakeUiVersion>
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="..\Frontend\VideoEnhancerPlugin.vbproj" />

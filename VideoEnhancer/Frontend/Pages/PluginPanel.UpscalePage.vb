@@ -115,6 +115,13 @@ Namespace videoenhancer
                 Return
             End If
 
+            If _switchInterp.Checked AndAlso _config.InterpBackend = "ncnn" Then
+                _syncingInterpSwitch = True
+                _switchInterp.Checked = False
+                _syncingInterpSwitch = False
+                ShowStatus("NCNN 补帧只有 8bit 接口，请先选择 CUDA 或 TensorRT", True)
+                Return
+            End If
             _config.InterpEnabled = _switchInterp.Checked
             If _switchInterp.Checked Then
                 RefreshInterpModels()
@@ -188,7 +195,7 @@ Namespace videoenhancer
             _config.UpscaleHalfPrecision = _switchUpscaleHalf.Checked
             _config.Save()
             ShowStatus(If(_switchUpscaleHalf.Checked,
-                "超分将优先使用 FP16，不兼容时自动回退 FP32",
+                "超分使用 FP16 加速，不能保留完整 16bit 计算精度；关闭后使用 FP32",
                 "超分已强制使用 FP32"), False)
         End Sub
 
@@ -198,7 +205,7 @@ Namespace videoenhancer
             _config.InterpHalfPrecision = _switchInterpHalf.Checked
             _config.Save()
             ShowStatus(If(_switchInterpHalf.Checked,
-                "补帧将优先使用 FP16，不兼容时自动回退 FP32",
+                "补帧使用 FP16 加速，不能保留完整 16bit 计算精度；关闭后使用 FP32",
                 "补帧已强制使用 FP32"), False)
         End Sub
 
@@ -275,7 +282,7 @@ Namespace videoenhancer
             If _loadingInterpModels Then Return
             _loadingInterpModels = True
             _cmbInterp.WaterText = "正在读取补帧模型…"
-            Dim backend = If(String.IsNullOrWhiteSpace(_config.InterpBackend), "ncnn", _config.InterpBackend)
+            Dim backend = If(String.IsNullOrWhiteSpace(_config.InterpBackend), "cuda", _config.InterpBackend)
             Try
                 Dim catalog = Await Task.Run(Function() ModelCatalogClient.RunModelCatalog(backend, interpolation:=True))
                 If IsDisposed OrElse Disposing Then Return
@@ -324,11 +331,11 @@ Namespace videoenhancer
             End If
         End Sub
 
-        ''' <summary>工作台滚动依赖 LakeUI 5.112 的公开渲染事务。</summary>
+        ''' <summary>工作台滚动依赖 LakeUI 5.117 的公开渲染事务。</summary>
         Private Shared Function LakeUiRequiredVersionAvailable() As Boolean
             Try
                 Dim version = GetType(ModernPanel).Assembly.GetName().Version
-                Return version IsNot Nothing AndAlso version.Major = 5 AndAlso version.Minor >= 112
+                Return version IsNot Nothing AndAlso version.Major = 5 AndAlso version.Minor >= 117
             Catch
                 Return False
             End Try
@@ -353,7 +360,7 @@ Namespace videoenhancer
                 .ForeColor = UiDanger,
                 .TextAlign = HtmlColorLabel.TextAlignEnum.MiddleLeft,
                 .Text = "<font color=#EB5D5D><b>无法加载视频超分插件</b></font><br/>" &
-                        "<font color=#C0C0C0>需要升级 3FUI/LakeUI 5.112 或更新的 5.x 版本后才能继续使用。</font>"
+                        "<font color=#C0C0C0>需要升级 3FUI/LakeUI 5.117 或更新的 5.x 版本后才能继续使用。</font>"
             }
             ModernPanel1.Controls.Add(message)
             Controls.Add(ModernPanel1)
@@ -529,7 +536,7 @@ Namespace videoenhancer
                 If(backend = "tensorrt",
                 "TensorRT（NVIDIA）：PTH/ONNX 超分与 RIFE 补帧均按实际输入尺寸自动构建 Engine",
                 If(backend = "onnx",
-                "ONNX Runtime：超分用 .onnx；补帧可独立选择 NCNN 或 CUDA",
+                "ONNX Runtime：超分用 .onnx；补帧可独立选择 CUDA 或 TensorRT",
                 If(backend = "flashvsr",
                 "FlashVSR（NVIDIA）：连续视频帧扩散超分；组合补帧会自动分两阶段",
                 If(backend = "cuda",
@@ -578,7 +585,7 @@ Namespace videoenhancer
             Dim text = If(item Is Nothing, "", item.ToString())
             If text.Contains("TensorRT", StringComparison.OrdinalIgnoreCase) Then Return "tensorrt"
             If text.Contains("CUDA", StringComparison.OrdinalIgnoreCase) Then Return "cuda"
-            Return "ncnn"
+            Return "cuda"
         End Function
 
         Private Shared Function FactorValue(item As Object) As Double
@@ -1078,7 +1085,6 @@ Namespace videoenhancer
                 "运动补帧", "", _switchInterp, _lblSwitchInterp, _switchInterpHalf)
             _cmbInterpBackend.WaterText = "选择后端…"
             ConfigureCombo(_cmbInterpBackend)
-            _cmbInterpBackend.Items.Add("NCNN (Vulkan)")
             _cmbInterpBackend.Items.Add("CUDA (PyTorch)")
             _cmbInterpBackend.Items.Add("TensorRT (NVIDIA)")
             AddHandler _cmbInterpBackend.SelectedIndexChanged, AddressOf OnInterpBackendSelected
@@ -1386,7 +1392,8 @@ Namespace videoenhancer
 
         Private Sub SyncInterpBackendCombo()
             If _cmbInterpBackend.Items.Count = 0 Then Return
-            _cmbInterpBackend.SelectedIndex = If(_config.InterpBackend = "tensorrt", 2, If(_config.InterpBackend = "cuda", 1, 0))
+            _cmbInterpBackend.SelectedIndex = If(_config.InterpBackend = "tensorrt", 1, If(_config.InterpBackend = "cuda", 0, -1))
+            If _cmbInterpBackend.SelectedIndex < 0 Then _cmbInterpBackend.WaterText = "NCNN 不支持 16bit，请重新选择"
         End Sub
 
         Private Sub SyncDynamicOpticalFlowCombo()

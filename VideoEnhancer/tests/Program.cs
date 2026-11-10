@@ -24,6 +24,7 @@ internal static partial class Program
             typeof(BackendServices).GetMethod("EnsurePytorchUpscaleCompatibility",BindingFlags.NonPublic|BindingFlags.Static)!.Invoke(null,null);
             return 0;
         }
+        if(RunRgb48ToolFixture(args))return 0;
         if(RunPreviewToolFixture(args))return 0;
         if((args.Length>0&&args[0]=="--ui-probe")||string.Equals(Path.GetFileNameWithoutExtension(Environment.ProcessPath),"VideoEnhancer.UiProbe",StringComparison.OrdinalIgnoreCase))return RunUiProbe();
         if(args.Length>0&&args[0]=="--port")return RtxSidecarFixture.Run(args).GetAwaiter().GetResult();
@@ -39,6 +40,7 @@ internal static partial class Program
         Environment.SetEnvironmentVariable("VIDEOENHANCER_ROOT",Path.Combine(_root,"runtime"));
         try
         {
+            if(args.Contains("--upstream-1317-tests")){TestUpstream1317();System.Console.WriteLine($"PASS {_checks} 个 1.3.17 移植断言");return 0;}
             if(args.Contains("--upstream-1315-tests")){TestUpstream1315();System.Console.WriteLine($"PASS {_checks} 个 1.3.15 移植断言");return 0;}
             if(args.Contains("--preview-tests")){TestPreviewEngine();System.Console.WriteLine($"PASS {_checks} 个预览断言");return 0;}
             System.Console.WriteLine("运行：TestArguments");
@@ -63,6 +65,7 @@ internal static partial class Program
             TestParameterPresentation();
             TestUpstreamPort();
             TestUpstream1315();
+            TestUpstream1317();
             TestManagementServices();
             TestInstalledModelCatalog();
             TestModelRemoval();
@@ -160,7 +163,7 @@ internal static partial class Program
         Check(source.TryGetPixel(1,0,0,ref pixel)&&Math.Abs(pixel.Red-80f/255)<0.00001f&&Math.Abs(pixel.Blue-240f/255)<0.00001f&&Math.Abs(pixel.Alpha-128f/255)<0.00001f,"预览源返回原帧 RGBA 像素");
         Check(!source.TryGetPixel(-1,0,0,ref pixel)&&!source.TryGetPixel(2,0,0,ref pixel),"预览像素查询拒绝越界坐标");
         using var picture=new LakeUI.PixelPictureBox{Source=source};
-        Check(picture.ImageWidth==2&&picture.ImageHeight==2,"LakeUI 5.112 通过 Source 接收预览帧");
+        Check(picture.ImageWidth==2&&picture.ImageHeight==2,"LakeUI 5.117 通过 Source 接收预览帧");
         picture.Source=null;
         pictureFactory.GetMethod("Release",BindingFlags.Static|BindingFlags.NonPublic)!.Invoke(null,[bitmap]);
         Check(!source.TryGetPixel(0,0,0,ref pixel),"释放后的预览帧不会继续读取 GDI 资源");

@@ -35,7 +35,7 @@ def nearest(image, scale):
 class FrameBackendTests(unittest.TestCase):
     def test_tile_edges_and_single_pixel(self):
         for height, width in [(1, 1), (1, 5), (7, 1), (5, 7), (8, 8)]:
-            image = np.arange(height * width * 3, dtype=np.uint8).reshape(height, width, 3)
+            image = np.arange(height * width * 3, dtype=np.uint16).reshape(height, width, 3)
             for scale in [1, 2, 4]:
                 for pad in [0, 1, 3]:
                     with self.subTest(size=(height, width), scale=scale, pad=pad):
@@ -43,7 +43,7 @@ class FrameBackendTests(unittest.TestCase):
                         np.testing.assert_array_equal(result, nearest(image, scale))
 
     def test_onnx_tile_wrapper(self):
-        image = np.arange(5 * 7 * 3, dtype=np.uint8).reshape(5, 7, 3)
+        image = np.arange(5 * 7 * 3, dtype=np.uint16).reshape(5, 7, 3)
         model = types.SimpleNamespace(scale=2, _run=lambda block: nearest(block, 2))
         np.testing.assert_array_equal(frames.onnx_tiled(model, image, 4, 1), nearest(image, 2))
 
@@ -68,7 +68,7 @@ class FrameBackendTests(unittest.TestCase):
                 self.scale = options["scale"]
 
             def __call__(self, frame):
-                image = np.frombuffer(frame.payload, np.uint8).reshape(frame.height, frame.width, 3)
+                image = np.frombuffer(frame.payload, np.uint16).reshape(frame.height, frame.width, 3)
                 return FakeFrame("ncnn", frame.width * self.scale, frame.height * self.scale).set_frame_bytes(
                     nearest(image, self.scale).tobytes()
                 )
@@ -76,7 +76,7 @@ class FrameBackendTests(unittest.TestCase):
         ncnn_module, frame_module = types.ModuleType("src.ncnn.UpscaleNCNN"), types.ModuleType("src.utils.Frame")
         ncnn_module.UpscaleNCNN, frame_module.Frame = FakeNCNN, FakeFrame
         with patch.dict(sys.modules, {"src.ncnn.UpscaleNCNN": ncnn_module, "src.utils.Frame": frame_module}):
-            image = np.arange(3 * 5 * 3, dtype=np.uint8).reshape(3, 5, 3)
+            image = np.arange(3 * 5 * 3, dtype=np.uint16).reshape(3, 5, 3)
             upscaler = frames.FrameUpscaler("ncnn", Path("fixture_x2.param"), 5, 3, tile_size=4)
             self.assertEqual(created[0]["modelPath"], "fixture_x2")
             self.assertEqual((created[0]["width"], created[0]["height"], created[0]["tilesize"]), (5, 3, 4))

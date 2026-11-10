@@ -48,7 +48,7 @@ def reflect_pad(image: np.ndarray, tile: int, pad: int) -> tuple[np.ndarray, int
 def tiled_rgb(run_block, image: np.ndarray, scale: int, tile: int, pad: int) -> np.ndarray:
     padded, extra_h, extra_w = reflect_pad(image, tile, pad)
     height, width = padded.shape[:2]
-    output = np.zeros((height * scale, width * scale, 3), dtype=np.uint8)
+    output = np.zeros((height * scale, width * scale, 3), dtype=np.uint16)
     tiles_x = (width - 2 * pad + tile - 1) // tile
     tiles_y = (height - 2 * pad + tile - 1) // tile
     for y in range(tiles_y):
@@ -136,14 +136,14 @@ class FrameUpscaler:
         if self.backend == "onnx":
             return onnx_tiled(self.model, rgb)
         if self.backend == "ncnn":
-            return np.frombuffer(self.process_bytes(rgb.tobytes()), dtype=np.uint8).reshape(
+            return np.frombuffer(self.process_bytes(rgb.tobytes()), dtype=np.uint16).reshape(
                 self.height * self.scale, self.width * self.scale, 3
             )
         from src.utils.Frame import Frame
         internal = "pytorch" if self.backend == "cuda" else self.backend
         frame = Frame(internal, self.width, self.height, "cuda", 0, False, self.frame_precision).set_frame_bytes(rgb.tobytes())
         result = self.model(frame)
-        return np.frombuffer(result.get_frame_bytes(), dtype=np.uint8).reshape(
+        return np.frombuffer(result.get_frame_bytes(), dtype=np.uint16).reshape(
             self.height * self.scale, self.width * self.scale, 3)
 
     def process_bytes(self, payload: bytes) -> bytes:

@@ -15,7 +15,7 @@ def main() -> int:
     parser.add_argument("model", help="RIFE 权重，可为 .pth、.pt 或 .pkl")
     parser.add_argument("--width", type=int, required=True)
     parser.add_argument("--height", type=int, required=True)
-    parser.add_argument("--precision", choices=("float16", "float32"), default="float16")
+    parser.add_argument("--precision", choices=("float16", "float32"), default="float32")
     parser.add_argument("--gpu-id", type=int, default=0)
     parser.add_argument("--static-shape", action="store_true")
     parser.add_argument("--optimization-level", type=int, choices=range(0, 6), default=5)

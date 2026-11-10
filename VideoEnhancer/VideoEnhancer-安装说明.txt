@@ -3,7 +3,7 @@ VideoEnhancer Ext 0.3.0 安装说明
 
 一、适用环境
 Windows x64；FFmpegFreeUI API Extended Edition，Ext API 2.5 或更新版本；
-LakeUI 5.112 或更新的 5.x；.NET 10 Desktop Runtime（x64）。
+LakeUI 5.117 或更新的 5.x；.NET 10 Desktop Runtime（x64）。
 上述宿主运行组件由宿主提供。请先确认宿主本身能够正常启动和处理视频。
 
 二、安装 ZIP

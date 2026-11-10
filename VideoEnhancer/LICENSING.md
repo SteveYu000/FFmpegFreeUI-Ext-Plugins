@@ -6,7 +6,7 @@
 
 | 源码或组件 | 授权范围 |
 | --- | --- |
-| `Backend/BackendServices.cs` | AGPL-3.0-only；包含 RVE 源文件适配及补丁 |
+| `Backend/BackendServices.cs`、`Backend/RveHighBitDepthSupport.cs` | AGPL-3.0-only；包含 RVE 源文件适配及补丁 |
 | `Backend/embedded-tools/*.py` | AGPL-3.0-only；RVE 启动、帧管线、分段、模型检查与 TensorRT 准备模块 |
 | `Frontend/**`、其他 `Backend/*.cs`、自有 JSON、测试、构建与安装脚本、文档 | MIT；保留原有授权，可单独复用 |
 | `Backend/third-party/**`、第三方源码归档及二进制 | 按其原许可证，不能用本项目的 MIT 或 AGPL 代替 |

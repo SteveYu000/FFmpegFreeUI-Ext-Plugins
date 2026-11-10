@@ -75,20 +75,19 @@ internal static partial class Program
             return string.Join(Environment.NewLine,context.Rows.Select(row=>row.Text));
         }
         var settings=new EnhancementSettings{UpscaleEnabled=true,Model="Param-Bin/2x-preview",OutputScale=3,UpscaleTileSize=256,
-            UpscaleHalfPrecision=false,InterpModel="未启用补帧模型",InterpFactor=7,RtxHdrMaxLuminance=1700};
+            UpscaleHalfPrecision=true,InterpModel="未启用补帧模型",InterpFactor=7,RtxHdrMaxLuminance=1700};
         string overview=Overview(settings);
-        Check(overview.Contains("2x-preview")&&overview.Contains("3x")&&overview.Contains("256 px")&&overview.Contains("半精度推理：关闭"),"总览保留用户选择的超分参数");
+        Check(overview.Contains("2x-preview")&&overview.Contains("3x")&&overview.Contains("256 px")&&overview.Contains("半精度推理：开启"),"总览保留用户选择的超分参数");
         Check(!overview.Contains("未启用补帧模型")&&!overview.Contains("1700")&&!overview.Contains("处理顺序"),"关闭功能的残留设置和无效顺序不进入总览");
         Check(!overview.Contains("FFV1")&&!overview.Contains("中间视频")&&!overview.Contains("-c:v")&&!overview.Contains("SchemaVersion"),"总览不显示内部流程、命令或原始 JSON");
         Check(Overview(new()).Length==0,"AI 关闭时不附加参数总览");
-        settings.OutputScale=0;settings.UpscaleTileSize=0;settings.UpscaleHalfPrecision=true;
+        settings.OutputScale=0;settings.UpscaleTileSize=0;settings.UpscaleHalfPrecision=false;
         overview=Overview(settings);
         Check(!overview.Contains("分块")&&!overview.Contains("输出倍率")&&!overview.Contains("半精度"),"总览省略未调整的默认附加项");
-        string rife=Path.Combine(_root,"runtime","models","RIFE","rife-v4.25");
-        Directory.CreateDirectory(rife);
-        File.WriteAllText(Path.Combine(rife,"model.param"),"7767517\n0 0\n");
-        File.WriteAllBytes(Path.Combine(rife,"model.bin"),[0]);
-        settings.InterpEnabled=true;settings.InterpModel="RIFE/rife-v4.25";settings.InterpFactor=2.5;
+        string rife=Path.Combine(_root,"runtime","models","PTH","rife-fixture.pth");
+        Directory.CreateDirectory(Path.GetDirectoryName(rife)!);
+        File.WriteAllBytes(rife,[0]);
+        settings.InterpEnabled=true;settings.InterpModel="PTH/rife-fixture.pth";settings.InterpFactor=2.5;
         settings.InterpHalfPrecision=false;settings.InterpDynamicScaledOpticalFlow=true;settings.SceneDetectThreshold=5.5;settings.ProcessOrder="interp-first";
         overview=Overview(settings);
         Check(overview.Contains("2.5x")&&overview.Contains("5.5")&&overview.Contains("动态光流：开启")&&overview.Contains("先补帧，再超分"),"总览保留调整的补帧和组合顺序参数");

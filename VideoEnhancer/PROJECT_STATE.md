@@ -1,112 +1,93 @@
 # VideoEnhancer 当前状态
 
-更新日期：2026-11-03。交接快照；实际状态以源码、Git 和可复核执行结果为准。这里只保留当前有效事实，不作逐次工作日志。
+更新日期：2026-11-10。交接快照，以源码、Git 和实际执行结果为准，不作逐次工作日志。
 
 ## 项目基线
 
 | 项目 | 当前事实 |
 | --- | --- |
-| 代码位置 | `FFmpegFreeUI-Ext-Plugins/VideoEnhancer/` |
-| 远程仓库 / Git | [SteveYu000/FFmpegFreeUI-Ext-Plugins](https://github.com/SteveYu000/FFmpegFreeUI-Ext-Plugins)，main，HEAD `9d1a5bb`，与 origin/main 同步；本轮 17 个修改/新增路径尚未提交 |
-| 产品版本 / 二进制 | `0.3.0` / `videoenhancer.ext.3fui.dll`；本轮未修改版本 |
-| 已发布版本 | [VideoEnhancer/v0.3.0](https://github.com/SteveYu000/FFmpegFreeUI-Ext-Plugins/releases/tag/VideoEnhancer%2Fv0.3.0)，源码提交 `9d1a5bb33bb1f07b41b09e5a54fb5a9470b3579e`；本轮修改尚未发布 |
-| 上游同步范围 | v1.3.13 / `472d62f` 完整基线；v1.3.14 / `6fe8545` 的四组预览修复；本轮追加 v1.3.15 / `21436b7` 中适用 Ext 的更新 |
-| 构建目标 | `net10.0-windows10.0.17763.0`；Ext SDK `2.5.0`；产品 LakeUI 锁定 `5.112.0`，支持兼容 5.x |
-| 许可 | 发行 DLL 为 AGPL-3.0-only，独立自有源码保留 MIT；范围见 [LICENSING.md](LICENSING.md) |
+| 代码位置 | FFmpegFreeUI-Ext-Plugins/VideoEnhancer；实际路径为 E:/DesktopPlus/Works/Code/FFmpegFreeUI-Ext-Plugins/VideoEnhancer |
+| Git | SteveYu000/FFmpegFreeUI-Ext-Plugins，main，HEAD 1c1e877；已执行 pull --ff-only，与 origin/main 同步 |
+| 工作区 | 58 个路径未提交，全部位于 VideoEnhancer；暂存区为空。开始时已有本状态文件和 tests/test_tensorrt_onnx_paths.py 两项改动，均保留 |
+| 产品 | 0.3.0 / videoenhancer.ext.3fui.dll；本轮未改版本、提交、推送或发布 |
+| 上游 | 最新正式版 [v1.3.17](https://github.com/maxzrb/VideoEnhancer/releases/tag/v1.3.17)；本轮核对并移植 main 至 83c5f1235c2bfbf43fe0f1fa4c01f03712d48e1b，收尾实时复核未变化 |
+| 构建目标 | net10.0-windows10.0.17763.0；Ext SDK 2.5.0；LakeUI 编译和最低依赖固定为 5.117.0，支持兼容 5.x |
+| 许可与分发 | 组合 DLL 为 AGPL-3.0-only，独立自有源码保留 MIT；安装 ZIP 和对应源码 ZIP 分开，管理文档不进入程序集或 ZIP |
 
-代码导航：[Frontend](Frontend) 为 VB/LakeUI 界面，[Backend](Backend) 为 C# 服务和处理链，自有托管代码最终合并为一个 DLL。Python/FFmpeg/RTX 保留外部进程协议。处理链和入口见 [README.md](README.md)，用户教程见 [ExtTutorial.md](Frontend/Resources/ExtTutorial.md)。
+本插件最近已提交的生产改动仍是 8682a3e；之后的 e9b77d5 / 1c1e877 属于 ab-av1，不能据其标题修改本插件版本。已发布的 VideoEnhancer/v0.3.0 资产没有替换，仓库 latest 的 ab-av1 版本也不是本插件版本。
 
-当前入口：参数面板 → 画面帧下方的“视频参数 | AI增强”；主导航“视频超分”的竖排菜单为“首页、实时预览、模型管理、模型下载、模型转换、模型导入、使用教程”。分段编辑在 AI 增强页。安装和源码分别打 ZIP；无插件 CLI、独立图片页面、四宫格或右键超分模块。
+## 已完成的本轮移植
 
-## 当前工作
+用户要求移植上游与 Ext 相关更新，并希望保持 LakeUI 5.117。本轮覆盖 v1.3.16、v1.3.17 和发布后主线的后端下载去重；取消两处仅为 5.201 专有透明渲染优化服务的调用，不增加多版本兼容层，全部 AI 改动保留：
 
-用户要求查看上游最新版本并移植本项目相关更新。已核实最新正式版为 v1.3.15（2026-11-02），完成适用部分的移植及本轮验证。开始时工作区干净，`git pull --ff-only` 确认 main 已同步，并取得已有 0.3.0 发布标签。此前状态文件关于“0.3.0 尚未提交/发布”的描述已经过时，本轮以实际 Git 和 GitHub API 为准。
+- 引入 RVE 2.4.1-dev17 配套的 16 个 RGB48 核心文件，内嵌于 DLL。SDR/HDR 主帧统一为 uint16；普通源、跨后端中间视频、分段切片与拼接采用 gbrp16le。Ext 的 rve-frame-backend.py 同步改为 16bit，没有增加独立图片或图片 CLI 模块。
+- 同步 ONNX、PyTorch/TensorRT、NCNN 浮点超分、转场旁路、时序窗口读写等修订。保留 Ext 的中文 Engine 文件流加载修复；16 个核心文件与上游 AST 一致，差异仅为该额外修复及许可/来源注释。
+- 默认 FP32，半精度开关显式传 float16。TensorRT 的 GRL、DAT2、AniToon-RPLKSRL 强制 FP32；转换关闭 TF32，新缓存指纹隔离旧策略，旧 Engine 不删除。RIFE 预构建按任务实际补帧精度执行。固定精度 ONNX / Engine 的内部精度仍由模型决定。
+- NCNN RIFE 只有 8bit 字节接口，补帧菜单改为 CUDA / TensorRT，默认 CUDA；遗留的选择器空值回退也已更正。显式启用 NCNN 补帧的预设由插件返回可读诊断，不静默切换模型。
+- RGB48 同步只接受配套基线；本插件管理标记为 .videoenhancer-rgb48-owner=ext，按哈希同步并在同进程串行化。独立高位深包按 rgb48-v1 和必要入口验证，保留其 Python 文件，顺序和分段也使用其自带入口。未知版本/协议或同步失败阻止推理；纯 RTX / FFmpeg 任务不因无关 RVE 同步失败而阻塞。
+- 分段最近邻使用 zscale point 保留低位，要求 FFmpeg 包含 zscale。半精度控件增加 LakeUI 原生信息图标和说明，5.117 已支持这些属性；类型化预览图像源、像素读取、图像生命周期和现有透明布局也保留。两个纯布局容器不调用 5.201 才有的 TransparentRenderMode；不声称保留了该新渲染优化。
+- 模型下载只显示一条基于渠道状态的后端更新项，隐藏后端历史归档；没有归档条目也能显示安装入口。参数总览继续只显示启用功能和用户调整项，完整真实参数保留在命令模板；默认 FP32 不增加总览说明。
+- 更新使用教程、README、安装说明、许可范围、RVE 来源材料及 ZIP 的 LakeUI 最低版本元数据。
 
-本轮完成：
+没有移植上游 CLI、独立图片页面、EXE 安装器或最终 SVT 编码兜底。宿主继续控制最终编码、音频、字幕、附件、章节、元数据和后处理；入队预设快照和其他插件组合方式保持原设计。v1.3.14 / v1.3.15 既有预览、ONNX TensorRT、HDR 保存回滚及 PR #16 中文路径解析修复保留。
 
-- TensorRT 超分选择器和模型转换页接受 ONNX；保留 ONNX Runtime。同步 28 项内置 ONNX 模型的候选后端、检查器和 ONNX 预检缓存版本。
-- ONNX 转换支持动态尺寸、固定 profile、分块补边对齐、图内低倍率输出，并封装为现有 RVE 可加载的 TorchScript Engine。限定自包含、单输入、单输出 RGB NCHW 浮点图；不兼容时明确失败，不静默切换后端。
-- 内置和用户模型清单向界面及实际转换进程传递 InputMultiple；缓存指纹包含约束。Ext 计划在源模型换成 Engine 后仍保留原模型输入倍数。
-- 配置新增 TrySave，成功后只通知一次；HDR 保存失败时恢复开关、配置及宿主预设。保留 Ext 入队预设快照，不引入上游旧队列钩子。
-- 真实 GPU 验证发现并修复两处 Windows 中文路径问题：ONNX 从内存解析；RVE Engine 通过 Python 文件流加载。RVE 补丁在已有输入倍数补丁的提前返回之前应用。
-- 补齐 README、Ext 教程及新的 C#/Python 语义回归。
+## 本轮验证与产物
 
-改动集中在 BackendServices、EnhancementPlanning、模型能力清单/预检、转换脚本及界面、PluginConfig、HDR 开关处理和两份新测试文件。未修改宿主或 SDK、最终编码链、依赖锁版本、项目版本和 GitHub Release；未生成新 ZIP，Ext 代码尚未提交或推送。
+全部下述结果为 2026-11-10 本机执行：
 
-用户随后要求将中文 ONNX 路径问题提交上游。已在隔离检出 `.test-tools/upstream-pr-onnx-unicode/` 创建分支 `fix/onnx-tensorrt-unicode-paths`，提交 `0c41250`（中文消息），推送到 SteveYu000/VideoEnhancer 并创建 [上游 PR #16](https://github.com/maxzrb/VideoEnhancer/pull/16)。已回读确认目标 main、状态 OPEN、非草稿、无合并冲突；仅含 ONNX 内存解析修复与新测试两个文件。3 个无 GPU 用例通过（旧实现有 2 个失败），真实 GPU 及已有图内缩放共 6 个用例通过。该 PR 聚焦 ONNX 输入路径，使用 ASCII Engine 输出路径，不包含另一个 RVE Engine 中文加载补丁或 Ext 其他改动。上游检出工作区干净；Ext 原有 17 个未提交路径继续保留。
+- locked restore / Release build：0 警告、0 错误，退出码 0。
+- 完整 C#：按实际 LakeUI 5.117 重新执行，517 项断言通过，包含真实 Ext 宿主命令、其他插件外挂字幕、RTX HTTP/管道、选帧、起始偏移与裁剪、参数异常、单 DLL 和清理，退出码 0。比先前 5.201 的 518 项少一项已取消渲染 API 对应断言。
+- 此前同日的 Python test_*.py：43/43 通过，GPU 开关开启，无跳过，退出码 0。本次只调整 LakeUI 基线和界面调用，没有改后端或重跑 GPU。包括真实 TensorRT 构建/推理、FP16/FP32、中文路径、动态/固定 profile、分块补边、图内低倍率输出、旧不稳定 FP16 Engine 拒绝。
+- FrameBackendTests.py：7/7 通过。RGB48 的 CPU/CUDA FP32 全 65,536 码值往返精确；普通 ONNX、全模型分段及 ONNX+最近邻混合分段实际执行 Ext 生成的计划，4,096 级样本逐码一致。时序窗口读取与写入也逐码一致。
+- 独立后端所有权使用 C# 文件哈希夹具验证；实际处理链使用 Ext 管理的隔离 RVE 副本，不改用户后端安装。未验收完整独立包的全部推理组合、全部大模型、长视频、FlashVSR / BasicVSR++ 实模型或真实窗口视觉效果；RGB48 不代表未验证的 HDR 色彩路径已开放。
+- 安装/源码双包：247 项许可与分发断言通过，独立 pwsh 进程退出码 0；安装包没有 Python 源码、工程文件或源码归档，源码快照与 DLL 对应，错误源码配旧 DLL 被拒绝。本轮只在忽略的验证目录生成包，没有上传或替换 dist 中已有发布 ZIP。
+- git diff --check 通过；新增 16 个核心资源已在合并 DLL 内确认。没有 FFmpegFreeUI / SharpCompress 程序集引用，AGENTS / PROJECT_STATE 未进入源码快照。
 
-## 上游 v1.3.15 适用性
+DLL：dist/videoenhancer.ext.3fui.dll，0.3.0.0，SHA-256：
+9237674359a3727caae2c579dcca610ad82b2ed6cb0f771263a4f00fa8a27ca2
 
-上游 [v1.3.15 发布说明](https://github.com/maxzrb/VideoEnhancer/releases/tag/v1.3.15) 经实时 GitHub API 和 Git 对象核实；标签源码提交为 `21436b7c079dfb17d2bc18458f3f7148f8a5654f`。已核对 main `0034eea514474f5ae008e8c68c3e36ff86c5bd04`，比标签仅多一项发布验证文档提交。
+内嵌和当前源码快照一致，171 个文件，SHA-256：
+1acefe6bd366391ac96e077a188392c9e812dcaac5873a8809428538cae5d581
 
-| 上游更新 | Ext 处理 |
-| --- | --- |
-| ONNX → TensorRT、手动转换尺寸倍数、模型候选和缓存 | 已移植，并适配类型化 DLL 服务与 Ext 任务计划 |
-| HDR 开关写盘失败回滚 | 已移植，另覆盖宿主预设通知失败后的恢复 |
-| 入队读取当前面板而非旧磁盘配置 | Ext 已按每个任务的宿主预设快照读取，保留当前实现 |
-| 缺省 SVT AV1 / y412 编码，以及显式数字视频编码器保护 | 不移植；最终编码属于宿主，AI 步骤继续输出无损视频；回归确认没有注入 libsvtav1 |
-| VMAF 通过真实 FFmpeg 恢复模型发现 | 上游用于全局替代进程中转；Ext 不安装该中转，保留宿主自己的质量评测，不添加反射轮询补丁 |
-| EXE 安装器及上游版本号 | 不移植；Ext 继续 ZIP 分发，本轮版本仍为 0.3.0 |
+当前 5.117 日志与验证包位于 .test-tools/lakeui-5117/：full.log、restore.log、restore-locked.log、build.log、distribution.log、zip-build.log、packages/。此前同日的 Python/GPU 和帧模块日志在 .test-tools/upstream-sync-20261110/python-all.log、frame.log。验证安装 ZIP 哈希为 d3f34a6ba96caf66b6612ab9aad18534e16da8984a9a0460545a6705df3f39dd；验证源码 ZIP 为 8a3506ad795bb8d4221063dc5c26804b8092a1ebbb64e06ce93edb61ff85ffc0。未声明对应源码 ZIP 已执行完整重建；分发回归验证的是源码身份、清单、许可和拒绝不匹配行为。
 
-此前 v1.3.14 已移植异步探测/超时恢复、关键帧有界读取与失败重试、预览刷新及取消生命周期、Ext 当前步骤的视频输出/帧率适配。相关代码已包含在提交 `9d1a5bb`，本轮完整回归继续通过。
+上游参考 Git 在 .test-tools/upstream-review-20261103.git/，upstream-main=83c5f12；本轮固定导出为 .test-tools/upstream-20261110/，旧 v1.3.15 导出不是最新主线。
 
-## 最近验证与产物
+## 本地条件与测试入口
 
-- **最终产品 Release 构建通过，0 警告、0 错误**：locked restore 后以产品 LakeUI 5.112.0 构建，维持 Ext SDK 2.5.0 / .NET 10 目标。
-- **完整 C# 回归 496 项断言通过，退出码 0**，包含本次 20 项专项断言、原有预设/参数展示/预览/原生组件/媒体链回归，以及 RTX HTTP、帧管道和取消夹具。
-- **真实宿主 6.2.43.1 / LakeUI 5.117.0** 的插件发现、命令生成和插件组合验证通过。测试显式匹配 LakeUI 5.117.0，出现预期 NU1608（产品前端精确锁定 5.112.0）；产品独立 Release 无此警告。
-- **Python 常规回归 26 个用例：19 通过，7 个 GPU 编译用例按开关跳过，退出码 0**。包括原有 PTH 图内缩放、GPU 张量设备和 RVE 组合处理；错误注入用例中的预期 traceback 不是测试失败。
-- **独立 ONNX / TensorRT 专项 12/12 通过，退出码 0**：真实 ONNX Runtime 候选识别及 RTX 5060 上的小模型编译、RVE 加载和数值验证；覆盖 FP16/FP32、动态/固定 profile、分块补边、4x 网络图内输出 2x、中文模型/Engine 路径、外置权重及多输出拒绝。测试使用隔离 RVE 源码副本，未改用户安装目录。未测试大型 HAT 模型的显存占用或原始报错图片。
-- TensorRT 输出缺少可选 modelopt / TensorRT-LLM 的提示；本轮非量化单图模型验证通过，没有安装这些可选组件。
-- Computer Use 技能要求 node_repl，但本会话工具列表未提供该执行工具；**未进行真实窗口视觉复测**。HDR 组件故障测试关闭模态消息展示，验证的是保存和回滚逻辑。
-- 最终 DLL：`dist/videoenhancer.ext.3fui.dll`，版本 0.3.0.0，SHA-256 `796f42db1cef8ce90aa64fbee9d2d8f02282fe91f8e3e0bb0198efbd59c6d806`。
-- DLL 内嵌源码与当前源码身份一致：`4b7863ac83b0fdba5063a28e277b3180f8a4b0605e8d4cca208f79be27344374`，149 个文件；没有宿主主程序集、SharpCompress 或独立 Backend 程序集引用，管理文档未收录到发行源码快照。
+实际宿主输出目录：
+E:/DesktopPlus/Works/Code/FFmpegFreeUI-API-Extended-Edition/FFmpegFreeUI/bin/Release/net10.0-windows10.0.26100.0
 
-本轮日志位于忽略目录 `.test-tools/upstream-port-1315/`：full-tests.log、python-tests.log、onnx-tensorrt-gpu.log、release-build.log。上游参考源码及 Git 对象在 `.test-tools/upstream-1.3.15/` 和 `.test-tools/upstream-review-20261103.git/`。早期失败用于定位中文路径问题；最终日志及退出码以上述通过结果为准。
+宿主为 6.3.0.1 / SDK 2.5.0 / LakeUI 5.117；本轮测试进程也使用 5.117，不要求宿主升级，没有替换安装文件。实际 DLL 的 LakeUI 引用为 5.117.0.0，PE 元数据确认没有 TransparentRenderMode 成员引用，安装元数据最低版本为 5.117.0。已确认 InfoIcon 和类型化预览接口在该版本存在；没有据此声称完成真实窗口视觉验收。
+
+.NET SDK：11.0.100-rc.1.26425.128，产品目标仍为 .NET 10。真实测试 Python：
+C:/Apps/FFmpegFreeUI API Extended/Plugin/videoenhancer/python/python/python.exe
+其 Torch 2.9.0+cu130、ONNX 1.22.0、ONNX Runtime 1.29.0、TensorRT 10.12.0.36。GPU 为 RTX 5060 Laptop，8151 MiB，驱动 621.14。Python 日志有上游既有的 TF32 API 弃用、只读缓冲区及可选量化组件提示，测试均退出 0。
+
+FFmpeg / FFprobe 使用 C:/Apps/ffmpeg/，已确认包含 zscale。相关环境变量为 VIDEOENHANCER_TEST_FFMPEG、VIDEOENHANCER_TEST_FFPROBE、VIDEOENHANCER_TEST_HOST。GPU 测试设置 VIDEOENHANCER_TEST_TRT=1，VIDEOENHANCER_TEST_RVE_BACKEND 指向隔离副本 .test-tools/upstream-sync-20261110/runtime/python/backend。不要把候选核心直接覆盖用户安装后再测试。
+
+常用入口：
+- dotnet restore Frontend/VideoEnhancerPlugin.vbproj --locked-mode
+- dotnet build Frontend/VideoEnhancerPlugin.vbproj -c Release --no-restore
+- dotnet run --project tests/VideoEnhancer.Tests.csproj -c Release
+- python -B -m unittest discover -s tests -p "test_*.py" -v
+- python -B tests/FrameBackendTests.py -v
+- pwsh -NoProfile -File tests/DistributionLicenseTests.ps1 -Package <验证安装包> -SourcePackage <验证源码包>
 
 ## 尚未解决的问题
 
 ### ONNX 图片超分显存不足
 
-已证实：RealHatGAN-JP-Illustration-2x-fix1，输入 1500×1061，FP32，`UpscaleTileSize=0` 整帧推理时，ONNX Runtime 请求单个 9,905,897,472 字节（约 9.23 GiB）缓冲区失败；用户显卡为 RTX 5060、8 GB。报错发生在模型推理，FFmpeg 写命令的红字本身不是失败依据。
+已证实：RealHatGAN-JP-Illustration-2x-fix1，输入 1500×1061，FP32，UpscaleTileSize=0 整帧推理时，ONNX Runtime 请求单个 9,905,897,472 字节（约 9.23 GiB）缓冲区失败；用户显卡为 RTX 5060、8 GB。报错发生在模型推理，FFmpeg 写命令的红字本身不是失败依据。
 
-已建议分块 256，仍不足则 128。固定 FP32 ONNX 模型不会因勾选半精度自动变成 FP16。尚未实现自动 OOM 降级，也未记录真实 GPU 分块复测成功，不能标记为已修复。
+已建议分块 256，仍不足则 128。固定 FP32 ONNX 不会因勾选半精度自动变成 FP16。本轮没有实现自动 OOM 降级，也未复测该大模型成功；RGB48 与小模型验证不能把此问题标记为已修复。
 
 ### Rendering 后日志可见但无法复制
 
-用户反馈：“复制当前视图”缺少 `BACKEND: Rendering` 之后日志，选中文字 Ctrl+C 也无法复制。截图已显示后续 ONNX 异常。问题未定位，未改宿主或插件复制实现。
+用户反馈：“复制当前视图”缺少 BACKEND: Rendering 之后日志，选中文字 Ctrl+C 也无法复制。截图显示后续 ONNX 异常。问题未定位，本轮未改宿主或插件复制实现。
 
-已有检查：宿主复制读取控件 `.Text`；检查的 LakeUI 5.112 实现中，getter 与 AppendLine 使用同一行集合，尚无“缓存未同步”的证据。ANSI 色码、控制字符或粘贴目标的影响均未证实。一次只读剪贴板检查未捕获目标日志，不能据此判断截断原因。
-
-当时 Computer Use 返回 native pipe 不可用（os error 2），重置重试仍失败，未完成实际窗口复制测试。曾请求用户粘贴到记事本比较，尚无结果。用户恢复该问题后，优先获取完整粘贴结果和真实控件操作证据，再决定修复位置；不属于本轮上游同步范围。
-
-## 本地执行条件
-
-以下仅为当前机器说明，换环境须重查，不作为项目固定依赖：
-
-- 本插件：`E:/DesktopPlus/Works/Code/FFmpegFreeUI-Ext-Plugins/VideoEnhancer`。会话最初提供的同名 `E:/DesktopPlus/Works/Code/VideoEnhancer` 参考目录已不存在，不要把旧目录记录当作当前源码位置。
-- 宿主只读验证目录：`E:/DesktopPlus/Works/Code/FFmpegFreeUI-API-Extended-Edition/FFmpegFreeUI/bin/Release/net10.0-windows10.0.26100.0`；本轮实际为 6.2.43.1 / LakeUI 5.117.0。
-- FFmpeg / FFprobe 本轮使用 `C:/Apps/ffmpeg/`，通过 VIDEOENHANCER_TEST_FFMPEG / VIDEOENHANCER_TEST_FFPROBE 指定。
-- .NET SDK 本轮选择 11.0.100-rc.1.26425.128，产品目标仍是 .NET 10。NETSDK1057 为预览 SDK 提示，不应把本机 SDK 选择变成项目升级要求。
-- GPU：RTX 5060 Laptop GPU，8151 MiB，驱动 617.42。
-- 真实 GPU Python：`C:/Apps/FFmpegFreeUI API Extended/Plugin/videoenhancer/python/python/python.exe`；已具备 torch、ONNX、ONNX Runtime、TensorRT、Torch-TensorRT。对应已安装 RVE backend 只读作为测试副本来源。
-- 基础 Codex Python 不含上述推理包；`.test-tools/scale-python/` 仅有 CPU Torch 等部分依赖。不要对这些解释器混用依赖结论。
-
-常规构建及回归入口：
-
-```powershell
-dotnet restore Frontend/VideoEnhancerPlugin.vbproj --locked-mode
-dotnet build Frontend/VideoEnhancerPlugin.vbproj -c Release --no-restore --nologo
-dotnet restore tests/VideoEnhancer.Tests.csproj --locked-mode -p:VideoEnhancerTestLakeUiVersion=5.117.0
-dotnet build tests/VideoEnhancer.Tests.csproj -c Release --no-restore -p:VideoEnhancerTestLakeUiVersion=5.117.0
-dotnet run --project tests/VideoEnhancer.Tests.csproj -c Release --no-build -p:VideoEnhancerTestLakeUiVersion=5.117.0
-python -B -m unittest discover -s tests -p "test_*.py"
-```
-
-真实宿主测试还需 VIDEOENHANCER_TEST_HOST 指向上述主程序输出目录；应按当前实际宿主重新匹配 LakeUI，不改变产品最低依赖。专项 C# 可在 run 后附 `-- --upstream-1315-tests`。独立 GPU 专项：在已构建测试程序且推理依赖齐全的解释器中，设置 VIDEOENHANCER_TEST_TRT=1、VIDEOENHANCER_TEST_RVE_BACKEND 为现有 RVE backend 目录，再运行 `python -B tests/test_onnx_tensorrt.py -v`。TEMP/TMP、Torch/CUDA 缓存均应指向隔离测试目录。
-
-本轮未修改安装、压缩或下载依赖，未重复运行独立分发测试。对应入口保留 `pwsh -NoProfile -File tests/DistributionLicenseTests.ps1` 及 `./tests/NativeDependencyTests.ps1 -Offline`。
+此前检查：宿主复制读取控件 .Text；LakeUI 5.112 的 getter 与 AppendLine 使用同一行集合，尚无缓存未同步证据。ANSI、控制字符和粘贴目标影响均未证实；只读剪贴板检查未捕获目标日志。此前 Computer Use native pipe 不可用，未完成真实窗口复制测试，等待记事本对照结果。本次没有做日志复制的真实窗口复测。
 
 ## 后续接手
 
-本轮上游相关更新、验证和使用说明已完成，工作区有 17 个未提交路径；没有新发布包、提交或推送。用户要求提交时用中文消息；若要求发布，先按对应版本核验源码身份，再生成安装/源码两包，不上传旧 ZIP。实际窗口视觉复测仍需可用的 Computer Use 执行工具。ONNX 大模型显存不足和宿主日志复制问题仍保持未解决，不能因小模型 TensorRT 测试通过而标记修复。
+本轮移植与验证已完成，全部 58 项改动未提交，版本保持 0.3.0；没有自动提交、推送或发布授权。用户若要求提交，使用中文消息并只暂存本插件明确范围。若要求发布，重新核对当前源码快照、宿主最低 LakeUI、版本和两包来源，再操作远程 Release；本地验证包不是已发布资产。

@@ -19,7 +19,7 @@ public sealed partial class ExtVideoPipeline
             else
             {
                 parts.AddRange(["AI 超分："+settings.Model,"后端："+settings.Backend]);
-                if(!settings.UpscaleHalfPrecision)parts.Add("半精度推理：关闭");
+                if(settings.UpscaleHalfPrecision!=defaults.UpscaleHalfPrecision)parts.Add("半精度推理：开启");
                 if(settings.OutputScale>0)parts.Add($"输出倍率：{settings.OutputScale}x");
                 if(settings.UpscaleTileSize>0)parts.Add($"分块：{settings.UpscaleTileSize} px");
             }
@@ -29,7 +29,7 @@ public sealed partial class ExtVideoPipeline
         {
             var parts=new List<string>{"AI 补帧："+settings.InterpModel,"后端："+settings.InterpBackend,
                 "倍率："+settings.InterpFactor.ToString("g",CultureInfo.InvariantCulture)+"x"};
-            if(!settings.InterpHalfPrecision)parts.Add("半精度推理：关闭");
+            if(settings.InterpHalfPrecision!=defaults.InterpHalfPrecision)parts.Add("半精度推理：开启");
             if(settings.SceneDetectThreshold!=defaults.SceneDetectThreshold)
                 parts.Add("转场阈值："+settings.SceneDetectThreshold.ToString("g",CultureInfo.InvariantCulture));
             if(settings.InterpDynamicScaledOpticalFlow)parts.Add("动态光流：开启");

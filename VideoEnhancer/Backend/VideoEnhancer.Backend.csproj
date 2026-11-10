@@ -16,6 +16,7 @@
     <PackageReference Include="FFmpegFreeUI.Ext.PluginSdk" Version="[2.5.0]" PrivateAssets="all" ExcludeAssets="runtime" />
   </ItemGroup>
   <ItemGroup>
+    <EmbeddedResource Include="third-party\RVE\high-bit-depth\**\*.py" LogicalName="VideoEnhancer.Embedded.RveHighBitDepth/%(RecursiveDir)%(Filename)%(Extension)" />
     <EmbeddedResource Include="embedded-tools\*.py" LogicalName="VideoEnhancer.Embedded.%(Filename)%(Extension)" />
     <EmbeddedResource Include="model-capabilities.json;ncnn-model-signatures.json;THIRD-PARTY-NOTICES.txt" LogicalName="VideoEnhancer.Embedded.%(Filename)%(Extension)" />
     <EmbeddedResource Include="..\LICENSE" LogicalName="VideoEnhancer.Embedded.LICENSE.txt" />

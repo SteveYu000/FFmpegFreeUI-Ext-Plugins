@@ -7,13 +7,13 @@ public sealed class EnhancementSettings
     public bool UpscaleEnabled {get;set;}
     public string Model {get;set;}="";
     public string Backend {get;set;}="ncnn";
-    public bool UpscaleHalfPrecision {get;set;}=true;
+    public bool UpscaleHalfPrecision {get;set;}
     public int UpscaleTileSize {get;set;}
     public int OutputScale {get;set;}
     public bool InterpEnabled {get;set;}
     public string InterpModel {get;set;}="";
-    public string InterpBackend {get;set;}="ncnn";
-    public bool InterpHalfPrecision {get;set;}=true;
+    public string InterpBackend {get;set;}="cuda";
+    public bool InterpHalfPrecision {get;set;}
     public double InterpFactor {get;set;}=2;
     public bool InterpDynamicScaledOpticalFlow {get;set;}
     public double SceneDetectThreshold {get;set;}=4;
@@ -32,7 +32,7 @@ public sealed class EnhancementSettings
     public static EnhancementSettings FromJson(string? json)
     {
         var result=JsonSerializer.Deserialize<EnhancementSettings>(string.IsNullOrWhiteSpace(json)?"{}":json,Options)??new();
-        result.Model??="";result.Backend??="ncnn";result.InterpModel??="";result.InterpBackend??="ncnn";
+        result.Model??="";result.Backend??="ncnn";result.InterpModel??="";result.InterpBackend??="cuda";
         result.RtxTarget??="2x";result.ProcessOrder??="upscale-first";result.SegmentedVideos??=[];
         foreach(var video in result.SegmentedVideos)
         {
@@ -71,7 +71,7 @@ public sealed class EnhancementSettings
     {
         var parts=new List<string>();
         if(SegmentedEnabled)parts.Add("分段超分："+SegmentedVideos.Count(item=>item.Enabled)+" 个文件方案");
-        if(UpscaleEnabled)parts.Add($"超分：{Backend} / {(Backend=="rtxvsr"?RtxTarget:Model)} / {(UpscaleHalfPrecision?"自动精度":"FP32")}");
+        if(UpscaleEnabled)parts.Add($"超分：{Backend} / {(Backend=="rtxvsr"?RtxTarget:Model)} / {(UpscaleHalfPrecision?"FP16":"FP32")}");
         if(InterpEnabled)parts.Add($"补帧：{InterpBackend} / {InterpModel} / {InterpFactor:g} 倍");
         if(RtxHdrEnabled)parts.Add($"RTX HDR：{RtxHdrMaxLuminance} nit");
         if(parts.Count==0)return "AI 增强已关闭";

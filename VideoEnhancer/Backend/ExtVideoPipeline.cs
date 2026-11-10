@@ -84,7 +84,7 @@ public sealed partial class ExtVideoPipeline : IDisposable
                     BackendInvocation.Slot.Value=invocation;
                     try
                     {
-                        BackendServices.PrepareExtSupport();
+                        BackendServices.PrepareExtSupport(settings,context.InputPath);
                         token.ThrowIfCancellationRequested();
                         return BackendServices.BuildEnhancementPlan(settings,context.PresetJson,context.InputPath,work,pause,_ffmpeg(),_ffprobe(),media,true);
                     }

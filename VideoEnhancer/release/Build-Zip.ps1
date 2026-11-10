@@ -140,7 +140,7 @@ try {
     Copy-Item -LiteralPath (Join-Path $projectRoot 'Backend/THIRD-PARTY-NOTICES.txt') -Destination $data
     Copy-Item -LiteralPath (Join-Path $projectRoot 'LICENSE') -Destination (Join-Path $data 'LICENSE.txt')
     foreach ($name in @('README.md', 'DEPENDENCIES-LICENSES.md', 'LICENSING.md')) { Copy-Item -LiteralPath (Join-Path $projectRoot $name) -Destination $data }
-    $manifest = [ordered]@{ id = 'videoenhancer'; version = $version; extApi = '2.5.0'; lakeUi = '5.112.0'; entry = 'videoenhancer.ext.3fui.dll'; runtime = 'videoenhancer'; distribution = 'zip'; license = 'AGPL-3.0-only'; sourceSnapshot = $sourceSnapshot.sha256; sourceArchive = $sourcePackageName; sourceUrl = $sourceUrl; sourceSha256 = $sourceArchiveSha256 }
+    $manifest = [ordered]@{ id = 'videoenhancer'; version = $version; extApi = '2.5.0'; lakeUi = '5.117.0'; entry = 'videoenhancer.ext.3fui.dll'; runtime = 'videoenhancer'; distribution = 'zip'; license = 'AGPL-3.0-only'; sourceSnapshot = $sourceSnapshot.sha256; sourceArchive = $sourcePackageName; sourceUrl = $sourceUrl; sourceSha256 = $sourceArchiveSha256 }
     [IO.File]::WriteAllText((Join-Path $installationStage 'videoenhancer.manifest.json'), ($manifest | ConvertTo-Json), [Text.UTF8Encoding]::new($false))
     $temporaryPackage = Join-Path $stage $packageName
     Add-Zip $temporaryPackage $installationStage @('.')
