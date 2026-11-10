@@ -1,16 +1,17 @@
 # VideoEnhancer 当前状态
 
-更新日期：2026-11-10。交接快照，以源码、Git 和实际验证结果为准。
+更新日期：2026-11-11。交接快照，以源码、Git 和实际验证结果为准。
 
-## 当前发布工作
+## 当前发布状态
 
-用户要求“更新版本为0.4并发布”，按现有三段版本、更新器识别和资产命名统一为 0.4.0。本轮已获得提交、推送和正式 GitHub Release 发布授权，无须再次请求确认。
+用户要求“更新版本为0.4并发布”，按现有三段版本、更新器识别和资产命名统一为 0.4.0。正式发布已完成：[VideoEnhancer Ext 0.4.0](https://github.com/SteveYu000/FFmpegFreeUI-Ext-Plugins/releases/tag/VideoEnhancer/v0.4.0)。
 
 - 目标目录：FFmpegFreeUI-Ext-Plugins/VideoEnhancer；远程 SteveYu000/FFmpegFreeUI-Ext-Plugins，分支 main。
-- 上一批提交 3312b14 已完成 RGB48 / TensorRT 移植并保持 LakeUI 5.117；此次把尚未提交的标题、按钮和底线修改纳入 0.4.0。
-- 前后端项目、教程、README、安装说明和许可范围标题统一 0.4.0。最低 LakeUI 仍为 5.117.0，Ext SDK 2.5.0，目标 .NET 10。
-- 即将提交版本和 UI 修改，再从该代码提交构建、验证安装/对应源码两包，推送 main 和 VideoEnhancer/v0.4.0 标签，创建正式发布。
-- 当前尚未构建或上传 0.4.0，不把旧 dist 文件或测试 ZIP 当作新版本。发布完成后本文件需用实际提交、源码身份、资产及远程结果更新。
+- 发布代码提交 c106ddbecad9c53234f2526dfedaa2af2f45382e，消息“更新 VideoEnhancer 至 0.4.0 并统一页面标题与按钮布局”；前一批移植提交为 3312b14，两者均已推送。
+- 已推送带注释标签 VideoEnhancer/v0.4.0，指向上述发布代码提交；发布后仅更新本状态文件，不移动标签或重建已发布产物。当前分支与工作区以 Git 查询为准。
+- 前后端、教程、README、安装说明和许可范围标题均为 0.4.0。最低和编译 LakeUI 保持 5.117.0，Ext SDK 2.5.0，目标 .NET 10。
+- GitHub Release ID 440573820，正式版、非草稿，四个资产均已上传。没有修改其他插件或仓库全局 latest。
+- 实际发行 DLL 的 PluginUpdater.FetchLatestManifestAsync 已从公开发布接口读取并识别 0.4.0，返回正确的安装包名称、字节数与 SHA-256。
 
 ## 发布内容与边界
 
@@ -18,13 +19,22 @@
 
 本次 UI：两个标题复用“模型资源库”的 13 号组件；模型管理刷新/移除按钮位于标题右侧，尺寸与资源库一致；AI 增强页底线和无用创建函数移除。没有新增兼容层或采用 LakeUI 5.201 专有 API。
 
-最终编码、音频、字幕、附件、章节、元数据和后处理仍由宿主预设控制；不恢复 CLI、独立图片/右键模块或 EXE 安装器。安装和源码 ZIP 分开发布，各附 SHA-256；不改其他插件的版本或旧 Release。
+最终编码、音频、字幕、附件、章节、元数据和后处理仍由宿主预设控制；不恢复 CLI、独立图片/右键模块或 EXE 安装器。安装和对应源码 ZIP 分开发布，各附 SHA-256。
 
-## 既有验证与本轮待办
+## 0.4.0 产物与验证
 
-此前同日：0.3.0 UI 完整 C# 回归 513 项通过、构建 0 警告 0 错误；RVE 相关 Python 43 项加帧模块 7 项均通过，含 RTX 5060 小模型真实 TensorRT 构建/推理；早期双包检查 247 项通过。它们不是 0.4.0 新产物验证结果。
+- 发布代码提交上执行 locked restore、Release 构建成功，0 警告、0 错误。
+- C# 回归 513 个断言通过，包含当前 Ext 宿主真实命令与插件组合；许可与双包分发 247 个断言通过；原生依赖离线检查 18 项通过。各进程已正常结束、退出码 0。
+- 安装 ZIP 与对应源码 ZIP 均通过 7za 完整性校验；安装包未夹带源码。管理文件不进入两包或程序集。
+- DLL 为 0.4.0.0，信息版本 0.4.0+c106ddbecad9c53234f2526dfedaa2af2f45382e，引用 LakeUI 5.117.0.0；SHA-256 为 fdc1ee504b92e97966f9ea361f0dcf5164300a3a8dec7b20d3d86282d4974cde。
+- DLL 内嵌与当前源码快照一致：171 个文件，身份 d391094e690e0341d10fdc91233744003b897e82ec8bdf93ff1d5cee4c469362。
+- 安装包 VideoEnhancer-0.4.0-win-x64.zip：10,682,927 字节，SHA-256 a67051ab20987246330769ded505b2ba0b14d936f96f154a10493b8fff0efbf9。
+- 源码包 VideoEnhancer-0.4.0-source.zip：98,526,536 字节，SHA-256 519146da0b460e553428437c9eee2f421f6f701d6375344fa237a77b56386d97。
+- 已读取正式远程 Release，四个资产的服务器大小和 SHA-256 均与本地一致；两份远程 .sha256 文件已下载并逐字节核验。远程标签指向正确发布代码。
 
-0.4.0 需执行 locked restore / Release build、现有 C# 回归、双包许可/源码一致性及 ZIP 完整性校验，再核验发布标签和四个远程资产。没有真实窗口截图复测：本轮工具列表不含 Computer Use 所需 node_repl；不能把逻辑布局检查当作视觉验收。
+同一批 RVE 移植代码此前通过 Python 43 项及帧模块 7 项测试，含 RTX 5060 小模型真实 TensorRT 构建/推理；本轮版本打包没有重复全套 GPU 测试，未验收全部大模型和长视频。没有真实窗口截图复测：工具列表不含 Computer Use 所需 node_repl，逻辑布局回归不能当作视觉验收。
+
+本轮日志、发布返回值、更新器结果和完整资产元数据位于忽略目录 .test-tools/release-0.4.0/，发行文件位于 dist/。
 
 本机线索：宿主 6.3.0.1 / SDK 2.5.0 / LakeUI 5.117，输出目录为 E:/DesktopPlus/Works/Code/FFmpegFreeUI-API-Extended-Edition/FFmpegFreeUI/bin/Release/net10.0-windows10.0.26100.0。FFmpeg/FFprobe 位于 C:/Apps/ffmpeg/，通过 VIDEOENHANCER_TEST_FFMPEG / VIDEOENHANCER_TEST_FFPROBE 指定，宿主目录使用 VIDEOENHANCER_TEST_HOST。GPU 验证使用隔离 RVE 副本，不覆盖用户安装。
 
@@ -42,6 +52,6 @@
 
 此前检查：宿主复制读取控件 .Text；LakeUI 5.112 的 getter 与 AppendLine 使用同一行集合，尚无缓存未同步证据。ANSI、控制字符和粘贴目标影响均未证实；只读剪贴板检查未捕获目标日志。此前 Computer Use native pipe 不可用，未完成真实窗口复制测试，等待记事本对照结果。本次没有做日志复制的真实窗口复测。
 
-## 下一步
+## 后续工作
 
-完成本轮已经授权的 0.4.0 提交、构建验证、推送和正式发布，读取远程结果后再标记完成。版本号不取仓库内 ab-av1 的版本，发行主体为 videoenhancer.ext.3fui.dll。
+本轮发布没有待完成的产品改动。上述显存和日志复制问题仍需另行验证；不将其视为本次发布已修复内容。后续版本工作按用户新要求开展，不自动扩大范围。
