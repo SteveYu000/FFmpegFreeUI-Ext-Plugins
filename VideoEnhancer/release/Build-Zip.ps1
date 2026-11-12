@@ -119,7 +119,7 @@ try {
         "插件 DLL SHA-256：$binarySha256" + [Environment]::NewLine +
         "插件源码在本包根目录，第三方版本源码与构建配方在 third-party-sources。" + [Environment]::NewLine +
         "许可原文保留在 LICENSES 与 Backend/third-party；版本及校验值见 release 中的锁定清单。" + [Environment]::NewLine +
-        "解压后按 README.md 使用 .NET 10 SDK 与 PowerShell 7 执行 ./release/Build-Zip.ps1 或 ./Install.ps1。" + [Environment]::NewLine +
+        "解压后按 README.md 使用 .NET 11 SDK 与 PowerShell 7 执行 ./release/Build-Zip.ps1 或 ./Install.ps1。" + [Environment]::NewLine +
         "本包与安装包必须在同一 Release 免费提供；发布与镜像时同时保留两包及各自的 .sha256 校验文件。" + [Environment]::NewLine
     [IO.File]::WriteAllText((Join-Path $sourceMaterials 'SOURCE.txt'), $sourceGuide, [Text.UTF8Encoding]::new($false))
     $temporarySourcePackage = Join-Path $stage $sourcePackageName
@@ -140,7 +140,7 @@ try {
     Copy-Item -LiteralPath (Join-Path $projectRoot 'Backend/THIRD-PARTY-NOTICES.txt') -Destination $data
     Copy-Item -LiteralPath (Join-Path $projectRoot 'LICENSE') -Destination (Join-Path $data 'LICENSE.txt')
     foreach ($name in @('README.md', 'DEPENDENCIES-LICENSES.md', 'LICENSING.md')) { Copy-Item -LiteralPath (Join-Path $projectRoot $name) -Destination $data }
-    $manifest = [ordered]@{ id = 'videoenhancer'; version = $version; extApi = '2.5.0'; lakeUi = '5.117.0'; entry = 'videoenhancer.ext.3fui.dll'; runtime = 'videoenhancer'; distribution = 'zip'; license = 'AGPL-3.0-only'; sourceSnapshot = $sourceSnapshot.sha256; sourceArchive = $sourcePackageName; sourceUrl = $sourceUrl; sourceSha256 = $sourceArchiveSha256 }
+    $manifest = [ordered]@{ id = 'videoenhancer'; version = $version; extApi = '2.5.0'; lakeUi = '5.301.0'; entry = 'videoenhancer.ext.3fui.dll'; runtime = 'videoenhancer'; distribution = 'zip'; license = 'AGPL-3.0-only'; sourceSnapshot = $sourceSnapshot.sha256; sourceArchive = $sourcePackageName; sourceUrl = $sourceUrl; sourceSha256 = $sourceArchiveSha256 }
     [IO.File]::WriteAllText((Join-Path $installationStage 'videoenhancer.manifest.json'), ($manifest | ConvertTo-Json), [Text.UTF8Encoding]::new($false))
     $temporaryPackage = Join-Path $stage $packageName
     Add-Zip $temporaryPackage $installationStage @('.')

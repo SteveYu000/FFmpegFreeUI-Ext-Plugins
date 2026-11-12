@@ -1,7 +1,7 @@
 {
   "version": 1,
   "dependencies": {
-    "net10.0-windows10.0.17763": {
+    "net11.0-windows10.0.17763": {
       "FFmpegFreeUI.Ext.PluginSdk": {
         "type": "Direct",
         "requested": "[2.5.0, 2.5.0]",
@@ -16,9 +16,9 @@
       },
       "LakeUI": {
         "type": "Direct",
-        "requested": "[5.117.0, 5.117.0]",
-        "resolved": "5.117.0",
-        "contentHash": "/PqA2PW0dghJoNJ/M140dHECz616AjDg5wjFVaqh4VSgsl/rYEDhvqN4y0dOfj3sH4XetAPMKdsgPQGibfxPAA==",
+        "requested": "[5.301.0, 5.301.0]",
+        "resolved": "5.301.0",
+        "contentHash": "DmnVOeU/0gu56GkbHXtmGTjywksRxAJmQustP4Fs3QZiXPLgN6Ayb3kK2Vqw6PTfMuIKOqaA/U5CMmUZP0NP4A==",
         "dependencies": {
           "Vortice.Direct2D1": "3.8.3",
           "Vortice.Direct3D11": "3.8.3",

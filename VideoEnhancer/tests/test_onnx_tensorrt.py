@@ -119,7 +119,7 @@ class OnnxTensorRtGpuTests(unittest.TestCase):
         patched = Path(cls.fixture.name) / "python/backend/src/pytorch/UpscaleTorch.py"
         patched.parent.mkdir(parents=True)
         shutil.copyfile(Path(backend) / "src/pytorch/UpscaleTorch.py", patched)
-        executable = ROOT / "tests/bin/Release/net10.0-windows10.0.17763.0/VideoEnhancer.Tests.exe"
+        executable = ROOT / "tests/bin/Release/net11.0-windows10.0.17763.0/VideoEnhancer.Tests.exe"
         subprocess.run([str(executable), "--patch-trt-loader", cls.fixture.name], check=True)
         module = load_script("src.pytorch.ExtPatchedUpscaleTorch", patched)
         cls.rve_engine = module._PrebuiltTensorRTEngine

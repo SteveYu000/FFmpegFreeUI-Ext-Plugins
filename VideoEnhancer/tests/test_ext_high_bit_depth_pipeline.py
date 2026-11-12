@@ -12,7 +12,7 @@ ROOT = Path(__file__).resolve().parents[1]
 BACKEND = os.environ.get("VIDEOENHANCER_TEST_RVE_BACKEND")
 FFMPEG = os.environ.get("VIDEOENHANCER_TEST_FFMPEG")
 FFPROBE = os.environ.get("VIDEOENHANCER_TEST_FFPROBE")
-FIXTURE = ROOT / "tests/bin/Release/net10.0-windows10.0.17763.0/VideoEnhancer.Tests.exe"
+FIXTURE = ROOT / "tests/bin/Release/net11.0-windows10.0.17763.0/VideoEnhancer.Tests.exe"
 
 
 @unittest.skipUnless(BACKEND and FFMPEG and FFPROBE and FIXTURE.is_file(),

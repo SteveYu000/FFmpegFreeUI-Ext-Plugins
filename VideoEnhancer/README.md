@@ -4,7 +4,7 @@
 
 发行的插件 DLL 采用 AGPL-3.0-only，独立自有源码保留 MIT；[许可范围](LICENSING.md) 明确列出例外及第三方边界。安装包保留许可声明；完整对应源码以独立源码 ZIP 在同一 Release 提供。
 
-需要 Ext API 2.5、LakeUI 5.117 或更新的 5.x，以及 .NET 10 Desktop Runtime。插件不引用 FFmpegFreeUI 主程序集，不提供旧宿主兼容入口。
+需要 Ext API 2.5、LakeUI 5.301 或更新的 5.x，以及 .NET 11 Desktop Runtime。插件不引用 FFmpegFreeUI 主程序集，不提供旧宿主兼容入口。
 
 ## 入口与预设
 

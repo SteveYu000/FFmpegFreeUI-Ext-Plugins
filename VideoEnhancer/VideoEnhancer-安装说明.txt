@@ -3,7 +3,7 @@ VideoEnhancer Ext 0.4.0 安装说明
 
 一、适用环境
 Windows x64；FFmpegFreeUI API Extended Edition，Ext API 2.5 或更新版本；
-LakeUI 5.117 或更新的 5.x；.NET 10 Desktop Runtime（x64）。
+LakeUI 5.301 或更新的 5.x；.NET 11 Desktop Runtime（x64）。
 上述宿主运行组件由宿主提供。请先确认宿主本身能够正常启动和处理视频。
 
 二、安装 ZIP
@@ -58,7 +58,7 @@ LakeUI 5.117 或更新的 5.x；.NET 10 Desktop Runtime（x64）。
 失败信息可在本插件首页任务详情和宿主任务日志中查看。
 
 六、从源码安装
-需要 .NET 10 SDK 与 PowerShell 7，在插件源码目录执行：
+需要 .NET 11 SDK 与 PowerShell 7，在插件源码目录执行：
   ./Install.ps1 -HostDirectory ../FFmpegFreeUI
 或先设置 FFMPEGFREEUI_HOME，再执行 ./Install.ps1。
 相对宿主路径以插件源码目录为基准。构建时下载并校验原生依赖及对应源码，

@@ -2,14 +2,14 @@
   <PropertyGroup>
     <OutputType>Exe</OutputType>
     <OutputType Condition="'$(VideoEnhancerUiProbe)' == 'true'">WinExe</OutputType>
-    <TargetFramework>net10.0-windows10.0.17763.0</TargetFramework>
+    <TargetFramework>net11.0-windows10.0.17763.0</TargetFramework>
     <UseWindowsForms>true</UseWindowsForms>
     <UseWPF>true</UseWPF>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <NuGetAudit>false</NuGetAudit>
     <!-- 真实宿主验证使用其配套 LakeUI；不改变发行插件的最低依赖。 -->
-    <VideoEnhancerTestLakeUiVersion Condition="'$(VideoEnhancerTestLakeUiVersion)' == ''">5.117.0</VideoEnhancerTestLakeUiVersion>
+    <VideoEnhancerTestLakeUiVersion Condition="'$(VideoEnhancerTestLakeUiVersion)' == ''">5.301.0</VideoEnhancerTestLakeUiVersion>
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="..\Frontend\VideoEnhancerPlugin.vbproj" />

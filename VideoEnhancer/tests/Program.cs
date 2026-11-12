@@ -163,7 +163,7 @@ internal static partial class Program
         Check(source.TryGetPixel(1,0,0,ref pixel)&&Math.Abs(pixel.Red-80f/255)<0.00001f&&Math.Abs(pixel.Blue-240f/255)<0.00001f&&Math.Abs(pixel.Alpha-128f/255)<0.00001f,"预览源返回原帧 RGBA 像素");
         Check(!source.TryGetPixel(-1,0,0,ref pixel)&&!source.TryGetPixel(2,0,0,ref pixel),"预览像素查询拒绝越界坐标");
         using var picture=new LakeUI.PixelPictureBox{Source=source};
-        Check(picture.ImageWidth==2&&picture.ImageHeight==2,"LakeUI 5.117 通过 Source 接收预览帧");
+        Check(picture.ImageWidth==2&&picture.ImageHeight==2,"LakeUI 5.301 通过 Source 接收预览帧");
         picture.Source=null;
         pictureFactory.GetMethod("Release",BindingFlags.Static|BindingFlags.NonPublic)!.Invoke(null,[bitmap]);
         Check(!source.TryGetPixel(0,0,0,ref pixel),"释放后的预览帧不会继续读取 GDI 资源");
