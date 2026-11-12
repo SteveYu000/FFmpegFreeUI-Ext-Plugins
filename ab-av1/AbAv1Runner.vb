@@ -112,6 +112,7 @@ Public NotInheritable Class AbAv1Runner
                                       progress As IProgress(Of SearchProgress),
                                       cancellationToken As CancellationToken) As Task(Of SearchResult)
         Dim executable = GetExecutablePath()
+        Await profile.ValidateInputAsync(inputPath, cancellationToken).ConfigureAwait(False)
 
         progress?.Report(New SearchProgress("正在检查 ab-av1 输出格式支持……"))
         Dim useJsonOutput = Await SupportsJsonOutputAsync(executable, cancellationToken).ConfigureAwait(False)

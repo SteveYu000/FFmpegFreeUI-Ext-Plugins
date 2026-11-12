@@ -4,6 +4,8 @@ Imports System.Linq
 Imports System.Text.Encodings.Web
 Imports System.Text.Json
 Imports System.Text.Json.Nodes
+Imports System.Threading
+Imports System.Threading.Tasks
 
 ''' <summary>
 ''' 读取 FFmpegFreeUI v6 JSON 预设，验证其视频处理链能否由 ab-av1 等价表示，
@@ -85,6 +87,20 @@ Public NotInheritable Class PresetProfile
             Return _searchOwnedArguments.Count
         End Get
     End Property
+
+    ''' <summary>静态预设校验只暂缓显式 0:v:0；真正执行时必须逐个确认输入恰好只有一条视频流。</summary>
+    Friend Async Function ValidateInputAsync(inputPath As String,
+                                            cancellationToken As CancellationToken) As Task
+        cancellationToken.ThrowIfCancellationRequested()
+        ValidateProcessingChainCompatibility()
+        If Not HasItems("流控制_将视频参数应用于指定流") Then Return
+
+        Dim count = Await VideoStreamProbe.CountAsync(inputPath, cancellationToken).ConfigureAwait(False)
+        If count <> 1 Then
+            Throw New PresetCompatibilityException(
+                $"已指定视频流 0:v:0，但输入文件包含 {count} 条视频流；当前仅允许恰好一条视频流的输入，无法确认其他情况下的 ab-av1 采样与正式编码一致。")
+        End If
+    End Function
 
     Public Shared Function Load(sourceFilePath As String) As PresetProfile
         If String.IsNullOrWhiteSpace(sourceFilePath) Then Throw New ArgumentException("请选择 FFmpegFreeUI v6 预设。", NameOf(sourceFilePath))
@@ -411,7 +427,9 @@ Public NotInheritable Class PresetProfile
 
         If HasItems("滤镜排序系统") Then issues.Add("FFmpegFreeUI 内置滤镜排序")
         If HasItems("视频参数_超分_滤镜叠加策略组") Then issues.Add("超分滤镜")
-        If HasItems("流控制_将视频参数应用于指定流") Then issues.Add("非默认视频流选择")
+        If HasItems("流控制_将视频参数应用于指定流") AndAlso Not SelectsFirstVideoStream() Then
+            issues.Add("非默认视频流选择")
+        End If
 
         If issues.Count > 0 Then
             Throw New PresetCompatibilityException(
@@ -419,6 +437,15 @@ Public NotInheritable Class PresetProfile
                 Environment.NewLine & "• " & String.Join(Environment.NewLine & "• ", issues.Distinct()))
         End If
     End Sub
+
+    Private Function SelectsFirstVideoStream() As Boolean
+        Dim streams = TryCast(_root("流控制_将视频参数应用于指定流"), JsonArray)
+        If streams Is Nothing OrElse streams.Count <> 1 Then Return False
+        Dim selected = TryCast(streams(0), JsonValue)
+        Dim text As String = Nothing
+        Return selected IsNot Nothing AndAlso selected.TryGetValue(Of String)(text) AndAlso
+               String.Equals(text?.Trim(), "0:v:0", StringComparison.Ordinal)
+    End Function
 
     Private Sub MapStructuredEncoderArguments()
         AddStructuredEncoderArgument("profile:v", GetString("视频参数_编码器_配置文件"))

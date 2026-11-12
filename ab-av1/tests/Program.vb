@@ -48,6 +48,7 @@ Module Program
         TestVmafModelHelpParser()
         TestAbAv1RunnerProcessIntegrationAsync().GetAwaiter().GetResult()
         TestSampleEncodeRunnerAsync().GetAwaiter().GetResult()
+        TestSingleVideoStreamSelectionAsync().GetAwaiter().GetResult()
         If args.Contains("--render", StringComparer.OrdinalIgnoreCase) Then RenderQualitySettingsPanel()
         Console.WriteLine($"PASS: {_assertions} assertions")
     End Sub
@@ -71,6 +72,7 @@ Module Program
 
     Private Async Function RunRealSampleAsync(inputPath As String) As Task
         Dim preset = JsonNode.Parse(CreateMinimalPresetJson()).AsObject()
+        preset("流控制_将视频参数应用于指定流") = New JsonArray(JsonValue.Create("0:v:0"))
         preset("视频参数_编码器_具体编码") = "libx264"
         preset("视频参数_编码器_编码预设") = "ultrafast"
         preset("视频参数_色彩管理_像素格式") = "yuv420p"
@@ -152,6 +154,7 @@ Module Program
         If Not File.Exists(inputPath) Then Throw New FileNotFoundException("Real test input not found", inputPath)
 
         Dim realPreset = JsonNode.Parse(CreateMinimalPresetJson()).AsObject()
+        realPreset("流控制_将视频参数应用于指定流") = New JsonArray(JsonValue.Create("0:v:0"))
         realPreset("视频参数_质量控制_进阶参数集") =
             "-svtav1-params keyint=8s:scd=1:tune=0:crf=31:input-depth=10"
         Dim profile = PresetProfile.LoadJson(realPreset.ToJsonString())
@@ -176,6 +179,9 @@ Module Program
 
         If Double.IsNaN(result.Crf) OrElse Double.IsNaN(result.Score) Then
             Throw New InvalidDataException("Real ab-av1 result contains NaN")
+        End If
+        If JsonNode.Parse(profile.ApplyCrf(result.Crf))("流控制_将视频参数应用于指定流")(0).GetValue(Of String)() <> "0:v:0" Then
+            Throw New InvalidDataException("Real search did not preserve the original video mapping")
         End If
         Console.WriteLine(
             $"REAL_RESULT: CRF={result.Crf.ToString("0.###", CultureInfo.InvariantCulture)}; " &
@@ -1179,7 +1185,7 @@ Module Program
                 Sub(value) progressMessages.Enqueue(value),
                 Sub(value) taskResults.Enqueue(value)) With {
                 .StageId = ExtFFmpegFreeUIPipelineStages.TaskBeforePrepare,
-                .PresetJson = CreateMinimalPresetJson(),
+                .PresetJson = CreateFirstVideoStreamPresetJson(),
                 .InputPath = inputPath,
                 .TaskId = "pipeline-test"
             }
@@ -1201,6 +1207,8 @@ Module Program
                 progressMessages.Any(Function(item) item.Fraction.HasValue AndAlso item.Fraction.Value = 1),
                 "pipeline reports completion")
             IsTrue(updated("插件扩展数据") IsNot Nothing, "pipeline retains extension state")
+            Equal("0:v:0", updated("流控制_将视频参数应用于指定流")(0).GetValue(Of String)(),
+                  "pipeline keeps explicit video mapping after the single-video check")
 
             Dim xpsnrPreset = JsonNode.Parse(CreateMinimalPresetJson()).AsObject()
             DirectCast(xpsnrPreset("插件扩展数据"), JsonObject)(AbAv1Plugin.PluginId) =
@@ -1518,6 +1526,122 @@ Module Program
         Equal("vmaf_v0.6.1", models(0), "default model")
         Equal("vmaf_4k_v0.6.1", models(1), "4K model")
     End Sub
+
+    Private Function CreateFirstVideoStreamPresetJson() As String
+        Dim preset = JsonNode.Parse(CreateMinimalPresetJson()).AsObject()
+        preset("流控制_将视频参数应用于指定流") = New JsonArray(JsonValue.Create("0:v:0"))
+        preset("流控制_将音频参数应用于指定流") = New JsonArray(JsonValue.Create("0:a:1"))
+        preset("流控制_将字幕参数应用于指定流") = New JsonArray(JsonValue.Create("0:s:0"))
+        Return preset.ToJsonString()
+    End Function
+
+    Private Async Function TestSingleVideoStreamSelectionAsync() As Task
+        Dim directory = Path.Combine(Path.GetTempPath(), "ab-av1-video-stream-check-" & Guid.NewGuid().ToString("N"))
+        IO.Directory.CreateDirectory(directory)
+        Dim files As New List(Of String)()
+        Try
+            Dim failures As New Dictionary(Of String, String) From {
+                {"two-videos.bin", "2 条视频流"}, {"no-video.bin", "0 条视频流"},
+                {"invalid-probe.bin", "有效 JSON"}, {"missing-streams.bin", "有效的视频流列表"},
+                {"missing-index.bin", "视频流信息不完整"}, {"failed-probe.bin", "退出码 7"}
+            }
+            For Each name In failures.Keys.Concat({"single.bin", "waiting-probe.bin"})
+                Dim filePath = Path.Combine(directory, name)
+                File.WriteAllBytes(filePath, {CByte(0)})
+                files.Add(filePath)
+            Next
+
+            Dim json = CreateFirstVideoStreamPresetJson()
+            Dim profile = PresetProfile.LoadJson(json)
+            For Each metric In {QualityScoreMetric.Vmaf, QualityScoreMetric.Xpsnr}
+                Dim result = Await New AbAv1Runner().SearchAsync(profile, Path.Combine(directory, "single.bin"),
+                    New SearchSettings With {.Metric = metric, .TargetScore = 38}, Nothing,
+                    CancellationToken.None).ConfigureAwait(False)
+                Equal(28.0, result.Crf, "single-video explicit map allows CRF search for " & metric.ToString())
+                Dim sampleResult = Await New AbAv1Runner().SampleEncodeAsync(profile, Path.Combine(directory, "single.bin"),
+                    New SampleEncodeSettings With {.Metric = metric, .Crf = 24}, Nothing,
+                    CancellationToken.None).ConfigureAwait(False)
+                Equal(24.0, sampleResult.Crf, "single-video explicit map allows sample encoding for " & metric.ToString())
+            Next
+
+            Dim updated = JsonNode.Parse(profile.ApplyCrf(28)).AsObject()
+            For Each field In {"流控制_将视频参数应用于指定流", "流控制_将音频参数应用于指定流", "流控制_将字幕参数应用于指定流"}
+                Equal(JsonNode.Parse(json)(field).ToJsonString(), updated(field).ToJsonString(),
+                      "CRF writeback preserves original stream selection: " & field)
+            Next
+
+            For Each failure In failures
+                For Each sampleMode In {False, True}
+                    Dim runner As New AbAv1Runner()
+                    Dim rejected = False
+                    Try
+                        If sampleMode Then
+                            Await runner.SampleEncodeAsync(profile, Path.Combine(directory, failure.Key),
+                                New SampleEncodeSettings(), Nothing, CancellationToken.None).ConfigureAwait(False)
+                        Else
+                            Await runner.SearchAsync(profile, Path.Combine(directory, failure.Key),
+                                New SearchSettings(), Nothing, CancellationToken.None).ConfigureAwait(False)
+                        End If
+                    Catch ex As Exception When TypeOf ex Is PresetCompatibilityException OrElse TypeOf ex Is InvalidDataException
+                        rejected = True
+                        IsTrue(ex.Message.Contains(failure.Value, StringComparison.Ordinal),
+                               "input rejection explains the probe result: " & failure.Key)
+                    End Try
+                    IsTrue(rejected, "unsafe or unconfirmed selection is rejected before search/sample: " & failure.Key)
+                    Equal(String.Empty, runner.CurrentCommandLine, "ab-av1 is not started after a failed input check")
+                Next
+            Next
+
+            Dim subsequent = Await New AbAv1Runner().SearchAsync(profile, Path.Combine(directory, "single.bin"),
+                New SearchSettings(), Nothing, CancellationToken.None).ConfigureAwait(False)
+            Equal(28.0, subsequent.Crf, "a previous multi-video rejection does not affect the next single-video input")
+
+            Dim noMapResult = Await New AbAv1Runner().SearchAsync(PresetProfile.LoadJson(CreateMinimalPresetJson()),
+                Path.Combine(directory, "failed-probe.bin"), New SearchSettings(), Nothing,
+                CancellationToken.None).ConfigureAwait(False)
+            Equal(28.0, noMapResult.Crf, "presets without explicit video selection do not require ffprobe")
+
+            For Each selections As String() In {New String() {"0:v:1"}, New String() {"1:v:0"},
+                                                New String() {"0:v"}, New String() {"0:v:0", "0:v:1"}}
+                Dim preset = JsonNode.Parse(json).AsObject()
+                preset("流控制_将视频参数应用于指定流") = New JsonArray(selections.Select(Function(value) DirectCast(JsonValue.Create(value), JsonNode)).ToArray())
+                Dim rejected = False
+                Try
+                    PresetProfile.LoadJson(preset.ToJsonString())
+                Catch ex As PresetCompatibilityException
+                    rejected = True
+                End Try
+                IsTrue(rejected, "other video selections remain unsupported: " & String.Join(",", selections))
+            Next
+
+            Dim incompatible = JsonNode.Parse(json).AsObject()
+            incompatible("视频参数_帧速率") = "30"
+            Dim processingRejected = False
+            Try
+                PresetProfile.LoadJson(incompatible.ToJsonString())
+            Catch ex As PresetCompatibilityException
+                processingRejected = ex.Message.Contains("帧率转换", StringComparison.Ordinal)
+            End Try
+            IsTrue(processingRejected, "allowing 0:v:0 does not bypass other processing-chain checks")
+
+            Using cancellation As New CancellationTokenSource(TimeSpan.FromMilliseconds(350))
+                Dim timer = Stopwatch.StartNew()
+                Dim canceled = False
+                Try
+                    Await profile.ValidateInputAsync(Path.Combine(directory, "waiting-probe.bin"), cancellation.Token).ConfigureAwait(False)
+                Catch ex As OperationCanceledException
+                    canceled = True
+                End Try
+                IsTrue(canceled, "canceling a video-stream probe propagates cancellation")
+                IsTrue(timer.Elapsed < TimeSpan.FromSeconds(5), "canceling a video-stream probe returns promptly")
+            End Using
+        Finally
+            For Each filePath In files
+                File.Delete(filePath)
+            Next
+            IO.Directory.Delete(directory)
+        End Try
+    End Function
 
     Private Async Function TestAbAv1RunnerProcessIntegrationAsync() As Task
         Dim fakeExecutable = PluginEnvironment.AbAv1Path

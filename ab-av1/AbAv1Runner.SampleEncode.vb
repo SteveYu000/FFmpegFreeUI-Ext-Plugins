@@ -36,6 +36,7 @@ Partial Public NotInheritable Class AbAv1Runner
                                              progress As IProgress(Of SearchProgress),
                                              cancellationToken As CancellationToken) As Task(Of SampleEncodeResult)
         Dim executable = GetExecutablePath()
+        Await profile.ValidateInputAsync(inputPath, cancellationToken).ConfigureAwait(False)
         Dim useJson = Await SupportsJsonOutputAsync(executable, cancellationToken).ConfigureAwait(False)
         Dim arguments = profile.BuildSampleEncodeArguments(inputPath, settings, useJson)
         SetCurrentCommandLine(FormatCommandLine(executable, arguments))
